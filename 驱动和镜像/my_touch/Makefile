@@ -1,0 +1,1 @@
+obj-y   += ft5x06_ts.o
