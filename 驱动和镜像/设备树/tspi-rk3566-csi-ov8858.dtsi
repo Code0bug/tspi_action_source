@@ -238,6 +238,19 @@
 &i2c4 {
 	/* i2c4 sda conflict with camera pwdn */
 	status = "okay";
+
+	/* 自动聚焦马达 */
+    dw9714: dw9714@c {
+        compatible = "dongwoon,dw9714";
+        status = "okay";
+        reg = <0x0c>;
+        rockchip,camera-module-index = <0>;
+        rockchip,vcm-start-current = <10>;
+        rockchip,vcm-rated-current = <85>;
+        rockchip,vcm-step-mode = <5>;
+        rockchip,camera-module-facing = "back";
+ 	};
+
 	ov8858: ov8858@36 {
 		status = "okay";
 		compatible = "ovti,ov8858";
@@ -254,6 +267,7 @@
 		rockchip,camera-module-facing = "back";
         rockchip,camera-module-name = "HS5885-BNSM1018-V01"; /* 这两个跟镜头有关 在external下直接搜 配置错误会导致图像颜色不对 */
 		rockchip,camera-module-lens-name = "default";
+		lens-focus = <&dw9714>; /* 关联马达 */
 		port {
 			ov8858_out: endpoint {
 				remote-endpoint = <&dphy0_in>;  /* 4-lanes要用dphy0，1和2只支持split mode*/

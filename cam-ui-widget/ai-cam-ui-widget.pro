@@ -17,7 +17,6 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     cameracapture.cpp \
-    encoderrtsp.cpp \
     main.cpp \
     rk_mpi.cpp \
     rknn/utils/file_utils.c \
@@ -29,7 +28,6 @@ SOURCES += \
 
 HEADERS += \
     cameracapture.h \
-    encoderrtsp.h \
     include/rk_mpi.h \
     widget.h
 
@@ -50,15 +48,16 @@ LIBS += \
         -lpthread \
         -L$$PWD/lib \
         -lrockit \
+        -lrknnrt \
+        -lrga \
+        -lturbojpeg \
+        -lmk_api \
+        -L/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib \
         -lrt_test_comm \
         -lopencv_core \
         -lopencv_highgui \
         -lopencv_imgproc \
-        -lopencv_imgcodecs \
-        -lrknnrt \
-        -lrga \
-        -lturbojpeg \
-        -lmk_api
+        -lopencv_imgcodecs
 
 FORMS += \
     widget.ui

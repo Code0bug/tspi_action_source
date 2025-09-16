@@ -17,7 +17,7 @@
    <property name="geometry">
     <rect>
      <x>30</x>
-     <y>100</y>
+     <y>50</y>
      <width>90</width>
      <height>60</height>
     </rect>
@@ -29,8 +29,8 @@
   <widget class="QPushButton" name="close">
    <property name="geometry">
     <rect>
-     <x>140</x>
-     <y>100</y>
+     <x>30</x>
+     <y>180</y>
      <width>90</width>
      <height>60</height>
     </rect>
@@ -42,10 +42,10 @@
   <widget class="QLabel" name="video">
    <property name="geometry">
     <rect>
-     <x>280</x>
-     <y>10</y>
-     <width>511</width>
-     <height>461</height>
+     <x>170</x>
+     <y>0</y>
+     <width>621</width>
+     <height>481</height>
     </rect>
    </property>
    <property name="text">
@@ -59,7 +59,7 @@
    <property name="geometry">
     <rect>
      <x>30</x>
-     <y>250</y>
+     <y>310</y>
      <width>90</width>
      <height>60</height>
     </rect>

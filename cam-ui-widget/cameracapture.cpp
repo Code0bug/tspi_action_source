@@ -107,6 +107,8 @@ void CameraCapture::takePhoto()
             src_image.size = RK_MPI_MB_GetSize(stViFrame.stVFrame.pMbBlk);
             src_image.fd = RK_MPI_MB_Handle2Fd(stViFrame.stVFrame.pMbBlk);
 
+            cv::imwrite("/root/img.jpg", frame);
+
             write_image(c_fileName, &src_image);
             printf("taking photo: %s\n", c_fileName);
         }
