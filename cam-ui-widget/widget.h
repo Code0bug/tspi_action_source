@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QThread>
 #include "cameracapture.h"
+#include "savevideo.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class Widget; }
@@ -27,6 +28,7 @@ private slots:
 private:
     Ui::Widget *ui;
     QThread *cameracapThread;
+    QThread *savevideoThread;
 };
 
 extern uint8_t camStatus;

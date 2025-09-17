@@ -12,13 +12,16 @@ Widget::Widget(QWidget *parent)
 {
     ui->setupUi(this);
 
-    qRegisterMetaType<image_buffer_t>("image_buffer_t");
     qRegisterMetaType<cv::Mat>("cv::Mat");
 
     // 视频采集线程
     cameracapThread = new QThread();
     CameraCapture* cameracap = new CameraCapture();
     cameracap->moveToThread(cameracapThread);
+
+    savevideoThread = new QThread();
+    SaveVideo* savevideo = new SaveVideo();
+    savevideo->moveToThread(savevideoThread);
 
     // 连接信号
     connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
@@ -27,8 +30,13 @@ Widget::Widget(QWidget *parent)
     connect(ui->close, &QPushButton::clicked, cameracap, &CameraCapture::stopCapture, Qt::DirectConnection);
     connect(ui->photo, &QPushButton::clicked, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
 
+    connect(ui->start_video, &QPushButton::clicked, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);
+    connect(ui->stop_video, &QPushButton::clicked, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);
+    connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);
+
     // 开启线程
     cameracapThread->start();
+    savevideoThread->start();
 }
 
 Widget::~Widget()

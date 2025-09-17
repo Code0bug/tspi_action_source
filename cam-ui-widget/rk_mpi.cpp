@@ -59,7 +59,7 @@ int vi_chn_init(int channelId, int width, int height) {
 //    vi_chn_attr.stFrameRate.s32SrcFrameRate = 30;
 	vi_chn_attr.enPixelFormat = RK_FMT_YUV420SP;
 	vi_chn_attr.enCompressMode = COMPRESS_MODE_NONE; // COMPRESS_AFBC_16x16;
-    vi_chn_attr.u32Depth = 2; //0, get fail, 1 - u32BufCount, can get, if bind to other device, must be < u32BufCount
+    vi_chn_attr.u32Depth = 1; //0, get fail, 1 - u32BufCount, can get, if bind to other device, must be < u32BufCount
 	ret = RK_MPI_VI_SetChnAttr(0, channelId, &vi_chn_attr);
 	ret |= RK_MPI_VI_EnableChn(0, channelId);
 	if (ret) {
@@ -109,3 +109,71 @@ int venc_init(int chnId, int width, int height, RK_CODEC_ID_E enType) {
 
 	return 0;
 }
+
+int vpss_init(int chnId, int width, int height)
+{
+    RK_S32 s32Ret = RK_SUCCESS;
+    VPSS_GRP VpssGrp = 0;           // VPSS组组号
+    VPSS_CHN VpssChn[VPSS_MAX_CHN_NUM] = { VPSS_CHN0, VPSS_CHN1, VPSS_CHN2, VPSS_CHN3 }; // VPSS通道号
+    VPSS_GRP_ATTR_S stGrpVpssAttr;  // VPSS组属性
+    VPSS_CHN_ATTR_S stVpssChnAttr;  // VPSS通道属性
+    MPP_CHN_S stViChn, stVpssChn;   // 模块设备通道结构体
+
+    stGrpVpssAttr.u32MaxW = 1920;  // 输入图像的最大宽度
+    stGrpVpssAttr.u32MaxH = 1080;  // 输入图像的最大高度
+    stGrpVpssAttr.enPixelFormat = RK_FMT_YUV420SP;           // 输入图像像素格式
+    stGrpVpssAttr.stFrameRate.s32SrcFrameRate = -1;          // 帧率控制
+    stGrpVpssAttr.stFrameRate.s32DstFrameRate = -1;
+    stGrpVpssAttr.enCompressMode = COMPRESS_MODE_NONE;       // 输入图像压缩模式
+    s32Ret = RK_MPI_VPSS_CreateGrp(VpssGrp, &stGrpVpssAttr); // 创建一个VPSS组
+    if (s32Ret != RK_SUCCESS) {
+        return s32Ret;
+    }
+
+    stVpssChnAttr.enChnMode = VPSS_CHN_MODE_USER;
+    stVpssChnAttr.enDynamicRange = DYNAMIC_RANGE_SDR8; // 目标图像动态范围
+    stVpssChnAttr.enPixelFormat = RK_FMT_BGR888;       // 目标图像像素格式
+    stVpssChnAttr.stFrameRate.s32SrcFrameRate = -1;
+    stVpssChnAttr.stFrameRate.s32DstFrameRate = -1;
+    stVpssChnAttr.u32Depth = 2;
+    stVpssChnAttr.u32Width = width;                    // 目标图像宽度
+    stVpssChnAttr.u32Height = height;                  // 目标图像高度
+    stVpssChnAttr.enCompressMode = COMPRESS_MODE_NONE; // 目标图像压缩模式
+    s32Ret = RK_MPI_VPSS_SetChnAttr(VpssGrp, VpssChn[chnId], &stVpssChnAttr); // 设置VPSS通道属性
+    if (s32Ret != RK_SUCCESS) {
+        return s32Ret;
+    }
+
+    s32Ret = RK_MPI_VPSS_EnableChn(VpssGrp, VpssChn[chnId]);  // 使能通道
+    if (s32Ret != RK_SUCCESS) {
+        return s32Ret;
+    }
+
+    s32Ret = RK_MPI_VPSS_EnableBackupFrame(VpssGrp);      // 使能 Backup 帧
+    if (s32Ret != RK_SUCCESS) {
+        return s32Ret;
+    }
+
+    s32Ret = RK_MPI_VPSS_StartGrp(VpssGrp);               // 启用VPSS组
+    if (s32Ret != RK_SUCCESS) {
+        return s32Ret;
+    }
+    // bind vi to vpss
+    stViChn.enModId    = RK_ID_VI;
+    stViChn.s32DevId   = 0;
+    stViChn.s32ChnId   = 1;
+    stVpssChn.enModId = RK_ID_VPSS;
+    stVpssChn.s32DevId = 0;
+    stVpssChn.s32ChnId = 0;
+
+    RK_LOGD("vi to vpss ch %d vpss group %d", stVpssChn.s32ChnId , stVpssChn.s32DevId);
+    s32Ret = RK_MPI_SYS_Bind(&stViChn, &stVpssChn);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("vi and vpss bind error ");
+        return s32Ret;
+    }
+
+    return 0;
+}
+
+

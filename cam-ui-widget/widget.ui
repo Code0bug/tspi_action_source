@@ -17,7 +17,7 @@
    <property name="geometry">
     <rect>
      <x>30</x>
-     <y>50</y>
+     <y>20</y>
      <width>90</width>
      <height>60</height>
     </rect>
@@ -30,7 +30,7 @@
    <property name="geometry">
     <rect>
      <x>30</x>
-     <y>180</y>
+     <y>110</y>
      <width>90</width>
      <height>60</height>
     </rect>
@@ -59,13 +59,39 @@
    <property name="geometry">
     <rect>
      <x>30</x>
-     <y>310</y>
+     <y>200</y>
      <width>90</width>
      <height>60</height>
     </rect>
    </property>
    <property name="text">
     <string>拍照</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="start_video">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>290</y>
+     <width>90</width>
+     <height>60</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>开始录像</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="stop_video">
+   <property name="geometry">
+    <rect>
+     <x>30</x>
+     <y>370</y>
+     <width>90</width>
+     <height>60</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>停止录像</string>
    </property>
   </widget>
  </widget>

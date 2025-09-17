@@ -9,8 +9,6 @@
 #include <iostream>
 #include "rk_mpi.h"
 #include <opencv2/opencv.hpp>
-#include <opencv/cv.hpp>
-#include "image_utils.h"
 #include "widget.h"
 
 class CameraCapture : public QObject
@@ -22,16 +20,18 @@ public:
 public slots:
     void startCapture();
     void stopCapture();
+    void startVideo();
+    void stopVideo();
     void takePhoto();
 
 private:
     uint8_t isRunning;
-    uint8_t detect_status;
     uint8_t photo_flag;
+    uint8_t video_flag;
 
 signals:
-    void capFinishedToRKNN(image_buffer_t imgbuf);
     void capFinishedToUI(cv::Mat imgbuf);
+    void capFinishedToVideo(cv::Mat buf);
 
 
 

@@ -19,41 +19,26 @@ SOURCES += \
     cameracapture.cpp \
     main.cpp \
     rk_mpi.cpp \
-    rknn/utils/file_utils.c \
-    rknn/utils/image_drawing.c \
-    rknn/utils/image_utils.c \
-    rknn/yolov5/postprocess.cc \
-    rknn/yolov5/yolov5.cc \
+    savevideo.cpp \
     widget.cpp
 
 HEADERS += \
     cameracapture.h \
     include/rk_mpi.h \
+    savevideo.h \
     widget.h
 
 # 添加rockit/opencv/rknn头文件和动态库 $$PWD表示.pro文件所在目录
 INCLUDEPATH += \
     $$PWD/include \
-    $$PWD/include/mpi/example \
     $$PWD/include/mpi/sdk \
-    $$PWD/include/rknn/rknpu2 \
-    $$PWD/include/rknn/utils \
-    $$PWD/include/rknn/yolov5 \
-    $$PWD/include/rknn/librga \
-    $$PWD/include/rknn/stb_image \
-    $$PWD/include/rknn/jpeg_turbo \
-    $$PWD/include/ZLMediaKit
+    $$PWD/include/opencv4
 
 LIBS += \
         -lpthread \
         -L$$PWD/lib \
         -lrockit \
-        -lrknnrt \
-        -lrga \
-        -lturbojpeg \
-        -lmk_api \
         -L/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib \
-        -lrt_test_comm \
         -lopencv_core \
         -lopencv_highgui \
         -lopencv_imgproc \
