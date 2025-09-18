@@ -16,11 +16,6 @@ CameraCapture::CameraCapture()
     vi_chn_init(0, 3264, 2448);   // channel 0 最大支持8M
     vi_chn_init(1, 1920, 1080);   // channel 1 最大支持1920*1080
 
-    int ret = vpss_init(0, 1920, 1080);
-    if (ret != 0) {
-        printf("vpss error!\n");
-    }
-
     isRunning = 0;
     photo_flag = 0;
     video_flag = 0;
@@ -34,7 +29,7 @@ void CameraCapture::startCapture()
         // 视频图像帧信息结构体，存储采集视频帧
         VIDEO_FRAME_INFO_S stViFrame;
         // get vi frame
-        RK_S32 s32Ret = RK_MPI_VPSS_GetChnFrame(0, 0, &stViFrame, -1);
+        RK_S32 s32Ret = RK_MPI_VI_GetChnFrame(0, 1, &stViFrame, -1);
 
         if(s32Ret == RK_SUCCESS) {
 
@@ -43,34 +38,31 @@ void CameraCapture::startCapture()
             // 转换为RGB888格式
             int height = stViFrame.stVFrame.u32Height;
             int width = stViFrame.stVFrame.u32Width;
-//            cv::Mat yuv420sp(height + height / 2, width, CV_8UC1, dat);
-//            cv::Mat frame(height, width, CV_8UC3);
-            printf("==============%d\n", stViFrame.stVFrame.enPixelFormat);
-            printf("==============height: %d  width: %d\n", height, width);
-            printf("%d %d %d \n", dat[0], dat[1], dat[2]);
-            cv::Mat frame(height, width, CV_8UC3, dat);
 
-//             记录起始时间
-//            auto t1 = std::chrono::high_resolution_clock::now();
+            cv::Mat ui_frame(480, 640, CV_8UC3);
+            cv::Mat video_frame(height, width, CV_8UC3);
 
-//            cv::cvtColor(yuv420sp, frame, cv::COLOR_YUV420sp2BGR); // COLOR_YUV2RGB_NV12 这个太耗时了
+            // 利用rga进行像素格式转换
+            rga_buffer_t src_img = wrapbuffer_virtualaddr(dat, width, height, RK_FORMAT_YCrCb_420_SP);
+            rga_buffer_t dst_img = wrapbuffer_virtualaddr(ui_frame.data, 640, 480, RK_FORMAT_BGR_888);
+            imresize(src_img, dst_img);
+            imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);
 
-//            // 记录结束时间
-//            auto t2 = std::chrono::high_resolution_clock::now();
-//            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count();
-
-//            std::cout << "cvtColor耗时: " << duration << " us" << std::endl;
-
-            emit capFinishedToUI(frame);
 
             if (video_flag) { // 录像
-//                capFinishedToVideo(frame);
+                rga_buffer_t dst_img_video = wrapbuffer_virtualaddr(video_frame.data, width, height, RK_FORMAT_BGR_888);
+                imcvtcolor(src_img, dst_img_video, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);
+                capFinishedToVideo(video_frame);
             }
+
+            emit capFinishedToUI(ui_frame);
+
+
 
 
         }
 
-        s32Ret = RK_MPI_VPSS_ReleaseChnFrame(0, 0, &stViFrame);
+        s32Ret = RK_MPI_VI_ReleaseChnFrame(0, 1, &stViFrame);
         if (s32Ret != RK_SUCCESS) {
             RK_LOGE("RK_MPI_VI_ReleaseChnFrame fail %x", s32Ret);
         }
@@ -119,9 +111,12 @@ void CameraCapture::takePhoto()
         int height = stViFrame.stVFrame.u32Height;
         int width = stViFrame.stVFrame.u32Width;
 
-        cv::Mat yuv420sp(height + height / 2, width, CV_8UC1, dat);
         cv::Mat frame(height, width, CV_8UC3);
-        cv::cvtColor(yuv420sp, frame, cv::COLOR_YUV420sp2RGB);
+
+        // 利用rga进行像素格式转换
+        rga_buffer_t src_img = wrapbuffer_virtualaddr(dat, width, height, RK_FORMAT_YCrCb_420_SP);
+        rga_buffer_t dst_img = wrapbuffer_virtualaddr(frame.data, width, height, RK_FORMAT_RGB_888);
+        imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_RGB_888);
 
         if (!frame.empty()) {
             // 保存图片

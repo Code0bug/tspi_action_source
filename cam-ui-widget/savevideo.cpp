@@ -51,9 +51,7 @@ SaveVideo::SaveVideo()
 
 void SaveVideo::do_save_video(cv::Mat buf)
 {
-    printf("loc---------------------------\n");
     memcpy(data, buf.data, encWidth * encHeight * 3);
-    printf("loc1---------------------------\n");
     /**************************
      * 向VENC发送原始图像进行编码
      * 0为编码通道号

@@ -11,6 +11,12 @@
 #include <opencv2/opencv.hpp>
 #include "widget.h"
 
+
+#include "im2d.h"
+#include "rga.h"
+#include "RgaUtils.h"
+
+
 class CameraCapture : public QObject
 {
     Q_OBJECT

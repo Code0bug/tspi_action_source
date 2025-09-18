@@ -97,6 +97,17 @@
 		pinctrl-0 = <&ex39_usb_vcc5v0_host_en>;
 	};	
 
+	camera_key {  // 相机按键
+		compatible = "gpio-keys";                    // 使用内核的按键驱动
+		key0: key_0 {
+			label = "KEY0";                          // 按键名称
+			gpios = <&gpio0 RK_PB7 GPIO_ACTIVE_LOW>; // GPIO0_B7
+			linux,code = <KEY_0>;                    // 按键码
+			debounce-interval = <10>;                // 防抖，单位毫秒
+			autorepeat;                              // 支持连按
+		};
+	};
+
 };
 
 &usbhost_dwc3 {
@@ -126,6 +137,7 @@
 			rockchip,pins = <0 RK_PA5 RK_FUNC_GPIO &pcfg_pull_up>;
 		};
 	};
+
 };
 
 //用户三色灯

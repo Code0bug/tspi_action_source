@@ -48,7 +48,7 @@ int vi_dev_init() {
 
 int vi_chn_init(int channelId, int width, int height) {
 	int ret;
-    int buf_cnt = 3;
+    int buf_cnt = 6;
 	// VI init
 	VI_CHN_ATTR_S vi_chn_attr;
 	memset(&vi_chn_attr, 0, sizeof(vi_chn_attr));
@@ -56,10 +56,9 @@ int vi_chn_init(int channelId, int width, int height) {
 	vi_chn_attr.stIspOpt.enMemoryType = VI_V4L2_MEMORY_TYPE_DMABUF; // VI_V4L2_MEMORY_TYPE_MMAP;
 	vi_chn_attr.stSize.u32Width = width;
 	vi_chn_attr.stSize.u32Height = height;
-//    vi_chn_attr.stFrameRate.s32SrcFrameRate = 30;
 	vi_chn_attr.enPixelFormat = RK_FMT_YUV420SP;
 	vi_chn_attr.enCompressMode = COMPRESS_MODE_NONE; // COMPRESS_AFBC_16x16;
-    vi_chn_attr.u32Depth = 1; //0, get fail, 1 - u32BufCount, can get, if bind to other device, must be < u32BufCount
+    vi_chn_attr.u32Depth = 2; //0, get fail, 1 - u32BufCount, can get, if bind to other device, must be < u32BufCount
 	ret = RK_MPI_VI_SetChnAttr(0, channelId, &vi_chn_attr);
 	ret |= RK_MPI_VI_EnableChn(0, channelId);
 	if (ret) {

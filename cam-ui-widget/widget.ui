@@ -42,17 +42,17 @@
   <widget class="QLabel" name="video">
    <property name="geometry">
     <rect>
-     <x>170</x>
+     <x>160</x>
      <y>0</y>
-     <width>621</width>
-     <height>481</height>
+     <width>640</width>
+     <height>480</height>
     </rect>
    </property>
    <property name="text">
     <string>TextLabel</string>
    </property>
    <property name="scaledContents">
-    <bool>true</bool>
+    <bool>false</bool>
    </property>
   </widget>
   <widget class="QPushButton" name="photo">

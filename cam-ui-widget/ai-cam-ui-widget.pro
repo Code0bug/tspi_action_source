@@ -32,7 +32,9 @@ HEADERS += \
 INCLUDEPATH += \
     $$PWD/include \
     $$PWD/include/mpi/sdk \
-    $$PWD/include/opencv4
+    $$PWD/include/opencv4 \
+    $$PWD/include/rga
+
 
 LIBS += \
         -lpthread \
@@ -42,7 +44,8 @@ LIBS += \
         -lopencv_core \
         -lopencv_highgui \
         -lopencv_imgproc \
-        -lopencv_imgcodecs
+        -lopencv_imgcodecs \
+        -lrga
 
 FORMS += \
     widget.ui
