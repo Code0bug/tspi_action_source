@@ -51,6 +51,8 @@ SaveVideo::SaveVideo()
 
 void SaveVideo::do_save_video(cv::Mat buf)
 {
+    printf("start video===\n");
+
     memcpy(data, buf.data, encWidth * encHeight * 3);
     /**************************
      * 向VENC发送原始图像进行编码

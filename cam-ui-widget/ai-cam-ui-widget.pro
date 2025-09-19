@@ -17,6 +17,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 
 SOURCES += \
     cameracapture.cpp \
+    keycontrol.cpp \
     main.cpp \
     rk_mpi.cpp \
     savevideo.cpp \
@@ -25,6 +26,7 @@ SOURCES += \
 HEADERS += \
     cameracapture.h \
     include/rk_mpi.h \
+    keycontrol.h \
     savevideo.h \
     widget.h
 

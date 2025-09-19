@@ -14,6 +14,63 @@ Widget::Widget(QWidget *parent)
 
     qRegisterMetaType<cv::Mat>("cv::Mat");
 
+    // 假设按钮宽高相等，比如 80x80
+    ui->switch_button_0->setFixedSize(80, 80);
+
+    // 设置样式表
+    ui->switch_button_0->setStyleSheet(
+        "QPushButton {"
+        "   background-color: rgba(255, 255, 255, 150);"
+        "   color: black;"
+        "   border-radius: 40px;"
+        "   border: none;"
+        "}"
+        "QPushButton:pressed {"
+        "   background-color: rgba(255, 255, 255, 200);"
+        "}"
+        "QPushButton:focus {"
+        "   outline: none;"  // 禁用焦点矩形
+        "}"
+    );
+
+    // 假设按钮宽高相等，比如 80x80
+    ui->switch_button_1->setFixedSize(80, 80);
+
+    // 设置样式表
+    ui->switch_button_1->setStyleSheet(
+        "QPushButton {"
+        "   background-color: rgba(255, 255, 255, 150);"
+        "   color: black;"
+        "   border-radius: 40px;"
+        "   border: none;"
+        "}"
+        "QPushButton:pressed {"
+        "   background-color: rgba(255, 255, 255, 200);"
+        "}"
+        "QPushButton:focus {"
+        "   outline: none;"  // 禁用焦点矩形
+        "}"
+    );
+
+    // 假设按钮宽高相等，比如 80x80
+    ui->switch_button_2->setFixedSize(80, 80);
+
+    // 设置样式表
+    ui->switch_button_2->setStyleSheet(
+        "QPushButton {"
+        "   background-color: rgba(255, 255, 255, 150);"
+        "   color: black;"
+        "   border-radius: 40px;"
+        "   border: none;"
+        "}"
+        "QPushButton:pressed {"
+        "   background-color: rgba(255, 255, 255, 200);"
+        "}"
+        "QPushButton:focus {"
+        "   outline: none;"  // 禁用焦点矩形
+        "}"
+    );
+
     // 视频采集线程
     cameracapThread = new QThread();
     CameraCapture* cameracap = new CameraCapture();
@@ -23,26 +80,36 @@ Widget::Widget(QWidget *parent)
     SaveVideo* savevideo = new SaveVideo();
     savevideo->moveToThread(savevideoThread);
 
+    keycontrolThread = new QThread();
+    KeyControl* keycontrol = new KeyControl();
+    keycontrol->moveToThread(keycontrolThread);
+
     // 连接信号
     connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
 
-    connect(ui->open, &QPushButton::clicked, cameracap, &CameraCapture::startCapture); // 按下"打开摄像头",开启视频捕获并显示
-    connect(ui->close, &QPushButton::clicked, cameracap, &CameraCapture::stopCapture, Qt::DirectConnection);
-    connect(ui->photo, &QPushButton::clicked, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
+    connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
+    connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);
+    connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);
+    connect(ui->switch_button_0, &QPushButton::clicked, this, &Widget::switchToPage1);
+    connect(ui->switch_button_1, &QPushButton::clicked, this, &Widget::switchToPage2);
+    connect(ui->switch_button_2, &QPushButton::clicked, this, &Widget::switchToPage0);
 
-    connect(ui->start_video, &QPushButton::clicked, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);
-    connect(ui->stop_video, &QPushButton::clicked, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);
-    connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);
+    connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
+    connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
 
     // 开启线程
     cameracapThread->start();
     savevideoThread->start();
+    keycontrolThread->start();
+
+
 }
 
 Widget::~Widget()
 {
     delete ui;
 }
+
 
 
 void Widget::doShow(cv::Mat img)
@@ -71,7 +138,25 @@ void Widget::doShow(cv::Mat img)
     QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
 
 
-    ui->video->setPixmap(QPixmap::fromImage(image));
+    ui->video_label->setPixmap(QPixmap::fromImage(image));
 }
+
+void Widget::switchToPage1()
+{
+    ui->stackedWidget->setCurrentIndex(1);
+}
+
+void Widget::switchToPage2()
+{
+    ui->stackedWidget->setCurrentIndex(2);
+}
+
+void Widget::switchToPage0()
+{
+    ui->stackedWidget->setCurrentIndex(0);
+}
+
+
+
 
 
