@@ -86,6 +86,7 @@ Widget::Widget(QWidget *parent)
 
     // 连接信号
     connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
+    connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);
 
     connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
     connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);
