@@ -20,7 +20,7 @@ Widget::Widget(QWidget *parent)
     // 设置样式表
     ui->switch_button_0->setStyleSheet(
         "QPushButton {"
-        "   background-color: rgba(255, 255, 255, 150);"
+        "   background-color: rgba(255, 255, 255, 150);"  // 最后一个参数是透明度
         "   color: black;"
         "   border-radius: 40px;"
         "   border: none;"
@@ -39,13 +39,13 @@ Widget::Widget(QWidget *parent)
     // 设置样式表
     ui->switch_button_1->setStyleSheet(
         "QPushButton {"
-        "   background-color: rgba(255, 255, 255, 150);"
+        "   background-color: rgba(255, 255, 255, 200);"
         "   color: black;"
         "   border-radius: 40px;"
         "   border: none;"
         "}"
         "QPushButton:pressed {"
-        "   background-color: rgba(255, 255, 255, 200);"
+        "   background-color: rgba(255, 255, 255, 230);"
         "}"
         "QPushButton:focus {"
         "   outline: none;"  // 禁用焦点矩形
@@ -58,50 +58,157 @@ Widget::Widget(QWidget *parent)
     // 设置样式表
     ui->switch_button_2->setStyleSheet(
         "QPushButton {"
-        "   background-color: rgba(255, 255, 255, 150);"
+        "   background-color: rgba(255, 255, 255, 200);"
         "   color: black;"
         "   border-radius: 40px;"
         "   border: none;"
         "}"
         "QPushButton:pressed {"
-        "   background-color: rgba(255, 255, 255, 200);"
+        "   background-color: rgba(255, 255, 255, 230);"
         "}"
         "QPushButton:focus {"
         "   outline: none;"  // 禁用焦点矩形
         "}"
     );
 
-    // 视频采集线程
-    cameracapThread = new QThread();
-    CameraCapture* cameracap = new CameraCapture();
-    cameracap->moveToThread(cameracapThread);
+    // 垂直滚动条样式
+    ui->picture_listWidget->verticalScrollBar()->setStyleSheet(
+        "QScrollBar:vertical {"
+        "    width: 40px;"                     // 滚动条整体宽度
+        "    background: #f0f0f0;"             // 背景色
+        "    margin: 0px 0px 0px 0px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "    background: #a0a0a0;"             // 滑块颜色
+        "    min-height: 60px;"                // 最小高度，方便触摸
+        "    border-radius: 8px;"
+        "}"
+        "QScrollBar::handle:vertical:hover {"
+        "    background: #808080;"             // 悬停时颜色
+        "}"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+        "    height: 0px;"                     // 去掉上下箭头按钮
+        "}"
+    );
 
-    savevideoThread = new QThread();
-    SaveVideo* savevideo = new SaveVideo();
-    savevideo->moveToThread(savevideoThread);
+    // 垂直滚动条样式
+    ui->video_listWidget->verticalScrollBar()->setStyleSheet(
+        "QScrollBar:vertical {"
+        "    width: 40px;"                     // 滚动条整体宽度
+        "    background: #f0f0f0;"             // 背景色
+        "    margin: 0px 0px 0px 0px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "    background: #a0a0a0;"             // 滑块颜色
+        "    min-height: 60px;"                // 最小高度，方便触摸
+        "    border-radius: 8px;"
+        "}"
+        "QScrollBar::handle:vertical:hover {"
+        "    background: #808080;"             // 悬停时颜色
+        "}"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+        "    height: 0px;"                     // 去掉上下箭头按钮
+        "}"
+    );
 
-    keycontrolThread = new QThread();
-    KeyControl* keycontrol = new KeyControl();
-    keycontrol->moveToThread(keycontrolThread);
 
-    // 连接信号
-    connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
-    connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);
+    QString dirPath = "/userdata/picture";
+    QDir dir(dirPath);
+    QStringList filters;
+    filters << "*.png" << "*.jpg" << "*.jpeg" << "*.bmp";
+    QFileInfoList fileList = dir.entryInfoList(filters, QDir::Files);
 
-    connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
-    connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);
-    connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);
+    for (auto &file : fileList) {
+        QListWidgetItem *item = new QListWidgetItem;
+        QPixmap pix(file.absoluteFilePath());
+        item->setIcon(QIcon(pix.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+        item->setText(file.fileName());
+        item->setData(Qt::UserRole, file.absoluteFilePath());
+        ui->picture_listWidget->addItem(item);
+
+    }
+
+    // 统一设置列表外观
+    ui->picture_listWidget->setIconSize(QSize(150, 150));     // 图标大小
+    ui->picture_listWidget->setGridSize(QSize(180, 200));     // 每个 item 的占位大小
+    ui->picture_listWidget->setViewMode(QListView::IconMode); // 图标模式
+    ui->picture_listWidget->setResizeMode(QListView::Adjust); // 自动调整
+
+
+
+    connect(ui->picture_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *item){
+        QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
+        QPixmap pix(path);
+
+        ui->picture_label->setPixmap(pix);
+    });
+
+
+
+    QString videoDirPath = "/userdata/video";
+    QDir videoDir(videoDirPath);
+    QStringList videoFilters;
+    videoFilters << "*.bin"; // H.264 原始流
+    QFileInfoList videoFileList = videoDir.entryInfoList(videoFilters, QDir::Files);
+
+    for (auto &videoFile : videoFileList) {
+        QListWidgetItem *videoItem = new QListWidgetItem;
+
+        // 可用视频封面图或占位图
+        QPixmap videoPlaceholder("");
+        videoItem->setIcon(QIcon(videoPlaceholder.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+        videoItem->setText(videoFile.fileName());
+        videoItem->setData(Qt::UserRole, videoFile.absoluteFilePath());
+
+        ui->video_listWidget->addItem(videoItem);
+    }
+
+    // 设置列表外观
+    ui->video_listWidget->setIconSize(QSize(150, 150));
+    ui->video_listWidget->setGridSize(QSize(180, 200));
+    ui->video_listWidget->setViewMode(QListView::IconMode);
+    ui->video_listWidget->setResizeMode(QListView::Adjust);
+
+    // 点击播放视频
+    connect(ui->video_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *videoItem){
+        QString videoPath = videoItem->data(Qt::UserRole).toString();
+
+        // 调用播放函数（需要你实现解码逻辑）
+//        playH264VideoBin(videoPath, ui->video_label);
+    });
+
+
+//    // 视频采集线程
+//    cameracapThread = new QThread();
+//    CameraCapture* cameracap = new CameraCapture();
+//    cameracap->moveToThread(cameracapThread);
+
+//    savevideoThread = new QThread();
+//    SaveVideo* savevideo = new SaveVideo();
+//    savevideo->moveToThread(savevideoThread);
+
+//    keycontrolThread = new QThread();
+//    KeyControl* keycontrol = new KeyControl();
+//    keycontrol->moveToThread(keycontrolThread);
+
+//    // 连接信号
+//    connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
+//    connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);
+
+//    connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
+//    connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);
+//    connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);
     connect(ui->switch_button_0, &QPushButton::clicked, this, &Widget::switchToPage1);
     connect(ui->switch_button_1, &QPushButton::clicked, this, &Widget::switchToPage2);
     connect(ui->switch_button_2, &QPushButton::clicked, this, &Widget::switchToPage0);
 
-    connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
-    connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
+//    connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
+//    connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
 
     // 开启线程
-    cameracapThread->start();
-    savevideoThread->start();
-    keycontrolThread->start();
+//    cameracapThread->start();
+//    savevideoThread->start();
+//    keycontrolThread->start();
 
 
 }

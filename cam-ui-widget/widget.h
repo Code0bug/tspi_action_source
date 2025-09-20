@@ -4,6 +4,8 @@
 #include <QWidget>
 #include <QThread>
 #include <QStackedWidget>
+#include <QFileSystemModel>
+#include <QScrollBar>
 
 #include "cameracapture.h"
 #include "savevideo.h"
