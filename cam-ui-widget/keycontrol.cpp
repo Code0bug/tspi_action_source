@@ -26,7 +26,7 @@ void KeyControl::key_query()
                     // 松开时判断长按短按
                     if (timer.isValid()) {
                         qint64 elapsed = timer.elapsed(); // 计时时间 ms
-                        if (elapsed < 500) {             // 短按
+                        if (elapsed < 500) {              // 短按
                             if (cam_video_status == 0) {  // 如果当前不在录像状态
                                 emit keyToTakephoto();    // 发出拍照信号
 //                                printf("short press \n");

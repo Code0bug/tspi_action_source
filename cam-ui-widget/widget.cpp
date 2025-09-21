@@ -1,10 +1,12 @@
 #include "widget.h"
 #include "ui_widget.h"
 
-uint8_t camStatus = 0;
 // 用于fps显示
 static char fps_text[16];
 static float fps = 0;
+
+QString picture_dirPath = "/userdata/picture";
+QString video_dirPath = "/userdata/video";
 
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
@@ -111,14 +113,25 @@ Widget::Widget(QWidget *parent)
         "}"
     );
 
+    // 设置相册列表外观
+    ui->picture_listWidget->setIconSize(QSize(150, 150));     // 图标大小
+    ui->picture_listWidget->setGridSize(QSize(180, 200));     // 每个 item 的占位大小
+    ui->picture_listWidget->setViewMode(QListView::IconMode); // 图标模式
+    ui->picture_listWidget->setResizeMode(QListView::Adjust); // 自动调整
 
-    QString dirPath = "/userdata/picture";
-    QDir dir(dirPath);
+    // 设置视频列表外观
+    ui->video_listWidget->setIconSize(QSize(150, 150));
+    ui->video_listWidget->setGridSize(QSize(180, 200));
+    ui->video_listWidget->setViewMode(QListView::IconMode);
+    ui->video_listWidget->setResizeMode(QListView::Adjust);
+
+    // 更新相册列表
+    QDir dir(picture_dirPath);
     QStringList filters;
     filters << "*.png" << "*.jpg" << "*.jpeg" << "*.bmp";
-    QFileInfoList fileList = dir.entryInfoList(filters, QDir::Files);
+    picture_fileList = dir.entryInfoList(filters, QDir::Files);
 
-    for (auto &file : fileList) {
+    for (auto &file : picture_fileList) {
         QListWidgetItem *item = new QListWidgetItem;
         QPixmap pix(file.absoluteFilePath());
         item->setIcon(QIcon(pix.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
@@ -127,26 +140,8 @@ Widget::Widget(QWidget *parent)
         ui->picture_listWidget->addItem(item);
 
     }
-
-    // 统一设置列表外观
-    ui->picture_listWidget->setIconSize(QSize(150, 150));     // 图标大小
-    ui->picture_listWidget->setGridSize(QSize(180, 200));     // 每个 item 的占位大小
-    ui->picture_listWidget->setViewMode(QListView::IconMode); // 图标模式
-    ui->picture_listWidget->setResizeMode(QListView::Adjust); // 自动调整
-
-
-
-    connect(ui->picture_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *item){
-        QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
-        QPixmap pix(path);
-
-        ui->picture_label->setPixmap(pix);
-    });
-
-
-
-    QString videoDirPath = "/userdata/video";
-    QDir videoDir(videoDirPath);
+    // 更新视频列表
+    QDir videoDir(video_dirPath);
     QStringList videoFilters;
     videoFilters << "*.bin"; // H.264 原始流
     QFileInfoList videoFileList = videoDir.entryInfoList(videoFilters, QDir::Files);
@@ -163,53 +158,55 @@ Widget::Widget(QWidget *parent)
         ui->video_listWidget->addItem(videoItem);
     }
 
-    // 设置列表外观
-    ui->video_listWidget->setIconSize(QSize(150, 150));
-    ui->video_listWidget->setGridSize(QSize(180, 200));
-    ui->video_listWidget->setViewMode(QListView::IconMode);
-    ui->video_listWidget->setResizeMode(QListView::Adjust);
 
-    // 点击播放视频
-    connect(ui->video_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *videoItem){
-        QString videoPath = videoItem->data(Qt::UserRole).toString();
+    // 视频采集线程
+    cameracapThread = new QThread();
+    CameraCapture* cameracap = new CameraCapture();
+    cameracap->moveToThread(cameracapThread);
 
-        // 调用播放函数（需要你实现解码逻辑）
-//        playH264VideoBin(videoPath, ui->video_label);
-    });
+    savevideoThread = new QThread();
+    SaveVideo* savevideo = new SaveVideo();
+    savevideo->moveToThread(savevideoThread);
 
+    keycontrolThread = new QThread();
+    KeyControl* keycontrol = new KeyControl();
+    keycontrol->moveToThread(keycontrolThread);
 
-//    // 视频采集线程
-//    cameracapThread = new QThread();
-//    CameraCapture* cameracap = new CameraCapture();
-//    cameracap->moveToThread(cameracapThread);
+    // 连接信号
+    connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
+    connect(cameracap, &CameraCapture::photoFinishedToUpdate, this, &Widget::updatePicture);
+    connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);
 
-//    savevideoThread = new QThread();
-//    SaveVideo* savevideo = new SaveVideo();
-//    savevideo->moveToThread(savevideoThread);
-
-//    keycontrolThread = new QThread();
-//    KeyControl* keycontrol = new KeyControl();
-//    keycontrol->moveToThread(keycontrolThread);
-
-//    // 连接信号
-//    connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
-//    connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);
-
-//    connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
-//    connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);
-//    connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);
+    connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
+    connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);
+    connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);
     connect(ui->switch_button_0, &QPushButton::clicked, this, &Widget::switchToPage1);
     connect(ui->switch_button_1, &QPushButton::clicked, this, &Widget::switchToPage2);
     connect(ui->switch_button_2, &QPushButton::clicked, this, &Widget::switchToPage0);
 
-//    connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
-//    connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
+    connect(this, &Widget::WidgetToStartCapture, cameracap, &CameraCapture::startCapture);
+    connect(this, &Widget::WidgetToStopCapture, cameracap, &CameraCapture::stopCapture);
+
+    connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
+    connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
+
+    connect(ui->picture_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *item){
+        QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
+        QPixmap pix(path);
+
+        ui->picture_label->setPixmap(pix);
+    });
+
+    // 点击播放视频
+    connect(ui->video_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *videoItem){
+        QString videoPath = videoItem->data(Qt::UserRole).toString();
+        // 调用播放函数（需要你实现解码逻辑）
+    });
 
     // 开启线程
-//    cameracapThread->start();
-//    savevideoThread->start();
-//    keycontrolThread->start();
-
+    cameracapThread->start();
+    savevideoThread->start();
+    keycontrolThread->start();
 
 }
 
@@ -219,11 +216,9 @@ Widget::~Widget()
 }
 
 
-
 void Widget::doShow(cv::Mat img)
 {
 
-    // 推流
     static int64_t time_last = 0;
     // 获取当前时间点
     auto now = std::chrono::system_clock::now();
@@ -249,19 +244,34 @@ void Widget::doShow(cv::Mat img)
     ui->video_label->setPixmap(QPixmap::fromImage(image));
 }
 
-void Widget::switchToPage1()
+void Widget::switchToPage1() // 切换到相册列表
 {
+    emit WidgetToStopCapture();
     ui->stackedWidget->setCurrentIndex(1);
 }
 
-void Widget::switchToPage2()
+void Widget::switchToPage2() // 切换到视频列表
 {
     ui->stackedWidget->setCurrentIndex(2);
 }
 
-void Widget::switchToPage0()
+void Widget::switchToPage0() // 切换回摄像头显示
 {
+    emit WidgetToStartCapture();
     ui->stackedWidget->setCurrentIndex(0);
+}
+
+void Widget::updatePicture(QString path)  // 每次拍完照片更新相册
+{
+    QFileInfo fileInfo(path);
+    QString fileName = fileInfo.fileName(); // 提取出文件名称
+    QListWidgetItem *item = new QListWidgetItem;
+    QPixmap pix(path);
+
+    item->setIcon(QIcon(pix.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+    item->setText(fileName);
+    item->setData(Qt::UserRole, path);
+    ui->picture_listWidget->addItem(item);
 }
 
 

@@ -10,6 +10,7 @@
 #include "cameracapture.h"
 #include "savevideo.h"
 #include "keycontrol.h"
+#include "rk_mpi.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class Widget; }
@@ -28,9 +29,12 @@ public slots:
     void switchToPage1();
     void switchToPage2();
     void switchToPage0();
+    void updatePicture(QString path);
 
 
-private slots:
+signals:
+    void WidgetToStartCapture();
+    void WidgetToStopCapture();
 
 
 private:
@@ -39,9 +43,10 @@ private:
     QThread *savevideoThread;
     QThread *keycontrolThread;
 
+    QFileInfoList picture_fileList;
+
 
 };
 
-extern uint8_t camStatus;
 
 #endif // WIDGET_H

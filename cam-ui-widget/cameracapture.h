@@ -22,6 +22,7 @@ class CameraCapture : public QObject
     Q_OBJECT
 public:
     CameraCapture();
+    ~CameraCapture();
 
 public slots:
     void startCapture();
@@ -38,6 +39,7 @@ private:
 signals:
     void capFinishedToUI(cv::Mat imgbuf);
     void capFinishedToVideo(cv::Mat buf);
+    void photoFinishedToUpdate(QString path);
 
 
 

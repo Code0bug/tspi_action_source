@@ -14,6 +14,7 @@
 #include "rk_mpi_mb.h"
 #include "rk_mpi_sys.h"
 #include "rk_mpi_venc.h"
+#include "rk_mpi_vdec.h"
 #include "rk_mpi_vpss.h"
 #include "rk_mpi_vo.h"
 #include "rk_mpi_rgn.h"
@@ -31,5 +32,6 @@ int vi_dev_init();
 int vi_chn_init(int channelId, int width, int height);
 int venc_init(int chnId, int width, int height, RK_CODEC_ID_E enType);
 int vpss_init(int chnId, int width, int height);
+int vdec_init(int width, int height);
 
 #endif

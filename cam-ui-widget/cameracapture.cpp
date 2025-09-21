@@ -10,20 +10,29 @@ CameraCapture::CameraCapture()
         // return -1;
     }
 
-    // vi init
-    vi_dev_init();
-
-    vi_chn_init(0, 3264, 2448);   // channel 0 最大支持8M
-    vi_chn_init(1, 1920, 1080);   // channel 1 最大支持1920*1080
-
     isRunning = 0;
     photo_flag = 0;
     video_flag = 0;
 
 }
 
+CameraCapture::~CameraCapture()
+{
+
+    RK_MPI_VI_DisableChn(0, 0);
+    RK_MPI_VI_DisableChn(0, 1);
+    RK_MPI_VI_DisableDev(0);
+    RK_MPI_SYS_Exit();
+}
+
 void CameraCapture::startCapture()
 {
+    // vi init
+    vi_dev_init();
+
+    vi_chn_init(0, 3264, 2448);   // channel 0 最大支持8M
+    vi_chn_init(1, 1920, 1080);   // channel 1 最大支持1920*1080
+
     isRunning = 1;
     while (isRunning) {
         // 视频图像帧信息结构体，存储采集视频帧
@@ -60,9 +69,6 @@ void CameraCapture::startCapture()
 
             emit capFinishedToUI(ui_frame);
 
-
-
-
         }
 
         s32Ret = RK_MPI_VI_ReleaseChnFrame(0, 1, &stViFrame);
@@ -73,21 +79,6 @@ void CameraCapture::startCapture()
 
 }
 
-
-void CameraCapture::stopCapture()
-{
-    isRunning = 0;
-}
-
-void CameraCapture::startVideo()
-{
-    video_flag = 1;
-}
-
-void CameraCapture::stopVideo()
-{
-    video_flag = 0;
-}
 
 void CameraCapture::takePhoto()
 {
@@ -131,6 +122,8 @@ void CameraCapture::takePhoto()
             // 保存图片
             cv::imwrite(savePath.toStdString(), frame);
 
+            emit photoFinishedToUpdate(savePath);  // 每次拍完照片更新相册
+
             printf("taking photo: %s\n", savePath.toStdString().c_str());
         }
 
@@ -142,6 +135,25 @@ void CameraCapture::takePhoto()
 
         break; // 只拍一张有效照片
     }
+}
+
+
+void CameraCapture::stopCapture()
+{
+    isRunning = 0;
+    RK_MPI_VI_DisableChn(0, 0);
+    RK_MPI_VI_DisableChn(0, 1);
+    RK_MPI_VI_DisableDev(0);
+}
+
+void CameraCapture::startVideo()
+{
+    video_flag = 1;
+}
+
+void CameraCapture::stopVideo()
+{
+    video_flag = 0;
 }
 
 
