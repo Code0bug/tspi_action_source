@@ -43,13 +43,9 @@ SaveVideo::SaveVideo()
     RK_CODEC_ID_E enCodecType = RK_VIDEO_ID_AVC;
     venc_init(0, encWidth, encHeight, enCodecType);
 
-    fp = fopen("/userdata/video/1.bin", "wb");
-    if (!fp) {
-        perror("fopen");
-    }
 }
 
-void SaveVideo::do_save_video(cv::Mat buf)
+void SaveVideo::do_save_video(cv::Mat buf, FILE* fp)
 {
     printf("start video===\n");
 

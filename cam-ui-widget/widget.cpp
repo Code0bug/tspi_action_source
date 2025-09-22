@@ -129,7 +129,7 @@ Widget::Widget(QWidget *parent)
     QDir dir(picture_dirPath);
     QStringList filters;
     filters << "*.png" << "*.jpg" << "*.jpeg" << "*.bmp";
-    picture_fileList = dir.entryInfoList(filters, QDir::Files);
+    QFileInfoList picture_fileList = dir.entryInfoList(filters, QDir::Files);
 
     for (auto &file : picture_fileList) {
         QListWidgetItem *item = new QListWidgetItem;
@@ -175,6 +175,7 @@ Widget::Widget(QWidget *parent)
     // 连接信号
     connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
     connect(cameracap, &CameraCapture::photoFinishedToUpdate, this, &Widget::updatePicture);
+    connect(cameracap, &CameraCapture::videoFinishedToUpdate, this, &Widget::updateVideo);
     connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);
 
     connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
@@ -272,6 +273,20 @@ void Widget::updatePicture(QString path)  // 每次拍完照片更新相册
     item->setText(fileName);
     item->setData(Qt::UserRole, path);
     ui->picture_listWidget->addItem(item);
+}
+
+void Widget::updateVideo(QString path)   // 录像时更新视频列表
+{
+    QFileInfo fileInfo(path);
+    QString fileName = fileInfo.fileName(); // 提取出文件名称
+    QListWidgetItem *item = new QListWidgetItem;
+    QPixmap pix(path);
+
+    item->setIcon(QIcon(pix.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+    item->setText(fileName);
+    item->setData(Qt::UserRole, path);
+    ui->video_listWidget->addItem(item);
+
 }
 
 

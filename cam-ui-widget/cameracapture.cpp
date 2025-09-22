@@ -64,7 +64,7 @@ void CameraCapture::startCapture()
             if (video_flag) { // 录像
                 rga_buffer_t dst_img_video = wrapbuffer_virtualaddr(video_frame.data, width, height, RK_FORMAT_BGR_888);
                 imcvtcolor(src_img, dst_img_video, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);
-                capFinishedToVideo(video_frame);
+                capFinishedToVideo(video_frame, video_fp);
             }
 
             emit capFinishedToUI(ui_frame);
@@ -144,11 +144,25 @@ void CameraCapture::stopCapture()
     RK_MPI_VI_DisableChn(0, 0);
     RK_MPI_VI_DisableChn(0, 1);
     RK_MPI_VI_DisableDev(0);
+
+    RK_MPI_SYS_Exit();
 }
 
 void CameraCapture::startVideo()
 {
+    QDateTime current = QDateTime::currentDateTime();
+    QString fileName = current.toString("yyyyMMdd_hhmmss") + ".bin";
+    // 拼接保存路径
+    QString savePath = "/userdata/video/" + fileName;
+    video_fp = fopen(savePath.toStdString().c_str(), "wb");
+    if (!video_fp) {
+        perror("fopen");
+    }
+
+    emit videoFinishedToUpdate(savePath);
+
     video_flag = 1;
+
 }
 
 void CameraCapture::stopVideo()

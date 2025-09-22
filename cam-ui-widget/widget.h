@@ -30,6 +30,7 @@ public slots:
     void switchToPage2();
     void switchToPage0();
     void updatePicture(QString path);
+    void updateVideo(QString path);
 
 
 signals:
@@ -43,7 +44,6 @@ private:
     QThread *savevideoThread;
     QThread *keycontrolThread;
 
-    QFileInfoList picture_fileList;
 
 
 };
