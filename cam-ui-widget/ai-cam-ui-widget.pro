@@ -19,6 +19,7 @@ SOURCES += \
     cameracapture.cpp \
     keycontrol.cpp \
     main.cpp \
+    playvideo.cpp \
     rk_mpi.cpp \
     savevideo.cpp \
     widget.cpp
@@ -27,6 +28,7 @@ HEADERS += \
     cameracapture.h \
     include/rk_mpi.h \
     keycontrol.h \
+    playvideo.h \
     savevideo.h \
     widget.h
 

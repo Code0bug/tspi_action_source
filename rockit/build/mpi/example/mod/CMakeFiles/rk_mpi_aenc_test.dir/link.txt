@@ -1,0 +1,1 @@
+/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/aarch64-buildroot-linux-gnu-g++    -rdynamic CMakeFiles/rk_mpi_aenc_test.dir/test_mpi_aenc.cpp.o  -o rk_mpi_aenc_test  -Wl,-rpath,/home/lzp/rk_project/rk-camera-display/rockit/mpi/../lib/lib64: ../../../../mpi/../lib/lib64/librockit.so -lpthread ../common/librt_test_comm.a 

@@ -5,24 +5,19 @@ int vdec_init(int width, int height) {
     RK_S32 s32Ret = RK_SUCCESS;
     VDEC_CHN_ATTR_S stAttr;
     VDEC_CHN_PARAM_S stVdecParam;
-    MB_POOL_CONFIG_S stMbPoolCfg;
-    VDEC_PIC_BUF_ATTR_S stVdecPicBufAttr;
-    MB_PIC_CAL_S stMbPicCalResult;
-    VDEC_MOD_PARAM_S stModParam;
 
     memset(&stAttr, 0, sizeof(VDEC_CHN_ATTR_S));
     memset(&stVdecParam, 0, sizeof(VDEC_CHN_PARAM_S));
-    memset(&stModParam, 0, sizeof(VDEC_MOD_PARAM_S));
 
 
-    stModParam.enVdecMBSource = MB_SOURCE_USER;     // 内存池：用户池
-    s32Ret = RK_MPI_VDEC_SetModParam(&stModParam);  // 设置解码通道参数
-    if (s32Ret != RK_SUCCESS) {
-        printf("SetModParam failed!\n");
-        return s32Ret;
-    }
+//    stModParam.enVdecMBSource = MB_SOURCE_USER;     // 内存池：用户池
+//    s32Ret = RK_MPI_VDEC_SetModParam(&stModParam);  // 设置解码通道参数
+//    if (s32Ret != RK_SUCCESS) {
+//        printf("SetModParam failed!\n");
+//        return s32Ret;
+//    }
 
-    stAttr.enMode = VIDEO_MODE_FRAME;  // 码流发送方式：流式/帧式
+    stAttr.enMode = VIDEO_MODE_STREAM;  // 码流发送方式：流式/帧式
     stAttr.enType = RK_VIDEO_ID_AVC;   // 码流格式
     stAttr.u32PicWidth = width;        // 视频宽度
     stAttr.u32PicHeight = height;      // 视频高度
@@ -42,11 +37,11 @@ int vdec_init(int width, int height) {
         return s32Ret;
     }
 
-    RK_S32 vdec_fd = RK_MPI_VDEC_GetFd(0); // 获取视频解码通道的设备文件句柄，用于查询解码通道数据有产生解码图像
-    if (vdec_fd <= 0) {
-        printf("get fd chn failed \n");
-        return s32Ret;
-    }
+//    RK_S32 vdec_fd = RK_MPI_VDEC_GetFd(0); // 获取视频解码通道的设备文件句柄，用于查询解码通道数据有产生解码图像
+//    if (vdec_fd <= 0) {
+//        printf("get fd chn failed \n");
+//        return s32Ret;
+//    }
 
     s32Ret = RK_MPI_VDEC_StartRecvStream(0); // 解码器开始接收用户发送的码流
     if (s32Ret != RK_SUCCESS) {

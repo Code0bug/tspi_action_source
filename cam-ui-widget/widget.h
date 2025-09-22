@@ -10,6 +10,7 @@
 #include "cameracapture.h"
 #include "savevideo.h"
 #include "keycontrol.h"
+#include "playvideo.h"
 #include "rk_mpi.h"
 
 QT_BEGIN_NAMESPACE
@@ -43,6 +44,7 @@ private:
     QThread *cameracapThread;
     QThread *savevideoThread;
     QThread *keycontrolThread;
+    QThread *playvideoThread;
 
 
 

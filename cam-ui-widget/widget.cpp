@@ -149,9 +149,9 @@ Widget::Widget(QWidget *parent)
     for (auto &videoFile : videoFileList) {
         QListWidgetItem *videoItem = new QListWidgetItem;
 
-        // 可用视频封面图或占位图
-        QPixmap videoPlaceholder("");
-        videoItem->setIcon(QIcon(videoPlaceholder.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+//        // 可用视频封面图或占位图
+//        QPixmap videoPlaceholder("");
+//        videoItem->setIcon(QIcon(videoPlaceholder.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
         videoItem->setText(videoFile.fileName());
         videoItem->setData(Qt::UserRole, videoFile.absoluteFilePath());
 
@@ -171,6 +171,11 @@ Widget::Widget(QWidget *parent)
     keycontrolThread = new QThread();
     KeyControl* keycontrol = new KeyControl();
     keycontrol->moveToThread(keycontrolThread);
+
+    // 视频采集线程
+    playvideoThread = new QThread();
+    PlayVideo* playvideo = new PlayVideo();
+    playvideo->moveToThread(playvideoThread);
 
     // 连接信号
     connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
@@ -199,15 +204,13 @@ Widget::Widget(QWidget *parent)
     });
 
     // 点击播放视频
-    connect(ui->video_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *videoItem){
-        QString videoPath = videoItem->data(Qt::UserRole).toString();
-        // 调用播放函数（需要你实现解码逻辑）
-    });
+    connect(ui->video_listWidget, &QListWidget::itemClicked, playvideo, &PlayVideo::do_play_video);
 
     // 开启线程
     cameracapThread->start();
     savevideoThread->start();
     keycontrolThread->start();
+    playvideoThread->start();
 
 }
 

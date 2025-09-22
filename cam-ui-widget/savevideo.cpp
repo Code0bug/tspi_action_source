@@ -11,7 +11,7 @@ SaveVideo::SaveVideo()
     // 内存缓存池配置
     MB_POOL_CONFIG_S PoolCfg;
     memset(&PoolCfg, 0, sizeof(MB_POOL_CONFIG_S));
-    PoolCfg.u64MBSize = encWidth * encHeight * 3 ;  		   // 缓存块大小
+    PoolCfg.u64MBSize = encWidth * encHeight * 3 ;     // 缓存块大小
     PoolCfg.u32MBCnt = 1;                              // 内存缓存池中缓存块个数
     PoolCfg.enAllocType = MB_ALLOC_TYPE_DMA;           // 申请内存类型
     //PoolCfg.bPreAlloc = RK_FALSE;
