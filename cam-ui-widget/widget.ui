@@ -113,7 +113,7 @@
       <rect>
        <x>0</x>
        <y>0</y>
-       <width>221</width>
+       <width>201</width>
        <height>481</height>
       </rect>
      </property>
@@ -121,17 +121,17 @@
     <widget class="QLabel" name="video_label_2">
      <property name="geometry">
       <rect>
-       <x>220</x>
+       <x>200</x>
        <y>0</y>
-       <width>571</width>
-       <height>481</height>
+       <width>600</width>
+       <height>480</height>
       </rect>
      </property>
      <property name="text">
       <string>TextLabel</string>
      </property>
      <property name="scaledContents">
-      <bool>true</bool>
+      <bool>false</bool>
      </property>
     </widget>
     <zorder>video_listWidget</zorder>

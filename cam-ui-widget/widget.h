@@ -10,7 +10,8 @@
 #include "cameracapture.h"
 #include "savevideo.h"
 #include "keycontrol.h"
-#include "playvideo.h"
+#include "videodecget.h"
+#include "videodecsend.h"
 #include "rk_mpi.h"
 
 QT_BEGIN_NAMESPACE
@@ -32,11 +33,13 @@ public slots:
     void switchToPage0();
     void updatePicture(QString path);
     void updateVideo(QString path);
+    void doShowVideo(cv::Mat img);
 
 
 signals:
     void WidgetToStartCapture();
     void WidgetToStopCapture();
+    void WidgetToStartDecVideo(QString path);
 
 
 private:
@@ -45,6 +48,8 @@ private:
     QThread *savevideoThread;
     QThread *keycontrolThread;
     QThread *playvideoThread;
+    QThread *videodecsendThread;
+    QThread *videodecgetThread;
 
 
 

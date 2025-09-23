@@ -9,14 +9,6 @@ int vdec_init(int width, int height) {
     memset(&stAttr, 0, sizeof(VDEC_CHN_ATTR_S));
     memset(&stVdecParam, 0, sizeof(VDEC_CHN_PARAM_S));
 
-
-//    stModParam.enVdecMBSource = MB_SOURCE_USER;     // 内存池：用户池
-//    s32Ret = RK_MPI_VDEC_SetModParam(&stModParam);  // 设置解码通道参数
-//    if (s32Ret != RK_SUCCESS) {
-//        printf("SetModParam failed!\n");
-//        return s32Ret;
-//    }
-
     stAttr.enMode = VIDEO_MODE_STREAM;  // 码流发送方式：流式/帧式
     stAttr.enType = RK_VIDEO_ID_AVC;   // 码流格式
     stAttr.u32PicWidth = width;        // 视频宽度

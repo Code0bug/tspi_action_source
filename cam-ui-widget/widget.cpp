@@ -164,18 +164,24 @@ Widget::Widget(QWidget *parent)
     CameraCapture* cameracap = new CameraCapture();
     cameracap->moveToThread(cameracapThread);
 
+    // 视频编码保存
     savevideoThread = new QThread();
     SaveVideo* savevideo = new SaveVideo();
     savevideo->moveToThread(savevideoThread);
 
+    // 按键控制
     keycontrolThread = new QThread();
     KeyControl* keycontrol = new KeyControl();
     keycontrol->moveToThread(keycontrolThread);
 
-    // 视频采集线程
-    playvideoThread = new QThread();
-    PlayVideo* playvideo = new PlayVideo();
-    playvideo->moveToThread(playvideoThread);
+    // 视频解码
+    videodecsendThread = new QThread();
+    VideoDecSend* videodecsend = new VideoDecSend();
+    videodecsend->moveToThread(videodecsendThread);
+
+    videodecgetThread = new QThread();
+    VideoDecGet* videodecget = new VideoDecGet();
+    videodecget->moveToThread(videodecgetThread);
 
     // 连接信号
     connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
@@ -204,13 +210,23 @@ Widget::Widget(QWidget *parent)
     });
 
     // 点击播放视频
-    connect(ui->video_listWidget, &QListWidget::itemClicked, playvideo, &PlayVideo::do_play_video);
+    connect(ui->video_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *item){
+        vdec_init(1920, 1080);
+        QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
+        emit WidgetToStartDecVideo(path);
+    });
+
+    connect(this, &Widget::WidgetToStartDecVideo, videodecsend, &VideoDecSend::do_send_frame);
+    connect(this, &Widget::WidgetToStartDecVideo, videodecget, &VideoDecGet::do_get_frame);
+
+    connect(videodecget, &VideoDecGet::VideodecToUI, this, &Widget::doShowVideo);
 
     // 开启线程
     cameracapThread->start();
     savevideoThread->start();
     keycontrolThread->start();
-    playvideoThread->start();
+    videodecsendThread->start();
+    videodecgetThread->start();
 
 }
 
@@ -247,6 +263,34 @@ void Widget::doShow(cv::Mat img)
 
     ui->video_label->setPixmap(QPixmap::fromImage(image));
 }
+
+void Widget::doShowVideo(cv::Mat img)
+{
+    static int64_t time_last = 0;
+    // 获取当前时间点
+    auto now = std::chrono::system_clock::now();
+    // 转换为自1970年1月1日以来的毫秒数
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+    // 获取毫秒级时间戳
+    int64_t timestamp = duration.count();
+    int64_t fps_time = timestamp - time_last;
+    fps = 1000 / fps_time;
+
+    time_last = timestamp;
+
+    sprintf(fps_text, "fps = %.2f", fps);
+    cv::putText(img, fps_text,
+                    cv::Point(40, 40),
+                    cv::FONT_HERSHEY_SIMPLEX,1,
+                    cv::Scalar(0,255,0),2);
+
+
+    QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
+
+
+    ui->video_label_2->setPixmap(QPixmap::fromImage(image));
+}
+
 
 void Widget::switchToPage1() // 切换到相册列表
 {
@@ -291,6 +335,8 @@ void Widget::updateVideo(QString path)   // 录像时更新视频列表
     ui->video_listWidget->addItem(item);
 
 }
+
+
 
 
 

@@ -19,17 +19,19 @@ SOURCES += \
     cameracapture.cpp \
     keycontrol.cpp \
     main.cpp \
-    playvideo.cpp \
     rk_mpi.cpp \
     savevideo.cpp \
+    videodecget.cpp \
+    videodecsend.cpp \
     widget.cpp
 
 HEADERS += \
     cameracapture.h \
     include/rk_mpi.h \
     keycontrol.h \
-    playvideo.h \
     savevideo.h \
+    videodecget.h \
+    videodecsend.h \
     widget.h
 
 # 添加rockit/opencv/rknn头文件和动态库 $$PWD表示.pro文件所在目录
