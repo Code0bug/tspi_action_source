@@ -51,6 +51,7 @@ void CameraCapture::startCapture()
             cv::Mat ui_frame(480, 800, CV_8UC3);
 //            cv::Mat ui_frame_rotate(480, 800, CV_8UC3);
             cv::Mat video_frame(height, width, CV_8UC3);
+//            cv::Mat video_frame_rotate(height, width, CV_8UC3);
 
             // 利用rga进行像素格式转换
             rga_buffer_t src_img = wrapbuffer_virtualaddr(dat, width, height, RK_FORMAT_YCrCb_420_SP);
@@ -63,7 +64,9 @@ void CameraCapture::startCapture()
 
             if (video_flag) { // 录像
                 rga_buffer_t dst_img_video = wrapbuffer_virtualaddr(video_frame.data, width, height, RK_FORMAT_BGR_888);
+//                rga_buffer_t dst_img_video_rotate = wrapbuffer_virtualaddr(video_frame_rotate.data, width, height, RK_FORMAT_BGR_888);
                 imcvtcolor(src_img, dst_img_video, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);
+//                imrotate(dst_img_video, dst_img_video_rotate, IM_HAL_TRANSFORM_ROT_180);  // 设置旋转
                 capFinishedToVideo(video_frame, video_fp);
             }
 
