@@ -32,6 +32,7 @@ public slots:
     void takePhoto();
 
 private:
+    cv::Mat stabilizeFrame(const cv::Mat& frame);
     uint8_t isRunning;
     uint8_t photo_flag;
     uint8_t video_flag;

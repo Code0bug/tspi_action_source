@@ -25,12 +25,13 @@ CameraCapture::~CameraCapture()
     RK_MPI_SYS_Exit();
 }
 
+
 void CameraCapture::startCapture()
 {
     // vi init
     vi_dev_init();
 
-    vi_chn_init(0, 3264, 2448);   // channel 0 最大支持8M
+    vi_chn_init(0, 3264, 2448);   // channel 0 最大支持8M  3264*2448
     vi_chn_init(1, 1920, 1080);   // channel 1 最大支持1920*1080
 
     isRunning = 1;

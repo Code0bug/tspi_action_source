@@ -51,6 +51,7 @@ LIBS += \
         -lopencv_highgui \
         -lopencv_imgproc \
         -lopencv_imgcodecs \
+        -lopencv_video \
         -lrga
 
 FORMS += \
