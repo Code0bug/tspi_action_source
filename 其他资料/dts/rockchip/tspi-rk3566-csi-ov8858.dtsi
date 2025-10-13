@@ -240,7 +240,7 @@
 	status = "okay";
 
 	/* 自动聚焦马达 */
-    dw9714: dw9714@c {
+    dw9714: dw9714@0c {
         compatible = "dongwoon,dw9714";
         status = "okay";
         reg = <0x0c>;
@@ -270,7 +270,7 @@
 		lens-focus = <&dw9714>; /* 关联马达 */
 		port {
 			ov8858_out: endpoint {
-				remote-endpoint = <&dphy0_in>;  /* 4-lanes要用dphy0，1和2只支持split mode*/
+				remote-endpoint = <&dphy0_in>;  /* 4-lanes要用dphy0，1和2只支持split mode */
 				data-lanes = <1 2 3 4>;
 			};
 		};
