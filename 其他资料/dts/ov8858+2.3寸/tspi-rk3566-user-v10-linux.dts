@@ -170,6 +170,7 @@
     };
 
 	ft5x06@38 {
+		status = "disabled";
 		compatible = "ft5x06-touch";
 		reg = <0x38>;
         tp-size = <89>;          // 触摸屏的大小

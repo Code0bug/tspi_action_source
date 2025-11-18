@@ -8582,7 +8582,7 @@
 
 &dsi1 {
  status = "okay";
- rockchip,lane-rate = <480>;
+ rockchip,lane-rate = <400>;
  dsi1_panel: panel@0 {
   status = "okay";
   compatible = "simple-panel-dsi";
@@ -8591,9 +8591,9 @@
   pinctrl-0 = <&dsi1_rst_gpio>;
   reg = <0>;
 
-  reset-delay-ms = <20>;
+  reset-delay-ms = <10>;
   enable-delay-ms = <120>;
-  prepare-delay-ms = <50>;
+  prepare-delay-ms = <5000>;
   unprepare-delay-ms = <20>;
   disable-delay-ms = <50>;
   dsi,flags = <((1 << 0) | (1 << 1) |
@@ -9132,6 +9132,7 @@
     };
 
  ft5x06@38 {
+  status = "disabled";
   compatible = "ft5x06-touch";
   reg = <0x38>;
         tp-size = <89>;
@@ -9145,14 +9146,14 @@
 
 &i2c2 {
  status = "okay";
-# 196 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
+# 197 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
 };
 
 &i2c3 {
  status = "okay";
  pinctrl-names = "default";
  pinctrl-0 = <&i2c3m1_xfer>;
-# 211 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
+# 212 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
 };
 
 
