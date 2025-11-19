@@ -62,12 +62,20 @@ static int gp7101_backlight_set(struct backlight_device *bl) {
     struct gp7101_bl_dev *dev = bl_get_data(bl);  // 获取背光设备结构体
     struct i2c_client *client = dev->client;      // 获取I2C设备指针
 
+    s32 ret;
+
     u8 addr[1] =  {BACKLIGHT_REG_CTRL_8};
     u8 buf[1] = {bl->props.brightness}  // 缓冲区，存储背光亮度
 
     MY_DEBUG("pwm:%d", bl->props.brightness);  
 
-    i2c_write_regs(client, addr[0], buf, sizeof(buf));
+    ret = i2c_write_regs(client, addr[0], buf, sizeof(buf));
+
+    while (ret < 0) { // 防止gp7101没有上电成功，发送失败时重新发送
+        MY_DEBUG("i2c write failed : %d", ret); 
+        msleep(50); 
+        ret = i2c_write_regs(client, addr[0], buf, sizeof(buf)); // 重新发送
+    }
 
     return 0;
 
@@ -115,6 +123,8 @@ static int  gp7101_bl_probe(struct i2c_client *client, const struct i2c_device_i
                                         &gp7101bldev, &gp7101_backlight_ops, &props);
     
     printk("max_brightness:%d  default_brightness:%d\r\n", props.max_brightness, props.brightness);
+
+    msleep(500); // 等待 gp7101 上电
     
     backlight_update_status(bl); // 更新背光设备的状态
 

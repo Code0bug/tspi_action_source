@@ -8582,7 +8582,7 @@
 
 &dsi1 {
  status = "okay";
- rockchip,lane-rate = <400>;
+
  dsi1_panel: panel@0 {
   status = "okay";
   compatible = "simple-panel-dsi";
@@ -8592,10 +8592,11 @@
   reg = <0>;
 
   reset-delay-ms = <10>;
-  enable-delay-ms = <120>;
-  prepare-delay-ms = <5000>;
+  enable-delay-ms = <0>;
+  prepare-delay-ms = <20>;
   unprepare-delay-ms = <20>;
   disable-delay-ms = <50>;
+  init-delay-ms = <30>;
   dsi,flags = <((1 << 0) | (1 << 1) |
    (1 << 11) | (1 << 9))>;
   dsi,format = <0>;
