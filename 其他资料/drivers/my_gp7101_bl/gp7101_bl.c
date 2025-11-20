@@ -124,7 +124,7 @@ static int  gp7101_bl_probe(struct i2c_client *client, const struct i2c_device_i
     
     printk("max_brightness:%d  default_brightness:%d\r\n", props.max_brightness, props.brightness);
 
-    msleep(500); // 等待 gp7101 上电
+    // msleep(500); // 等待 gp7101 上电
     
     backlight_update_status(bl); // 更新背光设备的状态
 
