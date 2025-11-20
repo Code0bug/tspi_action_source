@@ -9142,19 +9142,45 @@
         touch-gpio = <&gpio1 0 8>;
         reset-gpio = <&gpio1 1 0>;
  };
+
+ cst226se@1a {
+  status = "disabled";
+  compatible = "cst226se-touch";
+  reg = <0x1a>;
+        tp-size = <89>;
+        max-x = <368>;
+        max-y = <552>;
+        touch-gpio = <&gpio1 0 8>;
+        reset-gpio = <&gpio1 1 0>;
+ };
+
+ hynitron@1a {
+  status = "okay";
+  compatible = "hynitron,hyn_ts";
+  reg = <0x1a>;
+  hynitron,reset-gpio = <&gpio1 1 0>;
+  hynitron,irq-gpio = <&gpio1 0 8>;
+  hynitron,max-touch-number = <5>;
+  hynitron,display-coords = <368 552>;
+
+
+
+
+
+ };
 };
 
 
 &i2c2 {
  status = "okay";
-# 197 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
+# 223 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
 };
 
 &i2c3 {
  status = "okay";
  pinctrl-names = "default";
  pinctrl-0 = <&i2c3m1_xfer>;
-# 212 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
+# 238 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
 };
 
 

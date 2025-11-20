@@ -16,6 +16,8 @@ Widget::Widget(QWidget *parent)
 
     qRegisterMetaType<cv::Mat>("cv::Mat");
 
+    ui->video_label->setGeometry(this->rect());  // 让label自适应widget
+
     // 假设按钮宽高相等，比如 80x80
     ui->switch_button_0->setFixedSize(80, 80);
 

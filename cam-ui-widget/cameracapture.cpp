@@ -49,14 +49,14 @@ void CameraCapture::startCapture()
             int height = stViFrame.stVFrame.u32Height;
             int width = stViFrame.stVFrame.u32Width;
 
-            cv::Mat ui_frame(480, 800, CV_8UC3);
+            cv::Mat ui_frame(368, 552, CV_8UC3);
 //            cv::Mat ui_frame_rotate(480, 800, CV_8UC3);
             cv::Mat video_frame(height, width, CV_8UC3);
 //            cv::Mat video_frame_rotate(height, width, CV_8UC3);
 
             // 利用rga进行像素格式转换
             rga_buffer_t src_img = wrapbuffer_virtualaddr(dat, width, height, RK_FORMAT_YCrCb_420_SP);
-            rga_buffer_t dst_img = wrapbuffer_virtualaddr(ui_frame.data, 800, 480, RK_FORMAT_BGR_888);
+            rga_buffer_t dst_img = wrapbuffer_virtualaddr(ui_frame.data, 552, 368, RK_FORMAT_BGR_888);
 //            rga_buffer_t dst_img_rotate = wrapbuffer_virtualaddr(ui_frame_rotate.data, 800, 480, RK_FORMAT_BGR_888);
             imresize(src_img, dst_img);
             imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);

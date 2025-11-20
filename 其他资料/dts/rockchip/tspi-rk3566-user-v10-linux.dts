@@ -161,7 +161,7 @@
 
 &i2c1 {
     status = "okay"; // 状态为"okay"，表示此节点是可用和配置正确的
-	clock-frequency = <200000>;  // 设置i2c1的时钟频率为400kHz
+	clock-frequency = <200000>;  // 设置i2c1的时钟频率
     GP7101@58 {      // 定义一个子节点，名字为GP7101，地址为58
         compatible = "gp7101-backlight";   // 该节点与"gp7101-backlight"兼容，
         reg = <0x58>;                      // GP7101地址0x58
@@ -169,7 +169,7 @@
         default-brightness-level = <200>;  // 默认的背光亮度级别是200
     };
 
-	ft5x06@38 {
+	ft5x06@38 {  // 3.1寸屏幕触摸
 		status = "disabled";
 		compatible = "ft5x06-touch";
 		reg = <0x38>;
@@ -178,6 +178,32 @@
         max-y = <800>;           // 触摸屏支持的最大Y坐标值
         touch-gpio = <&gpio1 RK_PA0 IRQ_TYPE_LEVEL_LOW>; // 触摸屏的触摸中断引脚，连接到gpio1的第0个引脚，触发方式为低电平触发
         reset-gpio = <&gpio1 RK_PA1 GPIO_ACTIVE_HIGH>;   // 触摸屏的复位引脚，连接到gpio1的第1个引脚，有效电平为高电平
+	};
+
+	cst226se@1a {  // 2.3寸屏幕触摸(自编版)
+		status = "disabled";
+		compatible = "cst226se-touch";
+		reg = <0x1a>;
+        tp-size = <89>;          // 触摸屏的大小
+        max-x = <368>;           // 触摸屏支持的最大X坐标值
+        max-y = <552>;           // 触摸屏支持的最大Y坐标值
+        touch-gpio = <&gpio1 RK_PA0 IRQ_TYPE_LEVEL_LOW>; // 触摸屏的触摸中断引脚，连接到gpio1的第0个引脚，触发方式为低电平触发
+        reset-gpio = <&gpio1 RK_PA1 GPIO_ACTIVE_HIGH>;   // 触摸屏的复位引脚，连接到gpio1的第1个引脚，有效电平为高电平
+	};
+
+	hynitron@1a {  // 2.3寸屏幕触摸(商家提供)
+		status = "okay";
+		compatible = "hynitron,hyn_ts";
+		reg = <0x1a>;
+		hynitron,reset-gpio = <&gpio1 RK_PA1 GPIO_ACTIVE_HIGH>;
+		hynitron,irq-gpio = <&gpio1 RK_PA0 IRQ_TYPE_LEVEL_LOW>;
+		hynitron,max-touch-number = <5>;
+		hynitron,display-coords = <368 552>;
+		// hynitron,have-key;
+		// hynitron,key-number = <3>;
+		// hynitron,key-code = <139 172 158>;
+		// hynitron,key-y-coord = <2000 2000 2000>;
+		// hynitron,key-x-coord = <200 600 800>;
 	};
 };
 
