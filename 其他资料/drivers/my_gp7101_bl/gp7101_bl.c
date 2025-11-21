@@ -71,11 +71,11 @@ static int gp7101_backlight_set(struct backlight_device *bl) {
 
     ret = i2c_write_regs(client, addr[0], buf, sizeof(buf));
 
-    while (ret < 0) { // 防止gp7101没有上电成功，发送失败时重新发送
-        MY_DEBUG("i2c write failed : %d", ret); 
-        msleep(50); 
-        ret = i2c_write_regs(client, addr[0], buf, sizeof(buf)); // 重新发送
-    }
+    // while (ret < 0) { // 防止gp7101没有上电成功，发送失败时重新发送
+    //     MY_DEBUG("i2c write failed : %d", ret); 
+    //     msleep(50); 
+    //     ret = i2c_write_regs(client, addr[0], buf, sizeof(buf)); // 重新发送
+    // }
 
     return 0;
 

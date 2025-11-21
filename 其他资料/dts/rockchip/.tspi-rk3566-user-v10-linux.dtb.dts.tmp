@@ -9195,6 +9195,13 @@
   compatible ="rockchip,spi_test_bus1_cs0";
   reg = <0>;
   spi-max-frequency = <24000000>;
+  status = "disabled";
+ };
+
+ icm42688p@0 {
+  compatible ="rockchip,icm42688p";
+  reg = <0>;
+  spi-max-frequency = <24000000>;
   status = "okay";
  };
 };
