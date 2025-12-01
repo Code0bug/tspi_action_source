@@ -16,26 +16,47 @@ Widget::Widget(QWidget *parent)
 
     qRegisterMetaType<cv::Mat>("cv::Mat");
 
-    ui->video_label->setGeometry(this->rect());  // 让label自适应widget
+//    ui->video_label->setStyleSheet("text-align:center;font-size:1px;");
+//    ui->video_label->setContentsMargins(0,0,0,0);
+//    ui->stackedWidget->setContentsMargins(0,0,0,0);
+//    ui->page0->setContentsMargins(0,0,0,0);
 
-    // 假设按钮宽高相等，比如 80x80
-    ui->switch_button_0->setFixedSize(80, 80);
 
-    // 设置样式表
-    ui->switch_button_0->setStyleSheet(
+    QPixmap switch_button_0_pix("./photo.png");  // 加载图标
+    ui->switch_button_0->setIcon(QIcon(switch_button_0_pix));
+    ui->switch_button_0->setFixedSize(80, 80);     // 设置点击区域大小
+    ui->switch_button_0->setIconSize(QSize(80, 80)); // 设置图标大小
+    ui->switch_button_0->setStyleSheet( // 设置原按钮透明
         "QPushButton {"
-        "   background-color: rgba(255, 255, 255, 150);"  // 最后一个参数是透明度
-        "   color: black;"
-        "   border-radius: 40px;"
-        "   border: none;"
+        "  border: none;"
+        "  background: transparent;"
         "}"
         "QPushButton:pressed {"
-        "   background-color: rgba(255, 255, 255, 200);"
+        "  background: transparent;"
         "}"
         "QPushButton:focus {"
         "   outline: none;"  // 禁用焦点矩形
         "}"
     );
+
+//    // 假设按钮宽高相等，比如 80x80
+//    ui->switch_button_0->setFixedSize(80, 80);
+
+//    // 设置样式表
+//    ui->switch_button_0->setStyleSheet(
+//        "QPushButton {"
+//        "   background-color: rgba(255, 255, 255, 150);"  // 最后一个参数是透明度
+//        "   color: black;"
+//        "   border-radius: 40px;"
+//        "   border: none;"
+//        "}"
+//        "QPushButton:pressed {"
+//        "   background-color: rgba(255, 255, 255, 200);"
+//        "}"
+//        "QPushButton:focus {"
+//        "   outline: none;"  // 禁用焦点矩形
+//        "}"
+//    );
 
     // 假设按钮宽高相等，比如 80x80
     ui->switch_button_1->setFixedSize(80, 80);
@@ -74,6 +95,43 @@ Widget::Widget(QWidget *parent)
         "   outline: none;"  // 禁用焦点矩形
         "}"
     );
+
+    QPixmap prev_button_pix("./chevron-left.png");  // 加载图标
+    ui->prev_button->setIcon(QIcon(prev_button_pix));
+    ui->prev_button->setFixedSize(80, 80);     // 设置点击区域大小
+    ui->prev_button->setIconSize(QSize(80, 80)); // 设置图标大小
+    ui->prev_button->setStyleSheet( // 设置原按钮透明
+        "QPushButton {"
+        "  border: none;"
+        "  background: transparent;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: transparent;"
+        "}"
+        "QPushButton:focus {"
+        "   outline: none;"  // 禁用焦点矩形
+        "}"
+    );
+
+    QPixmap next_button_pix("./chevron-right.png");  // 加载图标
+    ui->next_button->setIcon(QIcon(next_button_pix));
+    ui->next_button->setFixedSize(80, 80);     // 设置点击区域大小
+    ui->next_button->setIconSize(QSize(80, 80)); // 设置图标大小
+    ui->next_button->setStyleSheet( // 设置原按钮透明
+        "QPushButton {"
+        "  border: none;"
+        "  background: transparent;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: transparent;"
+        "}"
+        "QPushButton:focus {"
+        "   outline: none;"  // 禁用焦点矩形
+        "}"
+    );
+
+
+
 
     // 垂直滚动条样式
     ui->picture_listWidget->verticalScrollBar()->setStyleSheet(
@@ -194,6 +252,7 @@ Widget::Widget(QWidget *parent)
     connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
     connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);
     connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);
+    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stopVideo, Qt::DirectConnection);
     connect(ui->switch_button_0, &QPushButton::clicked, this, &Widget::switchToPage1);
     connect(ui->switch_button_1, &QPushButton::clicked, this, &Widget::switchToPage2);
     connect(ui->switch_button_2, &QPushButton::clicked, this, &Widget::switchToPage0);
@@ -205,8 +264,13 @@ Widget::Widget(QWidget *parent)
     connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
 
     connect(ui->picture_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *item){
+
+        picture_current_index = ui->picture_listWidget->row(item);  // 读取当前图片索引
+        qDebug() << "index : " << picture_current_index;
         QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
         QPixmap pix(path);
+
+        ui->stackedWidget->setCurrentIndex(3);
 
         ui->picture_label->setPixmap(pix);
     });
@@ -222,6 +286,9 @@ Widget::Widget(QWidget *parent)
     connect(this, &Widget::WidgetToStartDecVideo, videodecget, &VideoDecGet::do_get_frame);
 
     connect(videodecget, &VideoDecGet::VideodecToUI, this, &Widget::doShowVideo);
+
+    connect(ui->next_button, &QPushButton::clicked, this, &Widget::showNextPhoto);
+    connect(ui->prev_button, &QPushButton::clicked, this, &Widget::showPrevPhoto);
 
     // 开启线程
     cameracapThread->start();
@@ -253,11 +320,50 @@ void Widget::doShow(cv::Mat img)
 
     time_last = timestamp;
 
-    sprintf(fps_text, "fps = %.2f", fps);
+    sprintf(fps_text, "FPS:%.0f", fps);
     cv::putText(img, fps_text,
-                    cv::Point(40, 40),
+                    cv::Point(420, 40),
                     cv::FONT_HERSHEY_SIMPLEX,1,
-                    cv::Scalar(0,255,0),2);
+                    cv::Scalar(220,220,220),2);
+
+    if (video_flag) { // 录像时，显示录像时长
+        QDateTime now = QDateTime::currentDateTime();
+        qint64 elapsedMS = recordStartTime.msecsTo(now);  // 毫秒
+        int seconds = (elapsedMS / 1000) % 60;
+        int minutes = (elapsedMS / (1000*60)) % 60;
+
+        // 构造分钟和秒的字符串
+        QString elapsedTime = QString("%1:%2")
+                                .arg(minutes, 2, 10, QChar('0'))
+                                .arg(seconds, 2, 10, QChar('0'));
+
+        // 转 std::string
+        std::string text = elapsedTime.toStdString();
+
+        // 获取文字尺寸
+        int fontFace = cv::FONT_HERSHEY_SIMPLEX;
+        double fontScale = 1;
+        int thickness = 2;
+        int baseline = 0;
+        cv::Size textSize = cv::getTextSize(text, fontFace, fontScale, thickness, &baseline);
+
+        // 绘制红色背景矩形
+        cv::Point textOrg(20, 40);
+        cv::rectangle(img,
+                      textOrg + cv::Point(-3, baseline),
+                      textOrg + cv::Point(textSize.width, -textSize.height-5),
+                      cv::Scalar(255, 0, 0),
+                      cv::FILLED);
+
+        // 绘制白色文字
+        cv::putText(img, text, textOrg, fontFace, fontScale, cv::Scalar(220, 220, 220), thickness);
+    } else {  // 非录像下，显示系统时间
+        QString timeStr = QDateTime::currentDateTime().toString("HH'h'mm'm'");
+        cv::putText(img, timeStr.toStdString(),
+                    cv::Point(20, 40),
+                    cv::FONT_HERSHEY_SIMPLEX, 1,
+                    cv::Scalar(220,220,220), 2);
+    }
 
 
     QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
@@ -268,27 +374,8 @@ void Widget::doShow(cv::Mat img)
 
 void Widget::doShowVideo(cv::Mat img)
 {
-    static int64_t time_last = 0;
-    // 获取当前时间点
-    auto now = std::chrono::system_clock::now();
-    // 转换为自1970年1月1日以来的毫秒数
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-    // 获取毫秒级时间戳
-    int64_t timestamp = duration.count();
-    int64_t fps_time = timestamp - time_last;
-    fps = 1000 / fps_time;
-
-    time_last = timestamp;
-
-    sprintf(fps_text, "fps = %.2f", fps);
-    cv::putText(img, fps_text,
-                    cv::Point(40, 40),
-                    cv::FONT_HERSHEY_SIMPLEX,1,
-                    cv::Scalar(0,255,0),2);
-
 
     QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
-
 
     ui->video_label_2->setPixmap(QPixmap::fromImage(image));
 }
@@ -336,11 +423,46 @@ void Widget::updateVideo(QString path)   // 录像时更新视频列表
     item->setData(Qt::UserRole, path);
     ui->video_listWidget->addItem(item);
 
+    video_flag = 1; // 开始录像
+    recordStartTime = QDateTime::currentDateTime(); // 记录下录制的时间
+
+
+}
+
+void Widget::stopVideo()
+{
+    video_flag = 0;
 }
 
 
+void Widget::showNextPhoto()
+{
+    picture_current_index++;
+    if (picture_current_index >= ui->picture_listWidget->count()){
+        picture_current_index = 0;
+    }
 
+    QListWidgetItem *item = ui->picture_listWidget->item(picture_current_index);
+    QString path = item->data(Qt::UserRole).toString();
+//    qDebug() << "index " << picture_current_index << " path " << path;
 
+    QPixmap pix(path);
+    ui->picture_label->setPixmap(pix);
+}
 
+void Widget::showPrevPhoto()
+{
+    picture_current_index--;
 
+    if (picture_current_index < 0) {
+        picture_current_index = ui->picture_listWidget->count() - 1;
+    }
+
+    QListWidgetItem *item = ui->picture_listWidget->item(picture_current_index);
+    QString path = item->data(Qt::UserRole).toString();
+//    qDebug() << "index " << picture_current_index << " path " << path;
+
+    QPixmap pix(path);
+    ui->picture_label->setPixmap(pix);
+}
 

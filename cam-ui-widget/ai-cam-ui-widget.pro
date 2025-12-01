@@ -19,6 +19,7 @@ SOURCES += \
     cameracapture.cpp \
     keycontrol.cpp \
     main.cpp \
+    photomanagement.cpp \
     rk_mpi.cpp \
     savevideo.cpp \
     videodecget.cpp \
@@ -29,6 +30,7 @@ HEADERS += \
     cameracapture.h \
     include/rk_mpi.h \
     keycontrol.h \
+    photomanagement.h \
     savevideo.h \
     videodecget.h \
     videodecsend.h \

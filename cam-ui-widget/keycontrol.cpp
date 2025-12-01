@@ -3,7 +3,7 @@
 KeyControl::KeyControl()
 {
 
-    fd = open("/dev/input/event4", O_RDWR);
+    fd = open("/dev/input/event3", O_RDWR);
     if (fd < 0) {
         printf("Can't open event file\r\n");
     }
