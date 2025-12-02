@@ -8,6 +8,24 @@ static float fps = 0;
 QString picture_dirPath = "/userdata/picture";
 QString video_dirPath = "/userdata/video";
 
+QPixmap makeRoundThumb(const QPixmap &src, int size)
+{
+    QPixmap dst(size, size);
+    dst.fill(Qt::transparent);
+
+    QPainter painter(&dst);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform);
+
+    QPainterPath path;
+    path.addRoundedRect(0, 0, size, size, 20, 20);   // 圆角20
+    painter.setClipPath(path);
+
+    painter.drawPixmap(0, 0, src.scaled(size, size, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+    return dst;
+}
+
+
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::Widget)
@@ -21,12 +39,11 @@ Widget::Widget(QWidget *parent)
 //    ui->stackedWidget->setContentsMargins(0,0,0,0);
 //    ui->page0->setContentsMargins(0,0,0,0);
 
-
-    QPixmap switch_button_0_pix("./photo.png");  // 加载图标
-    ui->switch_button_0->setIcon(QIcon(switch_button_0_pix));
-    ui->switch_button_0->setFixedSize(80, 80);     // 设置点击区域大小
-    ui->switch_button_0->setIconSize(QSize(80, 80)); // 设置图标大小
-    ui->switch_button_0->setStyleSheet( // 设置原按钮透明
+    QPixmap photo1back_button_pix("./back.png");  // 加载图标
+    ui->photo1back_button->setIcon(QIcon(photo1back_button_pix));
+    ui->photo1back_button->setFixedSize(80, 80);     // 设置点击区域大小
+    ui->photo1back_button->setIconSize(QSize(80, 80)); // 设置图标大小
+    ui->photo1back_button->setStyleSheet( // 设置原按钮透明
         "QPushButton {"
         "  border: none;"
         "  background: transparent;"
@@ -39,57 +56,69 @@ Widget::Widget(QWidget *parent)
         "}"
     );
 
-//    // 假设按钮宽高相等，比如 80x80
-//    ui->switch_button_0->setFixedSize(80, 80);
-
-//    // 设置样式表
-//    ui->switch_button_0->setStyleSheet(
-//        "QPushButton {"
-//        "   background-color: rgba(255, 255, 255, 150);"  // 最后一个参数是透明度
-//        "   color: black;"
-//        "   border-radius: 40px;"
-//        "   border: none;"
-//        "}"
-//        "QPushButton:pressed {"
-//        "   background-color: rgba(255, 255, 255, 200);"
-//        "}"
-//        "QPushButton:focus {"
-//        "   outline: none;"  // 禁用焦点矩形
-//        "}"
-//    );
-
-    // 假设按钮宽高相等，比如 80x80
-    ui->switch_button_1->setFixedSize(80, 80);
-
-    // 设置样式表
-    ui->switch_button_1->setStyleSheet(
+    QPixmap switch2video_button_pix("./video1.png");  // 加载图标
+    ui->switch2video_button->setIcon(QIcon(switch2video_button_pix));
+    ui->switch2video_button->setFixedSize(80, 80);     // 设置点击区域大小
+    ui->switch2video_button->setIconSize(QSize(80, 80)); // 设置图标大小
+    ui->switch2video_button->setStyleSheet( // 设置原按钮透明
         "QPushButton {"
-        "   background-color: rgba(255, 255, 255, 200);"
-        "   color: black;"
-        "   border-radius: 40px;"
-        "   border: none;"
+        "  border: none;"
+        "  background: transparent;"
         "}"
         "QPushButton:pressed {"
-        "   background-color: rgba(255, 255, 255, 230);"
+        "  background: transparent;"
         "}"
         "QPushButton:focus {"
         "   outline: none;"  // 禁用焦点矩形
         "}"
     );
 
-    // 假设按钮宽高相等，比如 80x80
-    ui->switch_button_2->setFixedSize(80, 80);
-
-    // 设置样式表
-    ui->switch_button_2->setStyleSheet(
+    QPixmap switch2photo_button_pix("./photo1.png");  // 加载图标
+    ui->switch2photo_button->setIcon(QIcon(switch2photo_button_pix));
+    ui->switch2photo_button->setFixedSize(80, 80);     // 设置点击区域大小
+    ui->switch2photo_button->setIconSize(QSize(80, 80)); // 设置图标大小
+    ui->switch2photo_button->setStyleSheet( // 设置原按钮透明
         "QPushButton {"
-        "   background-color: rgba(255, 255, 255, 200);"
-        "   color: black;"
-        "   border-radius: 40px;"
-        "   border: none;"
+        "  border: none;"
+        "  background: transparent;"
         "}"
         "QPushButton:pressed {"
-        "   background-color: rgba(255, 255, 255, 230);"
+        "  background: transparent;"
+        "}"
+        "QPushButton:focus {"
+        "   outline: none;"  // 禁用焦点矩形
+        "}"
+    );
+
+    QPixmap photoback_button_pix("./back.png");  // 加载图标
+    ui->photoback_button->setIcon(QIcon(photoback_button_pix));
+    ui->photoback_button->setFixedSize(80, 80);     // 设置点击区域大小
+    ui->photoback_button->setIconSize(QSize(80, 80)); // 设置图标大小
+    ui->photoback_button->setStyleSheet( // 设置原按钮透明
+        "QPushButton {"
+        "  border: none;"
+        "  background: transparent;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: transparent;"
+        "}"
+        "QPushButton:focus {"
+        "   outline: none;"  // 禁用焦点矩形
+        "}"
+    );
+
+
+    QPixmap videoback_button_pix("./back.png");  // 加载图标
+    ui->videoback_button->setIcon(QIcon(videoback_button_pix));
+    ui->videoback_button->setFixedSize(80, 80);     // 设置点击区域大小
+    ui->videoback_button->setIconSize(QSize(80, 80)); // 设置图标大小
+    ui->videoback_button->setStyleSheet( // 设置原按钮透明
+        "QPushButton {"
+        "  border: none;"
+        "  background: transparent;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: transparent;"
         "}"
         "QPushButton:focus {"
         "   outline: none;"  // 禁用焦点矩形
@@ -174,10 +203,23 @@ Widget::Widget(QWidget *parent)
     );
 
     // 设置相册列表外观
-    ui->picture_listWidget->setIconSize(QSize(150, 150));     // 图标大小
-    ui->picture_listWidget->setGridSize(QSize(180, 200));     // 每个 item 的占位大小
-    ui->picture_listWidget->setViewMode(QListView::IconMode); // 图标模式
-    ui->picture_listWidget->setResizeMode(QListView::Adjust); // 自动调整
+    ui->picture_listWidget->setViewMode(QListView::IconMode);
+    ui->picture_listWidget->setResizeMode(QListView::Adjust);
+    ui->picture_listWidget->setMovement(QListView::Static);
+    ui->picture_listWidget->setIconSize(QSize(150,150)); // 缩略图大小
+    ui->picture_listWidget->setGridSize(QSize(165,165)); // 缩略图占网格大小
+//    ui->picture_listWidget->setStyleSheet(
+//        "QListWidget {"
+//        "    background-image: url(./photobg.png);"
+//        "    background-position: center;"
+//        "    background-repeat: no-repeat;"
+//        "}"
+//        "QListWidget::item {"
+//        "    background: rgba(255,255,255,150);"
+//        "    border-radius: 16px;"
+//        "    margin: 6px;"
+//        "}"
+//    );
 
     // 设置视频列表外观
     ui->video_listWidget->setIconSize(QSize(150, 150));
@@ -191,15 +233,31 @@ Widget::Widget(QWidget *parent)
     filters << "*.png" << "*.jpg" << "*.jpeg" << "*.bmp";
     QFileInfoList picture_fileList = dir.entryInfoList(filters, QDir::Files);
 
+//    for (auto &file : picture_fileList) {
+//        QListWidgetItem *item = new QListWidgetItem;
+//        QPixmap pix(file.absoluteFilePath());
+//        item->setIcon(QIcon(pix.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+//        item->setText(file.fileName());
+//        item->setData(Qt::UserRole, file.absoluteFilePath());
+//        ui->picture_listWidget->addItem(item);
+
+//    }
+    int thumbSize = 160;
+
     for (auto &file : picture_fileList) {
         QListWidgetItem *item = new QListWidgetItem;
-        QPixmap pix(file.absoluteFilePath());
-        item->setIcon(QIcon(pix.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
-        item->setText(file.fileName());
-        item->setData(Qt::UserRole, file.absoluteFilePath());
-        ui->picture_listWidget->addItem(item);
 
+        QPixmap pix(file.absoluteFilePath());
+        QPixmap rounded = makeRoundThumb(pix, thumbSize);
+
+        item->setIcon(QIcon(rounded));
+//        item->setText(file.fileName());
+//        item->setTextAlignment(Qt::AlignCenter); // 让文字更好看
+        item->setData(Qt::UserRole, file.absoluteFilePath());
+
+        ui->picture_listWidget->addItem(item);
     }
+
     // 更新视频列表
     QDir videoDir(video_dirPath);
     QStringList videoFilters;
@@ -244,24 +302,27 @@ Widget::Widget(QWidget *parent)
     videodecget->moveToThread(videodecgetThread);
 
     // 连接信号
-    connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);
-    connect(cameracap, &CameraCapture::photoFinishedToUpdate, this, &Widget::updatePicture);
-    connect(cameracap, &CameraCapture::videoFinishedToUpdate, this, &Widget::updateVideo);
-    connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);
+    connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示
+    connect(cameracap, &CameraCapture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 拍照后更新相册列表
+    connect(cameracap, &CameraCapture::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
+    connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);  // 保存录像
 
-    connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);
-    connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);
-    connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);
-    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stopVideo, Qt::DirectConnection);
-    connect(ui->switch_button_0, &QPushButton::clicked, this, &Widget::switchToPage1);
-    connect(ui->switch_button_1, &QPushButton::clicked, this, &Widget::switchToPage2);
-    connect(ui->switch_button_2, &QPushButton::clicked, this, &Widget::switchToPage0);
+    connect(videodecget, &VideoDecGet::VideodecToUI, this, &Widget::doShowVideo);                  // 解码录像并显示
 
-    connect(this, &Widget::WidgetToStartCapture, cameracap, &CameraCapture::startCapture);
-    connect(this, &Widget::WidgetToStopCapture, cameracap, &CameraCapture::stopCapture);
+    connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);  // 开始拍照
+    connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);// 开始录像
+    connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);  // 停止录像
+    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stopVideo);                                    // 停止录像时标记flag为0
+    connect(keycontrol, &KeyControl::keyToStartvideo, this, &Widget::switchToPage5);                               // 开始录像时切换到录像页
+    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::switchToPage0);                                // 停止录像时切回预览页
 
-    connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
-    connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
+    connect(ui->switch2photo_button, &QPushButton::clicked, this, &Widget::switchToPage1);  // 切换到相册首页
+    connect(ui->switch2video_button, &QPushButton::clicked, this, &Widget::switchToPage2);  // 切换到录像首页
+    connect(ui->photoback_button, &QPushButton::clicked, this, &Widget::switchToPage0);     // 从相册首页切换回预览页
+    connect(ui->videoback_button, &QPushButton::clicked, this, &Widget::switchToPage0);     // 从录像首页切换回预览页
+    connect(ui->photo1back_button, &QPushButton::clicked, this, &Widget::switchToPage1);    // 照片查看页回退至相册首页
+    connect(ui->next_button, &QPushButton::clicked, this, &Widget::showNextPhoto);          // 照片查看切换下一张
+    connect(ui->prev_button, &QPushButton::clicked, this, &Widget::showPrevPhoto);          // 照片查看切换上一张
 
     connect(ui->picture_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *item){
 
@@ -270,7 +331,7 @@ Widget::Widget(QWidget *parent)
         QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
         QPixmap pix(path);
 
-        ui->stackedWidget->setCurrentIndex(3);
+        ui->stackedWidget->setCurrentIndex(3);  // 切换到照片显示页
 
         ui->picture_label->setPixmap(pix);
     });
@@ -282,16 +343,15 @@ Widget::Widget(QWidget *parent)
         emit WidgetToStartDecVideo(path);
     });
 
+    connect(this, &Widget::WidgetToStartCapture, cameracap, &CameraCapture::startCapture);
+    connect(this, &Widget::WidgetToStopCapture, cameracap, &CameraCapture::stopCapture);
     connect(this, &Widget::WidgetToStartDecVideo, videodecsend, &VideoDecSend::do_send_frame);
     connect(this, &Widget::WidgetToStartDecVideo, videodecget, &VideoDecGet::do_get_frame);
 
-    connect(videodecget, &VideoDecGet::VideodecToUI, this, &Widget::doShowVideo);
-
-    connect(ui->next_button, &QPushButton::clicked, this, &Widget::showNextPhoto);
-    connect(ui->prev_button, &QPushButton::clicked, this, &Widget::showPrevPhoto);
-
+    connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
+    connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
     // 开启线程
-    cameracapThread->start();
+//    cameracapThread->start();
     savevideoThread->start();
     keycontrolThread->start();
     videodecsendThread->start();
@@ -305,7 +365,7 @@ Widget::~Widget()
 }
 
 
-void Widget::doShow(cv::Mat img)
+void Widget::doShow(cv::Mat img)  // 预览和录像
 {
 
     static int64_t time_last = 0;
@@ -357,22 +417,26 @@ void Widget::doShow(cv::Mat img)
 
         // 绘制白色文字
         cv::putText(img, text, textOrg, fontFace, fontScale, cv::Scalar(220, 220, 220), thickness);
+
+        QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
+        ui->video_label_3->setPixmap(QPixmap::fromImage(image));
+
     } else {  // 非录像下，显示系统时间
         QString timeStr = QDateTime::currentDateTime().toString("HH'h'mm'm'");
         cv::putText(img, timeStr.toStdString(),
                     cv::Point(20, 40),
                     cv::FONT_HERSHEY_SIMPLEX, 1,
                     cv::Scalar(220,220,220), 2);
+
+        QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
+        ui->video_label->setPixmap(QPixmap::fromImage(image));
     }
 
 
-    QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
 
-
-    ui->video_label->setPixmap(QPixmap::fromImage(image));
 }
 
-void Widget::doShowVideo(cv::Mat img)
+void Widget::doShowVideo(cv::Mat img)  // 播放录像
 {
 
     QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
@@ -389,13 +453,18 @@ void Widget::switchToPage1() // 切换到相册列表
 
 void Widget::switchToPage2() // 切换到视频列表
 {
+    emit WidgetToStopCapture();
     ui->stackedWidget->setCurrentIndex(2);
 }
 
 void Widget::switchToPage0() // 切换回摄像头显示
 {
-    emit WidgetToStartCapture();
     ui->stackedWidget->setCurrentIndex(0);
+}
+
+void Widget::switchToPage5() // 切换至录像界面
+{
+    ui->stackedWidget->setCurrentIndex(5);
 }
 
 void Widget::updatePicture(QString path)  // 每次拍完照片更新相册
@@ -404,9 +473,9 @@ void Widget::updatePicture(QString path)  // 每次拍完照片更新相册
     QString fileName = fileInfo.fileName(); // 提取出文件名称
     QListWidgetItem *item = new QListWidgetItem;
     QPixmap pix(path);
-
-    item->setIcon(QIcon(pix.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
-    item->setText(fileName);
+    QPixmap rounded = makeRoundThumb(pix, 160);
+    item->setIcon(QIcon(rounded));
+//    item->setText(fileName);
     item->setData(Qt::UserRole, path);
     ui->picture_listWidget->addItem(item);
 }

@@ -39,11 +39,24 @@
       <bool>false</bool>
      </property>
     </widget>
-    <widget class="QPushButton" name="switch_button_0">
+    <widget class="QPushButton" name="switch2photo_button">
      <property name="geometry">
       <rect>
        <x>0</x>
-       <y>150</y>
+       <y>100</y>
+       <width>89</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="switch2video_button">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>270</y>
        <width>89</width>
        <height>25</height>
       </rect>
@@ -54,11 +67,11 @@
     </widget>
    </widget>
    <widget class="QWidget" name="page1">
-    <widget class="QPushButton" name="switch_button_1">
+    <widget class="QPushButton" name="photoback_button">
      <property name="geometry">
       <rect>
        <x>0</x>
-       <y>130</y>
+       <y>20</y>
        <width>89</width>
        <height>25</height>
       </rect>
@@ -78,14 +91,14 @@
      </property>
     </widget>
     <zorder>picture_listWidget</zorder>
-    <zorder>switch_button_1</zorder>
+    <zorder>photoback_button</zorder>
    </widget>
    <widget class="QWidget" name="page2">
-    <widget class="QPushButton" name="switch_button_2">
+    <widget class="QPushButton" name="videoback_button">
      <property name="geometry">
       <rect>
        <x>0</x>
-       <y>130</y>
+       <y>30</y>
        <width>89</width>
        <height>25</height>
       </rect>
@@ -121,7 +134,7 @@
      </property>
     </widget>
     <zorder>video_listWidget</zorder>
-    <zorder>switch_button_2</zorder>
+    <zorder>videoback_button</zorder>
     <zorder>video_label_2</zorder>
    </widget>
    <widget class="QWidget" name="page3">
@@ -165,6 +178,38 @@
      </property>
      <property name="text">
       <string/>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="photo1back_button">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>10</y>
+       <width>89</width>
+       <height>25</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QWidget" name="page4"/>
+   <widget class="QWidget" name="page5">
+    <widget class="QLabel" name="video_label_3">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>-10</y>
+       <width>552</width>
+       <height>368</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>TextLabel</string>
+     </property>
+     <property name="scaledContents">
+      <bool>false</bool>
      </property>
     </widget>
    </widget>

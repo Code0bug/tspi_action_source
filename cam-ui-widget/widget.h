@@ -7,6 +7,9 @@
 #include <QFileSystemModel>
 #include <QScrollBar>
 #include <QLayout>
+#include <QPixmap>
+#include <QPainter>
+#include <QPainterPath>
 
 #include "cameracapture.h"
 #include "savevideo.h"
@@ -33,6 +36,7 @@ public slots:
     void switchToPage1();
     void switchToPage2();
     void switchToPage0();
+    void switchToPage5();
     void updatePicture(QString path);
     void updateVideo(QString path);
     void doShowVideo(cv::Mat img);

@@ -173,7 +173,6 @@
 #define __unix__ 1
 #define __FLT64X_NORM_MAX__ 1.18973149535723176508575932662800702e+4932F64x
 #define __SIZEOF_POINTER__ 8
-#define __GXX_ABI_VERSION 1014
 #define __LP64__ 1
 #define __DBL_HAS_QUIET_NAN__ 1
 #define __FLT_EVAL_METHOD_C99__ 16
@@ -198,6 +197,7 @@
 #define __UINT64_C(c) c ## UL
 #define __cpp_unicode_characters 200704L
 #define __ARM_FEATURE_QRDMX 1
+#define __GXX_ABI_VERSION 1014
 #define __WINT_MAX__ 0xffffffffU
 #define __INT_LEAST32_MAX__ 0x7fffffff
 #define __GCC_ATOMIC_INT_LOCK_FREE 2
