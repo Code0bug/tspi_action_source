@@ -29,10 +29,10 @@ void VideoDecSend::do_send_frame(QString path)
     }
 
     while(!s32ReachEOS) {
-        data = reinterpret_cast<RK_U8 *>(calloc(1024, sizeof(RK_U8)));
-        memset(data, 0, 1024);
-        RK_S32 s32Size = fread(data, 1, 1024, fp);
-        printf("s32Size = %d\n", s32Size);
+        data = reinterpret_cast<RK_U8 *>(calloc(65536, sizeof(RK_U8)));
+        memset(data, 0, 65536);
+        RK_S32 s32Size = fread(data, 1, 65536, fp);  // 一次读取65536个字节
+        printf("s32Size = %d\n", s32Size);  // 实际读取到的字节数
         if (s32Size <= 0) {
             s32ReachEOS = 1; // 表示文件读完了
         }

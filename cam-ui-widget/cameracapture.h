@@ -36,13 +36,14 @@ private:
     uint8_t isRunning;
     uint8_t photo_flag;
     uint8_t video_flag;
+    uint8_t first_video_frame;
     FILE* video_fp;
 
 signals:
     void capFinishedToUI(cv::Mat imgbuf);
     void capFinishedToVideo(cv::Mat buf, FILE* fp);
     void photoFinishedToUpdate(QString path);
-    void videoFinishedToUpdate(QString path);
+    void videoFinishedToUpdate(QString path, cv::Mat first_frame);
 
 
 

@@ -64,11 +64,12 @@ void VideoDecGet::do_get_frame()
 
             int height = sFrame.stVFrame.u32Height;
             int width = sFrame.stVFrame.u32Width;
-            cv::Mat video_frame_rgb(480, 600, CV_8UC3);
+
+            cv::Mat video_frame_rgb(368, 552, CV_8UC3);
 
             // 利用rga进行像素格式转换
             rga_buffer_t src_img = wrapbuffer_virtualaddr(dat, width, height, RK_FORMAT_YCrCb_420_SP);
-            rga_buffer_t dst_img = wrapbuffer_virtualaddr(video_frame_rgb.data, 600, 480, RK_FORMAT_BGR_888);
+            rga_buffer_t dst_img = wrapbuffer_virtualaddr(video_frame_rgb.data, 552, 368, RK_FORMAT_BGR_888);
             imresize(src_img, dst_img);
             imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);
 

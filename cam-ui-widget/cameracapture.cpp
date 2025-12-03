@@ -56,14 +56,34 @@ void CameraCapture::startCapture()
 
             // 利用rga进行像素格式转换
             rga_buffer_t src_img = wrapbuffer_virtualaddr(dat, width, height, RK_FORMAT_YCrCb_420_SP);
-            rga_buffer_t dst_img = wrapbuffer_virtualaddr(ui_frame.data, 552, 368, RK_FORMAT_BGR_888);
+            rga_buffer_t dst_img = wrapbuffer_virtualaddr(ui_frame.data, 552, 368, RK_FORMAT_RGB_888);
 //            rga_buffer_t dst_img_rotate = wrapbuffer_virtualaddr(ui_frame_rotate.data, 800, 480, RK_FORMAT_BGR_888);
             imresize(src_img, dst_img);
-            imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);
+            imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_RGB_888);
 //            imrotate(dst_img, dst_img_rotate, IM_HAL_TRANSFORM_ROT_180);  // 设置旋转
 
 
             if (video_flag) { // 录像
+
+                if (first_video_frame) { // 如果是录像的第一帧，取其作为封面
+                    first_video_frame = 0;
+
+                    QDateTime current = QDateTime::currentDateTime();
+                    QString fileName = current.toString("yyyyMMdd_hhmmss");
+                    // 录像保存路径
+                    QString savePath = "/userdata/video/" + fileName + ".bin";
+                    video_fp = fopen(savePath.toStdString().c_str(), "wb");
+                    if (!video_fp) {
+                        perror("fopen");
+                    }
+
+                    // 将封面图像保存
+                    QString first_frame_savePath = "/userdata/firstFrame/" + fileName + ".jpg";
+                    cv::imwrite(first_frame_savePath.toStdString(), ui_frame);
+
+                    emit videoFinishedToUpdate(savePath, ui_frame);
+                }
+
                 rga_buffer_t dst_img_video = wrapbuffer_virtualaddr(video_frame.data, width, height, RK_FORMAT_BGR_888);
 //                rga_buffer_t dst_img_video_rotate = wrapbuffer_virtualaddr(video_frame_rotate.data, width, height, RK_FORMAT_BGR_888);
                 imcvtcolor(src_img, dst_img_video, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);
@@ -154,18 +174,9 @@ void CameraCapture::stopCapture()
 
 void CameraCapture::startVideo()
 {
-    QDateTime current = QDateTime::currentDateTime();
-    QString fileName = current.toString("yyyyMMdd_hhmmss") + ".bin";
-    // 拼接保存路径
-    QString savePath = "/userdata/video/" + fileName;
-    video_fp = fopen(savePath.toStdString().c_str(), "wb");
-    if (!video_fp) {
-        perror("fopen");
-    }
-
-    emit videoFinishedToUpdate(savePath);
 
     video_flag = 1;
+    first_video_frame = 1;
 
 }
 

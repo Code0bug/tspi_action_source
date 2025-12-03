@@ -56,6 +56,24 @@ Widget::Widget(QWidget *parent)
         "}"
     );
 
+
+    QPixmap video1back_button_pix("./back.png");  // 加载图标
+    ui->video1back_button->setIcon(QIcon(video1back_button_pix));
+    ui->video1back_button->setFixedSize(80, 80);     // 设置点击区域大小
+    ui->video1back_button->setIconSize(QSize(80, 80)); // 设置图标大小
+    ui->video1back_button->setStyleSheet( // 设置原按钮透明
+        "QPushButton {"
+        "  border: none;"
+        "  background: transparent;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: transparent;"
+        "}"
+        "QPushButton:focus {"
+        "   outline: none;"  // 禁用焦点矩形
+        "}"
+    );
+
     QPixmap switch2video_button_pix("./video1.png");  // 加载图标
     ui->switch2video_button->setIcon(QIcon(switch2video_button_pix));
     ui->switch2video_button->setFixedSize(80, 80);     // 设置点击区域大小
@@ -223,8 +241,9 @@ Widget::Widget(QWidget *parent)
 
     // 设置视频列表外观
     ui->video_listWidget->setIconSize(QSize(150, 150));
-    ui->video_listWidget->setGridSize(QSize(180, 200));
+    ui->video_listWidget->setGridSize(QSize(165, 165));
     ui->video_listWidget->setViewMode(QListView::IconMode);
+    ui->video_listWidget->setMovement(QListView::Static);
     ui->video_listWidget->setResizeMode(QListView::Adjust);
 
     // 更新相册列表
@@ -233,22 +252,11 @@ Widget::Widget(QWidget *parent)
     filters << "*.png" << "*.jpg" << "*.jpeg" << "*.bmp";
     QFileInfoList picture_fileList = dir.entryInfoList(filters, QDir::Files);
 
-//    for (auto &file : picture_fileList) {
-//        QListWidgetItem *item = new QListWidgetItem;
-//        QPixmap pix(file.absoluteFilePath());
-//        item->setIcon(QIcon(pix.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
-//        item->setText(file.fileName());
-//        item->setData(Qt::UserRole, file.absoluteFilePath());
-//        ui->picture_listWidget->addItem(item);
-
-//    }
-    int thumbSize = 160;
-
     for (auto &file : picture_fileList) {
         QListWidgetItem *item = new QListWidgetItem;
 
         QPixmap pix(file.absoluteFilePath());
-        QPixmap rounded = makeRoundThumb(pix, thumbSize);
+        QPixmap rounded = makeRoundThumb(pix, 160);
 
         item->setIcon(QIcon(rounded));
 //        item->setText(file.fileName());
@@ -267,10 +275,13 @@ Widget::Widget(QWidget *parent)
     for (auto &videoFile : videoFileList) {
         QListWidgetItem *videoItem = new QListWidgetItem;
 
-//        // 可用视频封面图或占位图
-//        QPixmap videoPlaceholder("");
-//        videoItem->setIcon(QIcon(videoPlaceholder.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
-        videoItem->setText(videoFile.fileName());
+        QFileInfo videofileinfo(videoFile.absoluteFilePath());
+        QString firstFramePath = "/userdata/firstFrame/" + videofileinfo.completeBaseName() + ".jpg";
+        QPixmap pix(firstFramePath);
+        QPixmap rounded = makeRoundThumb(pix, 160);
+
+        videoItem->setIcon(QIcon(rounded));
+//        videoItem->setText(videoFile.fileName());
         videoItem->setData(Qt::UserRole, videoFile.absoluteFilePath());
 
         ui->video_listWidget->addItem(videoItem);
@@ -324,24 +335,10 @@ Widget::Widget(QWidget *parent)
     connect(ui->next_button, &QPushButton::clicked, this, &Widget::showNextPhoto);          // 照片查看切换下一张
     connect(ui->prev_button, &QPushButton::clicked, this, &Widget::showPrevPhoto);          // 照片查看切换上一张
 
-    connect(ui->picture_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *item){
-
-        picture_current_index = ui->picture_listWidget->row(item);  // 读取当前图片索引
-        qDebug() << "index : " << picture_current_index;
-        QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
-        QPixmap pix(path);
-
-        ui->stackedWidget->setCurrentIndex(3);  // 切换到照片显示页
-
-        ui->picture_label->setPixmap(pix);
-    });
+    connect(ui->picture_listWidget, &QListWidget::itemClicked, this, &Widget::PicListItemClicked);
 
     // 点击播放视频
-    connect(ui->video_listWidget, &QListWidget::itemClicked, this, [=](QListWidgetItem *item){
-        vdec_init(1920, 1080);
-        QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
-        emit WidgetToStartDecVideo(path);
-    });
+    connect(ui->video_listWidget, &QListWidget::itemClicked, this, &Widget::VideoListItemClicked);
 
     connect(this, &Widget::WidgetToStartCapture, cameracap, &CameraCapture::startCapture);
     connect(this, &Widget::WidgetToStopCapture, cameracap, &CameraCapture::stopCapture);
@@ -351,7 +348,7 @@ Widget::Widget(QWidget *parent)
     connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
     connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
     // 开启线程
-//    cameracapThread->start();
+    cameracapThread->start();
     savevideoThread->start();
     keycontrolThread->start();
     videodecsendThread->start();
@@ -412,13 +409,13 @@ void Widget::doShow(cv::Mat img)  // 预览和录像
         cv::rectangle(img,
                       textOrg + cv::Point(-3, baseline),
                       textOrg + cv::Point(textSize.width, -textSize.height-5),
-                      cv::Scalar(255, 0, 0),
+                      cv::Scalar(0, 0, 255),
                       cv::FILLED);
 
         // 绘制白色文字
         cv::putText(img, text, textOrg, fontFace, fontScale, cv::Scalar(220, 220, 220), thickness);
 
-        QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
+        QImage image(img.data, img.cols, img.rows, QImage::Format_BGR888);
         ui->video_label_3->setPixmap(QPixmap::fromImage(image));
 
     } else {  // 非录像下，显示系统时间
@@ -428,7 +425,7 @@ void Widget::doShow(cv::Mat img)  // 预览和录像
                     cv::FONT_HERSHEY_SIMPLEX, 1,
                     cv::Scalar(220,220,220), 2);
 
-        QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
+        QImage image(img.data, img.cols, img.rows, QImage::Format_BGR888);
         ui->video_label->setPixmap(QPixmap::fromImage(image));
     }
 
@@ -480,15 +477,17 @@ void Widget::updatePicture(QString path)  // 每次拍完照片更新相册
     ui->picture_listWidget->addItem(item);
 }
 
-void Widget::updateVideo(QString path)   // 录像时更新视频列表
+void Widget::updateVideo(QString path, cv::Mat first_frame)   // 录像时更新视频列表
 {
     QFileInfo fileInfo(path);
     QString fileName = fileInfo.fileName(); // 提取出文件名称
     QListWidgetItem *item = new QListWidgetItem;
-    QPixmap pix(path);
 
-    item->setIcon(QIcon(pix.scaled(100, 100, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
-    item->setText(fileName);
+    QImage image(first_frame.data, first_frame.cols, first_frame.rows, QImage::Format_BGR888);
+
+    QPixmap rounded = makeRoundThumb(QPixmap::fromImage(image), 160);
+    item->setIcon(QIcon(rounded));
+//    item->setText(fileName);
     item->setData(Qt::UserRole, path);
     ui->video_listWidget->addItem(item);
 
@@ -533,5 +532,28 @@ void Widget::showPrevPhoto()
 
     QPixmap pix(path);
     ui->picture_label->setPixmap(pix);
+}
+
+// 相册列表item被点击时的动作
+void Widget::PicListItemClicked(QListWidgetItem *item)
+{
+    picture_current_index = ui->picture_listWidget->row(item);  // 读取当前图片索引
+    qDebug() << "index : " << picture_current_index;
+    QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
+    QPixmap pix(path);
+
+    ui->stackedWidget->setCurrentIndex(3);  // 切换到照片显示页
+
+    ui->picture_label->setPixmap(pix);
+}
+
+// 录像列表item被点击时的动作
+void Widget::VideoListItemClicked(QListWidgetItem *item)
+{
+    vdec_init(1920, 1080);
+
+    ui->stackedWidget->setCurrentIndex(4);  // 切换到录像显示页
+    QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
+    emit WidgetToStartDecVideo(path);
 }
 

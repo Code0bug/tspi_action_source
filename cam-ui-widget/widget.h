@@ -38,11 +38,13 @@ public slots:
     void switchToPage0();
     void switchToPage5();
     void updatePicture(QString path);
-    void updateVideo(QString path);
+    void updateVideo(QString path, cv::Mat first_frame);
     void doShowVideo(cv::Mat img);
     void stopVideo();
     void showNextPhoto();
     void showPrevPhoto();
+    void PicListItemClicked(QListWidgetItem *item);
+    void VideoListItemClicked(QListWidgetItem *item);
 
 
 signals:
