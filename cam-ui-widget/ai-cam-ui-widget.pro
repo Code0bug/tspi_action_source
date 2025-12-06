@@ -41,7 +41,14 @@ INCLUDEPATH += \
     $$PWD/include \
     $$PWD/include/mpi/sdk \
     $$PWD/include/opencv4 \
-    $$PWD/include/rga
+    $$PWD/include/rga \
+#    $$PWD/include/rkaiq/uAPI \
+#    $$PWD/include/rkaiq/uAPI2 \
+#    $$PWD/include/rkaiq/xcore \
+#    $$PWD/include/rkaiq/common \
+#    $$PWD/include/rkaiq/algos \
+#    $$PWD/include/rkaiq/iq_parser \
+#    $$PWD/include/rkaiq/iq_parser_v2
 
 
 LIBS += \
@@ -54,7 +61,8 @@ LIBS += \
         -lopencv_imgproc \
         -lopencv_imgcodecs \
         -lopencv_video \
-        -lrga
+        -lrga \
+#        -lrkaiq
 
 FORMS += \
     widget.ui
