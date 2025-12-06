@@ -36,11 +36,11 @@ void VideoDecGet::do_get_frame()
 
     RK_S32 s32Ret;
 
+    stop_get_frame = 0;
 
     memset(&sFrame, 0, sizeof(VIDEO_FRAME_INFO_S));
 
-    while (1) {
-
+    while (!stop_get_frame) {
 
         if (vdec_fd > 0) {
             s32Ret = mpi_vdec_poll_event(-1, vdec_fd);
@@ -65,6 +65,18 @@ void VideoDecGet::do_get_frame()
             int height = sFrame.stVFrame.u32Height;
             int width = sFrame.stVFrame.u32Width;
 
+            // 送入rga的源码图像长宽必须16位字节对齐，即width%16=0，否则图像会出现绿边
+            if (height % 16 != 0) {
+                while (height % 16 != 0) {
+                    height++;
+                }
+            }
+            if (width % 16 != 0) {
+                while (width % 16 != 0) {
+                    width++;
+                }
+            }
+
             cv::Mat video_frame_rgb(368, 552, CV_8UC3);
 
             // 利用rga进行像素格式转换
@@ -81,7 +93,7 @@ void VideoDecGet::do_get_frame()
 
             RK_MPI_VDEC_ReleaseFrame(0, &sFrame);
 
-            usleep(10000);
+            usleep(20000); // 控制播放帧率
 
         } else {
             printf("get frame failed! 0x%08X\n", s32Ret);
@@ -93,4 +105,9 @@ void VideoDecGet::do_get_frame()
 
     RK_MPI_VDEC_CloseFd(0);
     RK_MPI_VDEC_DestroyChn(0);
+}
+
+void VideoDecGet::do_stop_get_frame()
+{
+    stop_get_frame = 1;
 }

@@ -11,6 +11,8 @@
 #include <opencv2/opencv.hpp>
 #include "widget.h"
 
+#include <linux/videodev2.h>
+#include <sys/ioctl.h>
 
 #include "im2d.h"
 #include "rga.h"

@@ -15,6 +15,11 @@ signals:
 
 public slots:
     void do_send_frame(QString path);
+    void do_stop_send_frame();
+
+private:
+//    FILE* fp; // 读取视频文件
+    uint8_t stop_send_frame;
 
 };
 

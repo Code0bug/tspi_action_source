@@ -331,6 +331,9 @@ Widget::Widget(QWidget *parent)
     connect(ui->switch2video_button, &QPushButton::clicked, this, &Widget::switchToPage2);  // 切换到录像首页
     connect(ui->photoback_button, &QPushButton::clicked, this, &Widget::switchToPage0);     // 从相册首页切换回预览页
     connect(ui->videoback_button, &QPushButton::clicked, this, &Widget::switchToPage0);     // 从录像首页切换回预览页
+    connect(ui->video1back_button, &QPushButton::clicked, this, &Widget::switchToPage2);    // 录像播放页回退至录像首页
+    connect(ui->video1back_button, &QPushButton::clicked, videodecsend, &VideoDecSend::do_stop_send_frame, Qt::DirectConnection);  // 录像播放页回退至录像首页时停止发送解码帧
+    connect(ui->video1back_button, &QPushButton::clicked, videodecget, &VideoDecGet::do_stop_get_frame, Qt::DirectConnection);    // 录像播放页回退至录像首页时停止获取解码帧
     connect(ui->photo1back_button, &QPushButton::clicked, this, &Widget::switchToPage1);    // 照片查看页回退至相册首页
     connect(ui->next_button, &QPushButton::clicked, this, &Widget::showNextPhoto);          // 照片查看切换下一张
     connect(ui->prev_button, &QPushButton::clicked, this, &Widget::showPrevPhoto);          // 照片查看切换上一张
@@ -538,7 +541,7 @@ void Widget::showPrevPhoto()
 void Widget::PicListItemClicked(QListWidgetItem *item)
 {
     picture_current_index = ui->picture_listWidget->row(item);  // 读取当前图片索引
-    qDebug() << "index : " << picture_current_index;
+//    qDebug() << "index : " << picture_current_index;
     QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
     QPixmap pix(path);
 

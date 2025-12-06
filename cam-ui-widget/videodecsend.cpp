@@ -20,15 +20,16 @@ void VideoDecSend::do_send_frame(QString path)
     RK_S32 s32Ret = 0;
     RK_U8 *data;
 
-    memset(&stStream, 0, sizeof(VDEC_STREAM_S));
+    stop_send_frame = 0;
 
+    memset(&stStream, 0, sizeof(VDEC_STREAM_S));
 
     FILE* fp = fopen(path.toStdString().c_str(), "r");
     if (fp == RK_NULL) {
         printf("fopen failed!\n");
     }
 
-    while(!s32ReachEOS) {
+    while(!s32ReachEOS && !stop_send_frame) {
         data = reinterpret_cast<RK_U8 *>(calloc(65536, sizeof(RK_U8)));
         memset(data, 0, 65536);
         RK_S32 s32Size = fread(data, 1, 65536, fp);  // 一次读取65536个字节
@@ -67,9 +68,30 @@ __RETRY:
 
         RK_MPI_MB_ReleaseMB(stStream.pMbBlk);
 
-
-
     }
 
+    fclose(fp);
 
 }
+
+
+void VideoDecSend::do_stop_send_frame()
+{
+    stop_send_frame = 1;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

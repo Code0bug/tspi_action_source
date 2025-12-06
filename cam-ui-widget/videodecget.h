@@ -21,6 +21,10 @@ signals:
 
 public slots:
     void do_get_frame();
+    void do_stop_get_frame();
+
+private:
+    uint8_t stop_get_frame;
 
 };
 
