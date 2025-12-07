@@ -33,7 +33,7 @@
 // #include "tspi-rk3566-edp-v10.dtsi"
 
 //【开/关】mipi 显示屏幕配置，用户可以基于此复制自己的屏幕，注意EDP与MIPI屏幕互斥，因为共用了VOP如果需要同显自行修改
-// #include "tspi-rk3566-dsi-v10.dtsi"  // 立创3.1存屏幕
+// #include "tspi-rk3566-dsi-v10.dtsi"  // 立创3.1寸屏幕
 #include "tspi-rk3566-dsi-23-v10.dtsi"  // 2.3寸小屏
 
 //【开/关】HDMI 显示屏幕配置，里面内容几乎可以不用动，如果不需要hdmi显示直接注释掉即可
@@ -41,6 +41,7 @@
 
 //【开/关】摄像头 目前视频的是ov5659
 // #include "tspi-rk3566-csi-v10.dtsi"
+// #include "tspi-rk3566-csi-imx219.dtsi"
 #include "tspi-rk3566-csi-ov8858.dtsi"
 
 
@@ -193,7 +194,7 @@
 
 	hynitron@1a {  // 2.3寸屏幕触摸(商家提供)
 		status = "okay";
-		compatible = "hynitron,hyn_ts";
+		compatible = "hynitron,hyn_ts"; 
 		reg = <0x1a>;
 		hynitron,reset-gpio = <&gpio1 RK_PA1 GPIO_ACTIVE_HIGH>;
 		hynitron,irq-gpio = <&gpio1 RK_PA0 IRQ_TYPE_LEVEL_LOW>;

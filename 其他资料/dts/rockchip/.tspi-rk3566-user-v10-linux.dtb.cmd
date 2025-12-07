@@ -31,7 +31,7 @@ deps_arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dtb := \
   scripts/dtc/include-prefixes/dt-bindings/display/drm_mipi_dsi.h \
   scripts/dtc/include-prefixes/dt-bindings/sensor-dev.h \
   arch/arm64/boot/dts/rockchip/tspi-rk3566-dsi-23-v10.dtsi \
-  arch/arm64/boot/dts/rockchip/tspi-rk3566-csi-ov8858.dtsi \
+  arch/arm64/boot/dts/rockchip/tspi-rk3566-csi-imx219.dtsi \
   arch/arm64/boot/dts/rockchip/tspi-rk3566-gmac1-v10.dtsi \
 
 arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dtb: $(deps_arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dtb)
