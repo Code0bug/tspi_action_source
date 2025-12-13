@@ -252,8 +252,8 @@
 		// power-gpios = <&gpio0 RK_PB0 GPIO_ACTIVE_HIGH>;
 		rockchip,camera-module-index = <0>;
 		rockchip,camera-module-facing = "back";
-        rockchip,camera-module-name = "TongJu";
-		rockchip,camera-module-lens-name = "CHT842-MD";
+        rockchip,camera-module-name = "CMK-OT1522-FG3";
+		rockchip,camera-module-lens-name = "CS-P1150-IRC-8M-FAU";
 		port {
 			ov5695_out: endpoint {
 				remote-endpoint = <&dphy1_in>;

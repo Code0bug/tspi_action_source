@@ -8596,7 +8596,7 @@
   prepare-delay-ms = <20>;
   unprepare-delay-ms = <20>;
   disable-delay-ms = <50>;
-  init-delay-ms = <30>;
+  init-delay-ms = <50>;
   dsi,flags = <((1 << 0) | (1 << 1) |
    (1 << 11) | (1 << 9))>;
   dsi,format = <0>;
@@ -8705,8 +8705,9 @@
 
 
 
-# 1 "arch/arm64/boot/dts/rockchip/tspi-rk3566-csi-imx219.dtsi" 1
-# 17 "arch/arm64/boot/dts/rockchip/tspi-rk3566-csi-imx219.dtsi"
+
+# 1 "arch/arm64/boot/dts/rockchip/tspi-rk3566-csi-ov8858.dtsi" 1
+# 17 "arch/arm64/boot/dts/rockchip/tspi-rk3566-csi-ov8858.dtsi"
 &combphy1_usq {
  status = "okay";
 };
@@ -8722,7 +8723,7 @@
 };
 
 &csi2_dphy0 {
- status = "disabled";
+ status = "okay";
 
 
 
@@ -8738,7 +8739,7 @@
 
    dphy0_in: endpoint@1 {
     reg = <1>;
-
+    remote-endpoint = <&ov8858_out>;
     data-lanes = <1 2 3 4>;
    };
   };
@@ -8758,7 +8759,7 @@
 
 
 &csi2_dphy1 {
- status = "okay";
+ status = "disabled";
 
 
 
@@ -8776,8 +8777,8 @@
 
    dphy1_in: endpoint@1 {
     reg = <1>;
-    remote-endpoint = <&ov5695_out>;
-    data-lanes = <1 2>;
+    remote-endpoint = <&ov8858_out>;
+    data-lanes = <1 2 3 4>;
    };
   };
 
@@ -8923,7 +8924,7 @@
 
   isp0_in: endpoint@0 {
    reg = <0>;
-   remote-endpoint = <&dphy1_out>;
+   remote-endpoint = <&dphy0_out>;
   };
  };
 };
@@ -8931,32 +8932,45 @@
 &i2c4 {
 
  status = "okay";
- imx219: imx219@10 {
+
+
+    dw9714: dw9714@0c {
+        compatible = "dongwoon,dw9714";
+        status = "okay";
+        reg = <0x0c>;
+        rockchip,camera-module-index = <0>;
+        rockchip,vcm-start-current = <10>;
+        rockchip,vcm-rated-current = <85>;
+        rockchip,vcm-step-mode = <5>;
+        rockchip,camera-module-facing = "back";
+  };
+
+ ov8858: ov8858@36 {
   status = "okay";
-  compatible = "sony,imx219";
-  reg = <0x10>;
+  compatible = "ovti,ov8858";
+  reg = <0x36>;
   clocks = <&cru 214>;
   clock-names = "xvclk";
   power-domains = <&power 8>;
   pinctrl-names = "default";
   pinctrl-0 = <&cif_clk>;
-
-
-
+        reset-gpios = <&gpio4 13 0>;
+  pwdn-gpios = <&gpio4 12 0>;
+  power-gpios = <&gpio0 8 0>;
   rockchip,camera-module-index = <0>;
   rockchip,camera-module-facing = "back";
-        rockchip,camera-module-name = "TongJu";
-  rockchip,camera-module-lens-name = "CHT842-MD";
+        rockchip,camera-module-name = "HS5885-BNSM1018-V01";
+  rockchip,camera-module-lens-name = "default";
+  lens-focus = <&dw9714>;
   port {
-   ov5695_out: endpoint {
-    remote-endpoint = <&dphy1_in>;
-    data-lanes = <1 2>;
+   ov8858_out: endpoint {
+    remote-endpoint = <&dphy0_in>;
+    data-lanes = <1 2 3 4>;
    };
   };
  };
 };
-# 45 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts" 2
-
+# 46 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts" 2
 
 
 
