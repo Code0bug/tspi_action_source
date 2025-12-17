@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     Widget *from = new Widget; //项目主窗口
     QGraphicsScene *scene = new QGraphicsScene;
     QGraphicsProxyWidget *w = scene->addWidget(from);
-    w->setRotation(90);
+    w->setRotation(270);
     QGraphicsView *view = new QGraphicsView(scene);
 
     // 设置字体
