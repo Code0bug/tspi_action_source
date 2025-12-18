@@ -12,9 +12,9 @@
  * 2023-09-13   吴才成    1378913492@qq.com   v1.0.0
  *********************************************************************/
 / {
-	/*backlight: backlight {
+	backlight: backlight {
 		compatible = "pwm-backlight";
-		pwms = <&pwm5 0 25000 0>;
+		pwms = <&pwm8 0 25000 0>;
 		brightness-levels = <
 			  0  20  20  21  21  22  22  23
 			 23  24  24  25  25  26  26  27
@@ -50,10 +50,10 @@
 			248 249 250 251 252 253 254 255
 		>;
 		default-brightness-level = <255>;
-	};*/
+	};
 };
 
-&pwm5 {
+&pwm8 {
 	status = "okay";
 };
 
@@ -101,7 +101,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&dsi1_rst_gpio>;
 		reg = <0>;
-		// backlight = <&backlight>;
+		backlight = <&backlight>;
 		reset-delay-ms = <10>;
 		enable-delay-ms = <0>;   // 没有用到 enable-gpio 这个感觉可以不加
 		prepare-delay-ms = <20>; // reset 前的延时

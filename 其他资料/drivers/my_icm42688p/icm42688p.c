@@ -176,7 +176,7 @@ static int icm42688p_reginit(void)
     uint8_t reg_val = 0;
     // 读取 who am i 寄存器 
     reg_val = icm42688p_read_onereg(&icm42688pdev, ICM42688_WHO_AM_I);
-	printk("reg_val:0x%02x\n",reg_val);
+	printk("icm42688p_reginit : reg_val:0x%02x\n",reg_val);
 
     icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0); //设置bank 0区域寄存器
     icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x01); //软复位传感器
