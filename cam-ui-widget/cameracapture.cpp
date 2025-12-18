@@ -61,6 +61,7 @@ void CameraCapture::startCapture()
         // get vi frame
         RK_S32 s32Ret = RK_MPI_VI_GetChnFrame(0, 1, &stViFrame, -1);
 
+
         if(s32Ret == RK_SUCCESS) {
 
             unsigned char* dat = reinterpret_cast<unsigned char*>(RK_MPI_MB_Handle2VirAddr(stViFrame.stVFrame.pMbBlk));
@@ -101,7 +102,9 @@ void CameraCapture::startCapture()
                     QString first_frame_savePath = "/userdata/firstFrame/" + fileName + ".jpg";
                     cv::imwrite(first_frame_savePath.toStdString(), ui_frame);
 
+
                     emit videoFinishedToUpdate(savePath, ui_frame);
+                    emit videoFinishedToIMURecord(fileName);  // 将开始录像的时间戳发送给imu记录文件
                 }
 
                 rga_buffer_t dst_img_video = wrapbuffer_virtualaddr(video_frame.data, width, height, RK_FORMAT_BGR_888);

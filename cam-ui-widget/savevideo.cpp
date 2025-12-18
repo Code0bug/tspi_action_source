@@ -47,7 +47,7 @@ SaveVideo::SaveVideo()
 
 void SaveVideo::do_save_video(cv::Mat buf, FILE* fp)
 {
-    printf("start video===\n");
+//    printf("start video===\n");
 
     memcpy(data, buf.data, encWidth * encHeight * 3);
     /**************************

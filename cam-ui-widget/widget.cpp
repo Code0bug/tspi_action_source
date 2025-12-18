@@ -39,7 +39,7 @@ Widget::Widget(QWidget *parent)
 //    ui->stackedWidget->setContentsMargins(0,0,0,0);
 //    ui->page0->setContentsMargins(0,0,0,0);
 
-    QPixmap photo1back_button_pix("./back.png");  // 加载图标
+    QPixmap photo1back_button_pix("/root/back.png");  // 加载图标
     ui->photo1back_button->setIcon(QIcon(photo1back_button_pix));
     ui->photo1back_button->setFixedSize(80, 80);     // 设置点击区域大小
     ui->photo1back_button->setIconSize(QSize(80, 80)); // 设置图标大小
@@ -57,7 +57,7 @@ Widget::Widget(QWidget *parent)
     );
 
 
-    QPixmap video1back_button_pix("./back.png");  // 加载图标
+    QPixmap video1back_button_pix("/root/back.png");  // 加载图标
     ui->video1back_button->setIcon(QIcon(video1back_button_pix));
     ui->video1back_button->setFixedSize(80, 80);     // 设置点击区域大小
     ui->video1back_button->setIconSize(QSize(80, 80)); // 设置图标大小
@@ -74,7 +74,7 @@ Widget::Widget(QWidget *parent)
         "}"
     );
 
-    QPixmap switch2video_button_pix("./video1.png");  // 加载图标
+    QPixmap switch2video_button_pix("/root/video1.png");  // 加载图标
     ui->switch2video_button->setIcon(QIcon(switch2video_button_pix));
     ui->switch2video_button->setFixedSize(80, 80);     // 设置点击区域大小
     ui->switch2video_button->setIconSize(QSize(80, 80)); // 设置图标大小
@@ -91,7 +91,7 @@ Widget::Widget(QWidget *parent)
         "}"
     );
 
-    QPixmap switch2photo_button_pix("./photo1.png");  // 加载图标
+    QPixmap switch2photo_button_pix("/root/photo1.png");  // 加载图标
     ui->switch2photo_button->setIcon(QIcon(switch2photo_button_pix));
     ui->switch2photo_button->setFixedSize(80, 80);     // 设置点击区域大小
     ui->switch2photo_button->setIconSize(QSize(80, 80)); // 设置图标大小
@@ -108,7 +108,7 @@ Widget::Widget(QWidget *parent)
         "}"
     );
 
-    QPixmap photoback_button_pix("./back.png");  // 加载图标
+    QPixmap photoback_button_pix("/root/back.png");  // 加载图标
     ui->photoback_button->setIcon(QIcon(photoback_button_pix));
     ui->photoback_button->setFixedSize(80, 80);     // 设置点击区域大小
     ui->photoback_button->setIconSize(QSize(80, 80)); // 设置图标大小
@@ -126,7 +126,7 @@ Widget::Widget(QWidget *parent)
     );
 
 
-    QPixmap videoback_button_pix("./back.png");  // 加载图标
+    QPixmap videoback_button_pix("/root/back.png");  // 加载图标
     ui->videoback_button->setIcon(QIcon(videoback_button_pix));
     ui->videoback_button->setFixedSize(80, 80);     // 设置点击区域大小
     ui->videoback_button->setIconSize(QSize(80, 80)); // 设置图标大小
@@ -143,7 +143,7 @@ Widget::Widget(QWidget *parent)
         "}"
     );
 
-    QPixmap prev_button_pix("./chevron-left.png");  // 加载图标
+    QPixmap prev_button_pix("/root/chevron-left.png");  // 加载图标
     ui->prev_button->setIcon(QIcon(prev_button_pix));
     ui->prev_button->setFixedSize(80, 80);     // 设置点击区域大小
     ui->prev_button->setIconSize(QSize(80, 80)); // 设置图标大小
@@ -160,7 +160,7 @@ Widget::Widget(QWidget *parent)
         "}"
     );
 
-    QPixmap next_button_pix("./chevron-right.png");  // 加载图标
+    QPixmap next_button_pix("/root/chevron-right.png");  // 加载图标
     ui->next_button->setIcon(QIcon(next_button_pix));
     ui->next_button->setFixedSize(80, 80);     // 设置点击区域大小
     ui->next_button->setIconSize(QSize(80, 80)); // 设置图标大小
@@ -303,6 +303,11 @@ Widget::Widget(QWidget *parent)
     KeyControl* keycontrol = new KeyControl();
     keycontrol->moveToThread(keycontrolThread);
 
+    // IMU线程
+    imuThread = new QThread();
+    IMUReader* imureader = new IMUReader();
+    imureader->moveToThread(imuThread);
+
     // 视频解码
     videodecsendThread = new QThread();
     VideoDecSend* videodecsend = new VideoDecSend();
@@ -316,6 +321,7 @@ Widget::Widget(QWidget *parent)
     connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示
     connect(cameracap, &CameraCapture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 拍照后更新相册列表
     connect(cameracap, &CameraCapture::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
+    connect(cameracap, &CameraCapture::videoFinishedToIMURecord, imureader, &IMUReader::imu_record_init);  // 开始录像时IMU做初始化准备
     connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);  // 保存录像
 
     connect(videodecget, &VideoDecGet::VideodecToUI, this, &Widget::doShowVideo);                  // 解码录像并显示
@@ -323,6 +329,8 @@ Widget::Widget(QWidget *parent)
     connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);  // 开始拍照
     connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);// 开始录像
     connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);  // 停止录像
+    connect(keycontrol, &KeyControl::keyToStopvideo, imureader, &IMUReader::stop_imu_record_txt);                  // IMU停止记录数据
+    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stop_imu_record);                              // 通知IMU停止记录，关闭文件
     connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stopVideo);                                    // 停止录像时标记flag为0
     connect(keycontrol, &KeyControl::keyToStartvideo, this, &Widget::switchToPage5);                               // 开始录像时切换到录像页
     connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::switchToPage0);                                // 停止录像时切回预览页
@@ -350,18 +358,34 @@ Widget::Widget(QWidget *parent)
 
     connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
     connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
+
+    connect(&IMUTimer, &QTimer::timeout, imureader, &IMUReader::record_imu_data);
+    connect(imureader, &IMUReader::IMUinitToWidget, this, &Widget::start_imu_record); // 开始录制后，IMU要先记录时间戳，初始化计数变量，然后才开启定时器进行记录
+
+    video_flag = 0; // video_flag初始化为0，不初始化会有个野值
     // 开启线程
     cameracapThread->start();
     savevideoThread->start();
     keycontrolThread->start();
     videodecsendThread->start();
     videodecgetThread->start();
+    imuThread->start();
 
 }
 
 Widget::~Widget()
 {
     delete ui;
+}
+
+void Widget::start_imu_record()
+{
+    IMUTimer.start(20); // 20ms->50hz
+}
+
+void Widget::stop_imu_record()
+{
+    IMUTimer.stop();
 }
 
 
@@ -387,6 +411,7 @@ void Widget::doShow(cv::Mat img)  // 预览和录像
                     cv::Scalar(220,220,220),2);
 
     if (video_flag) { // 录像时，显示录像时长
+
         QDateTime now = QDateTime::currentDateTime();
         qint64 elapsedMS = recordStartTime.msecsTo(now);  // 毫秒
         int seconds = (elapsedMS / 1000) % 60;

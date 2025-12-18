@@ -50,6 +50,7 @@ signals:
     void capFinishedToVideo(cv::Mat buf, FILE* fp);
     void photoFinishedToUpdate(QString path);
     void videoFinishedToUpdate(QString path, cv::Mat first_frame);
+    void videoFinishedToIMURecord(QString path);
 
 
 

@@ -10,13 +10,14 @@
 #include <QPixmap>
 #include <QPainter>
 #include <QPainterPath>
+#include <QListWidgetItem>
 
 #include "cameracapture.h"
 #include "savevideo.h"
 #include "keycontrol.h"
 #include "videodecget.h"
 #include "videodecsend.h"
-#include "photomanagement.h"
+#include "imureader.h"
 #include "rk_mpi.h"
 
 QT_BEGIN_NAMESPACE
@@ -45,6 +46,8 @@ public slots:
     void showPrevPhoto();
     void PicListItemClicked(QListWidgetItem *item);
     void VideoListItemClicked(QListWidgetItem *item);
+    void stop_imu_record();
+    void start_imu_record();
 
 
 signals:
@@ -64,11 +67,14 @@ private:
     QThread *playvideoThread;
     QThread *videodecsendThread;
     QThread *videodecgetThread;
+    QThread *imuThread;
 
     uint8_t video_flag;
     QDateTime recordStartTime;
 
     int picture_current_index; // 当前显示图片的索引
+
+    QTimer IMUTimer;
 
 
 
