@@ -17,46 +17,6 @@ IMUReader::IMUReader(QObject *parent) : QObject(parent)
     bsp_Icm42688GetGres(GFS_1000DPS);
 }
 
-void IMUReader::imu_record_init(QString path)
-{
-    recordCount = 0;
-    file.setFileName("/userdata/imu/" + path + ".txt");
-    if (!file.open(QIODevice::Append | QIODevice::Text)) {
-        qDebug() << "Unable to open file for writing:" << file.errorString();
-        return;
-    }
-    emit IMUinitToWidget();
-
-}
-
-void IMUReader::stop_imu_record_txt()
-{
-    file.close();
-}
-
-void IMUReader::record_imu_data()
-{
-//    auto start = std::chrono::high_resolution_clock::now();
-
-    imu_get_data();
-    QString str = QString::number(recordCount) + ","  // 时间戳
-                  + QString::number(gx) + ","
-                  + QString::number(gy) + ","
-                  + QString::number(gz) + ","
-                  + QString::number(ax) + ","
-                  + QString::number(ay) + ","
-                  + QString::number(az) + "\n";
-
-    QTextStream out(&file);
-    out << str;
-
-//    auto end = std::chrono::high_resolution_clock::now();
-//    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-//    qDebug() << "record_imu_data took:" << duration.count() << "µs";
-
-    recordCount++;
-}
-
 
 
 void IMUReader::imu_get_data()
@@ -65,19 +25,16 @@ void IMUReader::imu_get_data()
 
     int ret = read(fd, databuf, sizeof(databuf));
     if (ret == 0) {
-//        ax = databuf[0] * accSensitivity;
-//        ay = databuf[1] * accSensitivity;
-//        az = databuf[2] * accSensitivity;
-//        gx = databuf[3] * gyroSensitivity;
-//        gy = databuf[4] * gyroSensitivity;
-//        gz = databuf[5] * gyroSensitivity;
+        // 读取原始数据
+//        ax = databuf[0];
+//        ay = databuf[1];
+//        az = databuf[2];
+//        gx = databuf[3];
+//        gy = databuf[4];
+//        gz = databuf[5];
 
-        ax = databuf[0];
-        ay = databuf[1];
-        az = databuf[2];
-        gx = databuf[3];
-        gy = databuf[4];
-        gz = databuf[5];
+        emit IMUreadTorecord({databuf[0], databuf[1], databuf[2], databuf[3], databuf[4], databuf[5]});
+
 //        tem = databuf[6] / 132.48 + 25;
 
 //        printf("ax: %d, ay: %d, az: %d, gx: %d, gy: %d, gz: %d, tem: %d\r\n", ax, ay, az, gx, gy, gz, tem);
