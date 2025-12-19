@@ -40,6 +40,10 @@ void IMUReader::imu_get_data()
 //        printf("ax: %d, ay: %d, az: %d, gx: %d, gy: %d, gz: %d, tem: %d\r\n", ax, ay, az, gx, gy, gz, tem);
     }
 
+    static int recordCount = 0;
+
+    printf("imu_get_data : recordCount = %d\n", recordCount++);
+
 }
 
 float IMUReader::bsp_Icm42688GetAres(unsigned char Ascale)

@@ -387,7 +387,7 @@ Widget::~Widget()
 
 void Widget::start_imu_record()
 {
-    IMUTimer.start(20); // 20ms->50hz
+    IMUTimer.start(5); // 20ms->50hz
 }
 
 void Widget::stop_imu_record()
