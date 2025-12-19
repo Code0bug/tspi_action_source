@@ -52,5 +52,5 @@ void IMURecoder::record_imu_data(std::array<signed short, 6> data)
     file.write(buf, len);
     recordCount++;
 
-    printf("recordCount = %d\n", recordCount);
+//    printf("recordCount = %d\n", recordCount);
 }

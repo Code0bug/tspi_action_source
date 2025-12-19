@@ -37,12 +37,12 @@ void IMUReader::imu_get_data()
 
 //        tem = databuf[6] / 132.48 + 25;
 
-//        printf("ax: %d, ay: %d, az: %d, gx: %d, gy: %d, gz: %d, tem: %d\r\n", ax, ay, az, gx, gy, gz, tem);
+        printf("ax: %d, ay: %d, az: %d, gx: %d, gy: %d, gz: %d, tem: %d\r\n", ax, ay, az, gx, gy, gz, tem);
     }
 
-    static int recordCount = 0;
+//    static int recordCount = 0;
 
-    printf("imu_get_data : recordCount = %d\n", recordCount++);
+//    printf("imu_get_data : recordCount = %d\n", recordCount++);
 
 }
 

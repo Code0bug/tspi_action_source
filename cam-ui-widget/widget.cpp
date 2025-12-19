@@ -364,9 +364,10 @@ Widget::Widget(QWidget *parent)
     connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
     connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
 
-    connect(&IMUTimer, &QTimer::timeout, imureader, &IMUReader::imu_get_data);
     connect(imurecoder, &IMURecoder::IMUinitToWidget, this, &Widget::start_imu_record); // 开始录制后，IMU要先记录时间戳，初始化计数变量，然后才开启定时器进行记录
     connect(imureader, &IMUReader::IMUreadTorecord, imurecoder, &IMURecoder::record_imu_data, Qt::QueuedConnection); // 读取数据后发送信号，进行记录
+
+    connect(&IMUTimer, &QTimer::timeout, imureader, &IMUReader::imu_get_data);
 
     video_flag = 0; // video_flag初始化为0，不初始化会有个野值
     // 开启线程
@@ -387,7 +388,7 @@ Widget::~Widget()
 
 void Widget::start_imu_record()
 {
-    IMUTimer.start(5); // 20ms->50hz
+    IMUTimer.start(20); // 采样时间20ms
 }
 
 void Widget::stop_imu_record()
