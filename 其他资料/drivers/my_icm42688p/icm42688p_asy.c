@@ -50,7 +50,6 @@ struct icm42688p_dev {
 	int irq_gpio;               // 中断引脚
 	int irq;                    // 中断号
 	irqreturn_t (*handler)(int, void *);	// 中断服务函数 
-	wait_queue_head_t r_wait; // 读等待队列头
 
 	struct fasync_struct *async_queue;  // 异步相关结构体
 };
@@ -225,6 +224,7 @@ static int icm42688p_reginit(void)
 
 		icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_CONFIG, 0x30);
         icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_SOURCE0, 0x08); // ÅäÖÃINT1 DRDY INT
+		icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_CONFIG1, 0x00);
 		
         // bsp_Icm42688GetAres(AFS_4G);
         icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x00);
@@ -246,7 +246,7 @@ static int icm42688p_reginit(void)
         reg_val |= ((3) << 2);//ÉèÖÃGYRO_MODE  0:¹Ø±Õ 1:´ý»ú 2:Ô¤Áô 3:µÍÔëÉù
         reg_val |= (3);//ÉèÖÃACCEL_MODE 0:¹Ø±Õ 1:¹Ø±Õ 2:µÍ¹¦ºÄ 3:µÍÔëÉù
         icm42688p_write_onereg(&icm42688pdev, ICM42688_PWR_MGMT0, reg_val);
-        mdelay(20); 
+        mdelay(1); 
 
         return 0;
 	}
@@ -285,8 +285,20 @@ static irqreturn_t spi_handler(int irq, void *dev_id)
 {
 	struct icm42688p_dev *dev = (struct icm42688p_dev *)dev_id;
 
+    u8 int_status;
+    
+    // 必须读取中断状态寄存器来清除中断标志
+    int_status = icm42688p_read_onereg(dev, ICM42688_INT_STATUS);
+    
+    // 简单打印调试信息（可选）
+    if (int_status & 0x08) { // 数据就绪中断
+        printk("icm42688p: Data ready\n");
+    }
+	
 	if (dev->async_queue)
 		kill_fasync(&dev->async_queue, SIGIO, POLL_IN);
+
+	// printk("spi_handler\n");
 
 	return IRQ_RETVAL(IRQ_HANDLED);
 }
@@ -401,7 +413,7 @@ static int icm42688p_probe(struct spi_device *spi)
 	}
 
     // 初始化spi_device
-    spi->mode = SPI_MODE_0;  // MODE0，CPOL=0，CPHA=0
+    spi->mode = SPI_MODE_3;  
     spi_setup(spi);
     icm42688pdev.private_data = spi;
     if ( icm42688p_reginit() ) {
@@ -440,9 +452,9 @@ static int icm42688p_probe(struct spi_device *spi)
 
 	// 申请中断 
 	icm42688pdev.handler = spi_handler;
-	ret = request_irq(icm42688pdev.irq, icm42688pdev.handler, 
-						IRQF_TRIGGER_FALLING, "icm42688p_irq", &icm42688pdev);
-	if(ret < 0){
+	ret = devm_request_irq(dev, icm42688pdev.irq, icm42688pdev.handler, 
+						IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "icm42688p_irq", &icm42688pdev);
+	if(ret < 0) {
 		printk("irq %d request failed!\r\n", icm42688pdev.irq);
 		return -EFAULT;
 	}

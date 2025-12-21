@@ -162,7 +162,7 @@ void CameraCapture::takePhoto()
         if (!frame.empty()) {
             // 保存图片
             QDateTime current = QDateTime::currentDateTime();
-            QString fileName = current.toString("yyyyMMdd_hhmmss") + ".jpg";
+            QString fileName = current.toString("yyyyMMdd_hhmmss") + ".png";
             // 拼接保存路径
             QString savePath = "/userdata/picture/" + fileName;
 

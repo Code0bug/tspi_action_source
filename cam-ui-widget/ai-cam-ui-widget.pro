@@ -18,7 +18,6 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
     cameracapture.cpp \
     imureader.cpp \
-    imurecoder.cpp \
     keycontrol.cpp \
     main.cpp \
     rk_mpi.cpp \
@@ -30,7 +29,6 @@ SOURCES += \
 HEADERS += \
     cameracapture.h \
     imureader.h \
-    imurecoder.h \
     include/rk_mpi.h \
     keycontrol.h \
     savevideo.h \

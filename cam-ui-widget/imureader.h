@@ -6,7 +6,6 @@
 #include <QTimer>
 #include <QFile>
 #include <QDebug>
-#include <QTextStream>
 
 #include "stdio.h"
 #include "unistd.h"
@@ -22,7 +21,6 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#include <vector>
 
 #define AFS_2G  0x03
 #define AFS_4G  0x02
@@ -45,6 +43,7 @@ class IMUReader : public QObject
 public:
     explicit IMUReader(QObject *parent = nullptr);
     void imu_get_data();
+    void record_imu_data();
 
 private:
     float bsp_Icm42688GetAres(unsigned char Ascale);
@@ -53,10 +52,16 @@ private:
     int fd;
     float accSensitivity, gyroSensitivity;
 
+    QFile file;
+    QString timestamp;
+    int recordCount;
+
 public slots:
+    void imu_record_init(QString path);
+    void stop_imu_record_txt();
 
 signals:
-    void IMUreadTorecord(std::array<signed short, 6> data);
+    void IMUinitToWidget();
 
 
 };

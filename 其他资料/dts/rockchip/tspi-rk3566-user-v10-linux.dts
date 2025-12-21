@@ -140,6 +140,12 @@
 		};
 	};
 
+    pinctrl_icm42688p {
+        icm42688p_interrupt_pin: icm42688p_interrupt_pin { // icm42688p中断引脚
+            rockchip,pins = <3 RK_PA6 RK_FUNC_GPIO &pcfg_pull_up>;
+        };
+    };
+
 };
 
 //用户三色灯
@@ -256,6 +262,10 @@
 
 	icm42688p@0 {
 		compatible ="rockchip,icm42688p";
+		interrupt-gpios = <&gpio3 RK_PA6 GPIO_ACTIVE_LOW>;
+		pinctrl-0 = <&icm42688p_interrupt_pin>;
+		interrupt-parent = <&gpio3>;
+        interrupts = <RK_PA6 IRQ_TYPE_EDGE_FALLING>;
 		reg = <0>;
 		spi-max-frequency = <24000000>;
 		status = "okay";

@@ -8974,7 +8974,7 @@
 
     dw9714: dw9714@0c {
         compatible = "dongwoon,dw9714";
-        status = "okay";
+        status = "disabled";
         reg = <0x0c>;
         rockchip,camera-module-index = <0>;
         rockchip,vcm-start-current = <10>;
@@ -9141,6 +9141,12 @@
   };
  };
 
+    pinctrl_icm42688p {
+        icm42688p_interrupt_pin: icm42688p_interrupt_pin {
+            rockchip,pins = <3 6 0 &pcfg_pull_up>;
+        };
+    };
+
 };
 
 
@@ -9213,14 +9219,14 @@
 
 &i2c2 {
  status = "okay";
-# 225 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
+# 231 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
 };
 
 &i2c3 {
  status = "okay";
  pinctrl-names = "default";
  pinctrl-0 = <&i2c3m1_xfer>;
-# 240 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
+# 246 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
 };
 
 
@@ -9240,6 +9246,10 @@
 
  icm42688p@0 {
   compatible ="rockchip,icm42688p";
+  interrupt-gpios = <&gpio3 6 1>;
+  pinctrl-0 = <&icm42688p_interrupt_pin>;
+  interrupt-parent = <&gpio3>;
+        interrupts = <6 2>;
   reg = <0>;
   spi-max-frequency = <24000000>;
   status = "okay";

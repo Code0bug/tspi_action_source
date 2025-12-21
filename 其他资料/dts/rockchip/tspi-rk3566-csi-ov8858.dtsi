@@ -242,7 +242,7 @@
 	/* 自动聚焦马达 */
     dw9714: dw9714@0c {
         compatible = "dongwoon,dw9714";
-        status = "okay";
+        status = "disabled";
         reg = <0x0c>;
         rockchip,camera-module-index = <0>;
         rockchip,vcm-start-current = <10>;

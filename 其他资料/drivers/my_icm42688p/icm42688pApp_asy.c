@@ -112,6 +112,8 @@ void sigio_signal_func(int signum) {
         printf("ax: %d, ay: %d, az: %d, gx: %d, gy: %d, gz: %d, tem: %d\r\n", ax, ay, az, gx, gy, gz, tem);
 
     }
+
+    printf("sigio_signal_func\n");
 }
 
 

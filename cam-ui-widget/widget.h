@@ -18,7 +18,6 @@
 #include "videodecget.h"
 #include "videodecsend.h"
 #include "imureader.h"
-#include "imurecoder.h"
 #include "rk_mpi.h"
 
 QT_BEGIN_NAMESPACE
@@ -68,8 +67,7 @@ private:
     QThread *playvideoThread;
     QThread *videodecsendThread;
     QThread *videodecgetThread;
-    QThread *imureaderThread;
-    QThread *imurecoderThread;
+    QThread *imuThread;
 
     uint8_t video_flag;
     QDateTime recordStartTime;
