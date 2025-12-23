@@ -103,7 +103,7 @@
 		reg = <0>;
 		backlight = <&backlight>;
 		reset-delay-ms = <10>;
-		enable-delay-ms = <0>;   // 没有用到 enable-gpio 这个感觉可以不加
+		enable-delay-ms = <120>;   
 		prepare-delay-ms = <20>; // reset 前的延时
 		unprepare-delay-ms = <20>;
 		disable-delay-ms = <50>;
