@@ -1,6 +1,5 @@
 #include "cameracapture.h"
 
-
 CameraCapture::CameraCapture()
 {
 
@@ -101,9 +100,12 @@ void CameraCapture::startCapture()
                     // 将封面图像保存
                     QString first_frame_savePath = "/userdata/firstFrame/" + fileName + ".jpg";
                     cv::imwrite(first_frame_savePath.toStdString(), ui_frame);
+                    // 强制刷盘，保证数据写入 eMMC
+                    int fd = open(first_frame_savePath.toStdString().c_str(), O_RDONLY);
+                    fsync(fd);
+                    close(fd);
 
-
-                    emit videoFinishedToUpdate(savePath, ui_frame);
+                    emit videoFinishedToUpdate(savePath, ui_frame); // 更新录像列表
                     emit videoFinishedToIMURecord(fileName);  // 将开始录像的时间戳发送给imu记录文件
                 }
 
@@ -167,11 +169,19 @@ void CameraCapture::takePhoto()
             QString savePath = "/userdata/picture/" + fileName;
 
             // 保存图片
-            cv::imwrite(savePath.toStdString(), frame);
+//            cv::imwrite(savePath.toStdString(), frame);
+//            if (!saveImageSafe(savePath, frame)) {
+//                fprintf(stderr, "save image failed: %s\n", savePath.toStdString().c_str());
+//            }
+//            else {
+//                printf("taking photo: %s\n", savePath.toStdString().c_str());
+//            }
 
-            emit photoFinishedToUpdate(savePath);  // 每次拍完照片更新相册
+            emit photoFinishedToSave(savePath, frame); // 照片保存
 
-            printf("taking photo: %s\n", savePath.toStdString().c_str());
+
+
+
         }
 
         // 释放帧

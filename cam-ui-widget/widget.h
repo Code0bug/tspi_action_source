@@ -14,6 +14,7 @@
 
 #include "cameracapture.h"
 #include "savevideo.h"
+#include "savepicture.h"
 #include "keycontrol.h"
 #include "videodecget.h"
 #include "videodecsend.h"
@@ -63,6 +64,7 @@ private:
     Ui::Widget *ui;
     QThread *cameracapThread;
     QThread *savevideoThread;
+    QThread *savepictureThread;
     QThread *keycontrolThread;
     QThread *playvideoThread;
     QThread *videodecsendThread;

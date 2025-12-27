@@ -31,6 +31,13 @@ void IMUReader::imu_record_init(QString path)
 
 void IMUReader::stop_imu_record_txt()
 {
+    // 强制刷盘
+    file.flush();                       // Qt 缓冲 → 内核缓存
+    int fd = file.handle();             // 获取底层文件描述符
+    if (fd >= 0) {
+        fsync(fd);                       // 内核缓存 → eMMC
+    }
+
     file.close();
 }
 
@@ -53,6 +60,8 @@ void IMUReader::record_imu_data()
 //    auto end = std::chrono::high_resolution_clock::now();
 //    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 //    qDebug() << "record_imu_data took:" << duration.count() << "µs";
+
+
 
     recordCount++;
 }

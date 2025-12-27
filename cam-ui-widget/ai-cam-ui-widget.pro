@@ -21,6 +21,7 @@ SOURCES += \
     keycontrol.cpp \
     main.cpp \
     rk_mpi.cpp \
+    savepicture.cpp \
     savevideo.cpp \
     videodecget.cpp \
     videodecsend.cpp \
@@ -31,6 +32,7 @@ HEADERS += \
     imureader.h \
     include/rk_mpi.h \
     keycontrol.h \
+    savepicture.h \
     savevideo.h \
     videodecget.h \
     videodecsend.h \

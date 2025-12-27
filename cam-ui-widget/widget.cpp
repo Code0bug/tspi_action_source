@@ -7,6 +7,7 @@ static float fps = 0;
 
 QString picture_dirPath = "/userdata/picture";
 QString video_dirPath = "/userdata/video";
+QString firstFrame_dirPath = "/userdata/firstFrame/";
 
 QPixmap makeRoundThumb(const QPixmap &src, int size)
 {
@@ -276,7 +277,7 @@ Widget::Widget(QWidget *parent)
         QListWidgetItem *videoItem = new QListWidgetItem;
 
         QFileInfo videofileinfo(videoFile.absoluteFilePath());
-        QString firstFramePath = "/userdata/firstFrame/" + videofileinfo.completeBaseName() + ".jpg";
+        QString firstFramePath = firstFrame_dirPath + videofileinfo.completeBaseName() + ".jpg";
         QPixmap pix(firstFramePath);
         QPixmap rounded = makeRoundThumb(pix, 160);
 
@@ -292,6 +293,11 @@ Widget::Widget(QWidget *parent)
     cameracapThread = new QThread();
     CameraCapture* cameracap = new CameraCapture();
     cameracap->moveToThread(cameracapThread);
+
+    // 照片保存线程
+    savepictureThread = new QThread();
+    SavePicture* savepicture = new SavePicture();
+    savepicture->moveToThread(savepictureThread);
 
     // 视频编码保存
     savevideoThread = new QThread();
@@ -319,10 +325,12 @@ Widget::Widget(QWidget *parent)
 
     // 连接信号
     connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示
-    connect(cameracap, &CameraCapture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 拍照后更新相册列表
     connect(cameracap, &CameraCapture::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
     connect(cameracap, &CameraCapture::videoFinishedToIMURecord, imureader, &IMUReader::imu_record_init);  // 开始录像时IMU做初始化准备
     connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);  // 保存录像
+    connect(cameracap, &CameraCapture::photoFinishedToSave, savepicture, &SavePicture::do_save_picture);  // 保存照片
+    connect(savepicture, &SavePicture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 保存照片后更新相册列表
+
 
     connect(videodecget, &VideoDecGet::VideodecToUI, this, &Widget::doShowVideo);                  // 解码录像并显示
 
@@ -365,6 +373,7 @@ Widget::Widget(QWidget *parent)
     video_flag = 0; // video_flag初始化为0，不初始化会有个野值
     // 开启线程
     cameracapThread->start();
+    savepictureThread->start();
     savevideoThread->start();
     keycontrolThread->start();
     videodecsendThread->start();

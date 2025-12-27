@@ -28,7 +28,6 @@ void checkAndCreateUserDataDirs()
     for (const QString &dirName : subDirs) {
         if (!baseDir.exists(dirName)) {
             if (baseDir.mkdir(dirName)) {
-                qDebug() << "Created directory:" << basePath + "/" + dirName;
             } else {
                 qWarning() << "Failed to create directory:" << basePath + "/" + dirName;
             }

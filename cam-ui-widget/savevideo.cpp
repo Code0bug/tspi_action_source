@@ -78,6 +78,9 @@ void SaveVideo::do_save_video(cv::Mat buf, FILE* fp)
                 fprintf(stderr, "fwrite failed, written=%zu, len=%u\n", written, len);
             }
             fflush(fp); // 保证写入磁盘
+
+            int fd = fileno(fp);      // 获取文件描述符
+            fsync(fd);                // 强制刷到 eMMC
         }
     }
 
