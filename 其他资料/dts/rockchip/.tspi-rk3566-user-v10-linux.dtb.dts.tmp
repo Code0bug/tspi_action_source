@@ -8630,11 +8630,11 @@
   reg = <0>;
   backlight = <&backlight>;
   reset-delay-ms = <10>;
-  enable-delay-ms = <0>;
+  enable-delay-ms = <120>;
   prepare-delay-ms = <20>;
   unprepare-delay-ms = <20>;
   disable-delay-ms = <50>;
-  init-delay-ms = <50>;
+  init-delay-ms = <30>;
   dsi,flags = <((1 << 0) | (1 << 1) |
    (1 << 11) | (1 << 9))>;
   dsi,format = <0>;
@@ -8745,7 +8745,8 @@
 
 
 # 1 "arch/arm64/boot/dts/rockchip/tspi-rk3566-csi-ov8858.dtsi" 1
-# 17 "arch/arm64/boot/dts/rockchip/tspi-rk3566-csi-ov8858.dtsi"
+
+
 &combphy1_usq {
  status = "okay";
 };
@@ -8992,7 +8993,7 @@
   power-domains = <&power 8>;
   pinctrl-names = "default";
   pinctrl-0 = <&cif_clk>;
-        reset-gpios = <&gpio4 13 0>;
+        reset-gpios = <&gpio4 13 1>;
   pwdn-gpios = <&gpio4 12 0>;
   power-gpios = <&gpio0 8 0>;
   rockchip,camera-module-index = <0>;
@@ -9009,6 +9010,7 @@
  };
 };
 # 46 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts" 2
+
 
 
 
@@ -9047,7 +9049,7 @@
   reg = <0x0>;
  };
 };
-# 50 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts" 2
+# 51 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts" 2
 
 
 / {
@@ -9219,14 +9221,14 @@
 
 &i2c2 {
  status = "okay";
-# 231 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
+# 232 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
 };
 
 &i2c3 {
  status = "okay";
  pinctrl-names = "default";
  pinctrl-0 = <&i2c3m1_xfer>;
-# 246 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
+# 247 "arch/arm64/boot/dts/rockchip/tspi-rk3566-user-v10-linux.dts"
 };
 
 
@@ -9249,7 +9251,7 @@
   interrupt-gpios = <&gpio3 6 1>;
   pinctrl-0 = <&icm42688p_interrupt_pin>;
   interrupt-parent = <&gpio3>;
-        interrupts = <6 2>;
+        interrupts = <6 1>;
   reg = <0>;
   spi-max-frequency = <24000000>;
   status = "okay";

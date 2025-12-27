@@ -2753,7 +2753,7 @@ static int __ov8858_power_on(struct ov8858 *ov8858)
 	}
 
 	if (!IS_ERR(ov8858->reset_gpio))
-		gpiod_set_value_cansleep(ov8858->reset_gpio, 0);
+		gpiod_set_value_cansleep(ov8858->reset_gpio, 1);  // 低电平有效，这里拉低复位
 
 	ret = regulator_bulk_enable(OV8858_NUM_SUPPLIES, ov8858->supplies);
 	if (ret < 0) {
@@ -2762,7 +2762,7 @@ static int __ov8858_power_on(struct ov8858 *ov8858)
 	}
 
 	if (!IS_ERR(ov8858->reset_gpio))
-		gpiod_set_value_cansleep(ov8858->reset_gpio, 1);
+		gpiod_set_value_cansleep(ov8858->reset_gpio, 0);  // 拉高释放
 
 	usleep_range(1000, 2000);
 	if (!IS_ERR(ov8858->pwdn_gpio))
