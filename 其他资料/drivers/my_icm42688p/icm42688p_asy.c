@@ -202,29 +202,12 @@ static int icm42688p_reginit(void)
 	mdelay(100);
 
 	if (reg_val == ICM42688_ID) {
-        // icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x00);
-        // //reg_val = icm42688_read_reg(ICM42688_ACCEL_CONFIG0);//page74
-        // reg_val = (AFS_4G << 5);   // 量程 2g
-        // reg_val |= (AODR_100Hz);     // 输出速率 100HZ
-        // icm42688p_write_onereg(&icm42688pdev, ICM42688_ACCEL_CONFIG0, reg_val);
-
-        // icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x00);
-        // //reg_val = icm42688_read_reg(ICM42688_GYRO_CONFIG0);//page73
-        // reg_val = (GFS_1000DPS << 5);   // 量程 1000dps
-        // reg_val |= (GODR_100Hz);     // 输出速率 100HZ
-        // icm42688p_write_onereg(&icm42688pdev, ICM42688_GYRO_CONFIG0, reg_val);
-
-        // icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x00);
-        // reg_val = icm42688p_read_onereg(&icm42688pdev, ICM42688_PWR_MGMT0); 
-        // reg_val &= ~(1 << 5);
-        // reg_val |= ((3) << 2);
-        // reg_val |= (3);
-        // icm42688p_write_onereg(&icm42688pdev, ICM42688_PWR_MGMT0, reg_val);
 
 
-		icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_CONFIG, 0x30);
+
+		// icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_CONFIG, 0x32);
+		icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_CONFIG, 0x02);
         icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_SOURCE0, 0x08); // ÅäÖÃINT1 DRDY INT
-		icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_CONFIG1, 0x00);
 		
         // bsp_Icm42688GetAres(AFS_4G);
         icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x00);
@@ -285,15 +268,17 @@ static irqreturn_t spi_handler(int irq, void *dev_id)
 {
 	struct icm42688p_dev *dev = (struct icm42688p_dev *)dev_id;
 
-    u8 int_status;
+    // u8 int_status;
     
-    // 必须读取中断状态寄存器来清除中断标志
-    int_status = icm42688p_read_onereg(dev, ICM42688_INT_STATUS);
+    // // 必须读取中断状态寄存器来清除中断标志
+    // int_status = icm42688p_read_onereg(dev, ICM42688_INT_STATUS);
     
-    // 简单打印调试信息（可选）
-    if (int_status & 0x08) { // 数据就绪中断
-        printk("icm42688p: Data ready\n");
-    }
+    // // 简单打印调试信息（可选）
+    // if (int_status & 0x08) { // 数据就绪中断
+    //     printk("icm42688p: Data ready\n");
+    // }
+
+	// printk("icm42688p: Data ready\n");
 	
 	if (dev->async_queue)
 		kill_fasync(&dev->async_queue, SIGIO, POLL_IN);
@@ -350,7 +335,7 @@ static ssize_t icm42688p_read(struct file *filp, char __user *buf, size_t cnt, l
  * @param - on      : 模式
  * @return          : 负数表示函数执行失败
  */
-static int imx6uirq_fasync(int fd, struct file *filp, int on)
+static int icm42688p_fasync(int fd, struct file *filp, int on)
 {
 	struct icm42688p_dev *dev = (struct icm42688p_dev *)filp->private_data;
 	return fasync_helper(fd, filp, on, &dev->async_queue);
@@ -363,7 +348,7 @@ static int imx6uirq_fasync(int fd, struct file *filp, int on)
  */
 static int icm42688p_release(struct inode *inode, struct file *filp)
 {
-	return imx6uirq_fasync(-1, filp, 0);
+	return icm42688p_fasync(-1, filp, 0);
 }
 
 
@@ -372,7 +357,7 @@ static const struct file_operations icm42688p_ops = {
 	.owner = THIS_MODULE,
 	.open = icm42688p_open,
 	.read = icm42688p_read,
-	.fasync = imx6uirq_fasync,
+	.fasync = icm42688p_fasync,
 	.release = icm42688p_release,
 };
 
@@ -453,7 +438,7 @@ static int icm42688p_probe(struct spi_device *spi)
 	// 申请中断 
 	icm42688pdev.handler = spi_handler;
 	ret = devm_request_irq(dev, icm42688pdev.irq, icm42688pdev.handler, 
-						IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "icm42688p_irq", &icm42688pdev);
+						IRQF_TRIGGER_FALLING, "icm42688p_irq", &icm42688pdev);
 	if(ret < 0) {
 		printk("irq %d request failed!\r\n", icm42688pdev.irq);
 		return -EFAULT;
