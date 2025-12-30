@@ -51,7 +51,10 @@ struct icm42688p_dev {
 	int irq;                    // 中断号
 	irqreturn_t (*handler)(int, void *);	// 中断服务函数 
 
-	struct fasync_struct *async_queue;  // 异步相关结构体
+	struct fasync_struct *async_queue;      // 异步相关结构体
+
+	struct work_struct irq_work;         // 定义工作
+
 };
 
 static struct icm42688p_dev icm42688pdev;
@@ -106,6 +109,9 @@ out1:
 	
 	return ret;
 }
+
+
+
 
 /*
  * @description	: 向icm42688p多个寄存器写入数据
@@ -180,56 +186,120 @@ static void icm42688p_write_onereg(struct icm42688p_dev *dev, u8 reg, u8 value)
 	icm42688p_write_regs(dev, reg, &buf, 1);
 }
 
+/* @description		: 中断服务函数
+ * @param - irq 	: 中断号 
+ * @param - dev_id	: 设备结构。
+ * @return 			: 中断执行结果
+ */
+static irqreturn_t spi_handler(int irq, void *dev_id)
+{
+	struct icm42688p_dev *dev = (struct icm42688p_dev *)dev_id;
+
+    // u8 int_status;
+    
+    // // 必须读取中断状态寄存器来清除中断标志
+    // int_status = icm42688p_read_onereg(dev, ICM42688_INT_STATUS);
+    
+    // // 简单打印调试信息（可选）
+    // if (int_status & 0x08) { // 数据就绪中断
+    //     printk("icm42688p: Data ready\n");
+    // }
+
+	// printk("icm42688p: Data ready\n");
+	
+	if (dev->async_queue)
+		kill_fasync(&dev->async_queue, SIGIO, POLL_IN);
+
+	// printk("spi_handler\n");
+
+	schedule_work(&dev->irq_work); // 下半部调用
+
+
+	return IRQ_RETVAL(IRQ_HANDLED);
+}
+
+
+// 工作队列处理函数
+static void work_function(struct work_struct *work) 
+{
+    // struct icm42688p_dev *dev = container_of(work, struct icm42688p_dev, irq_work);
+
+    uint8_t int_status = 0;
+
+    int_status = icm42688p_read_onereg(&icm42688pdev, ICM42688_INT_STATUS3);
+	if (int_status & 0x02) {  // SLEEP_INT
+		printk("icm42688p: SLEEP_INT\n");
+	} else if (int_status & 0x04) {  // WAKE_INT
+		printk("icm42688p: WAKE_INT\n");
+	}
+
+	// printk("icm42688p: %d\n", int_status);
+
+	// printk("icm42688p: work_function\n");
+
+}
+
 
 
 static int icm42688p_reginit(void)
 {
     uint8_t reg_val = 0;
-    icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0); //ÉèÖÃbank 0ÇøÓò¼Ä´æÆ÷
-    icm42688p_write_onereg(&icm42688pdev, ICM42688_DEVICE_CONFIG, 0x01); //Èí¸´Î»´«¸ÐÆ÷
+    icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0); // 设置bank 0区域寄存器
+    icm42688p_write_onereg(&icm42688pdev, ICM42688_DEVICE_CONFIG, 0x01); // 软复位传感器
     mdelay(100);
 
     // 读取 who am i 寄存器 
     reg_val = icm42688p_read_onereg(&icm42688pdev, ICM42688_WHO_AM_I);
 	printk("icm42688p_reginit : reg_val:0x%02x\n",reg_val);
 
-    // icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0); //设置bank 0区域寄存器
-    // icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x01); //软复位传感器
-
-    icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0); //ÉèÖÃbank 0ÇøÓò¼Ä´æÆ÷
-    icm42688p_write_onereg(&icm42688pdev, ICM42688_DEVICE_CONFIG, 0x01); //Èí¸´Î»´«¸ÐÆ÷
+    icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0); // 设置bank 0区域寄存器
+    icm42688p_write_onereg(&icm42688pdev, ICM42688_DEVICE_CONFIG, 0x01); // 软复位传感器
 
 	mdelay(100);
 
 	if (reg_val == ICM42688_ID) {
 
+		icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_CONFIG, 0x02);  // 设置INT1为推挽,低电平有效
+        icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_SOURCE0, 0x08); // 数据可读中断映射到INT1
 
 
-		// icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_CONFIG, 0x32);
-		icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_CONFIG, 0x02);
-        icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_SOURCE0, 0x08); // ÅäÖÃINT1 DRDY INT
-		
-        // bsp_Icm42688GetAres(AFS_4G);
         icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x00);
-        //reg_val = icm42688_read_reg(ICM42688_ACCEL_CONFIG0);//page74
-        reg_val = (AFS_4G << 5);   //Á¿³Ì ¡À4g
-        reg_val |= (AODR_100Hz);     //Êä³öËÙÂÊ 100HZ
+        reg_val = (AFS_4G << 5);   // 量程4g
+        reg_val |= (AODR_100Hz);    // 输出速率100HZ
         icm42688p_write_onereg(&icm42688pdev, ICM42688_ACCEL_CONFIG0, reg_val);
 
-        // bsp_Icm42688GetGres(GFS_1000DPS);
         icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x00);
-        //reg_val = icm42688_read_reg(ICM42688_GYRO_CONFIG0);//page73
-        reg_val = (GFS_1000DPS << 5);   //Á¿³Ì ¡À1000dps
-        reg_val |= (GODR_100Hz);     //Êä³öËÙÂÊ 100HZ
+        reg_val = (GFS_1000DPS << 5);  // 量程1000dps
+        reg_val |= (GODR_100Hz);       //输出速率100HZ 
         icm42688p_write_onereg(&icm42688pdev, ICM42688_GYRO_CONFIG0, reg_val);
 
         icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x00);
-        reg_val = icm42688p_read_onereg(&icm42688pdev, ICM42688_PWR_MGMT0); //¶ÁÈ¡PWR¡ªMGMT0µ±Ç°¼Ä´æÆ÷µÄÖµ(page72)
-        reg_val &= ~(1 << 5);//Ê¹ÄÜÎÂ¶È²âÁ¿
-        reg_val |= ((3) << 2);//ÉèÖÃGYRO_MODE  0:¹Ø±Õ 1:´ý»ú 2:Ô¤Áô 3:µÍÔëÉù
-        reg_val |= (3);//ÉèÖÃACCEL_MODE 0:¹Ø±Õ 1:¹Ø±Õ 2:µÍ¹¦ºÄ 3:µÍÔëÉù
+        reg_val = icm42688p_read_onereg(&icm42688pdev, ICM42688_PWR_MGMT0); 
+        reg_val &= ~(1 << 5);  // 使能温度测量 
+        reg_val |= ((3) << 2); // 设置GYRO_MODE 0:关闭 1:待机 2:预留 3:低噪声
+        reg_val |= (3);        // 设置ACCEL_MODE 0:关闭 1:关闭 2:低功耗 3:低噪声
         icm42688p_write_onereg(&icm42688pdev, ICM42688_PWR_MGMT0, reg_val);
         mdelay(1); 
+		icm42688p_write_onereg(&icm42688pdev, ICM42688_APEX_CONFIG0, 0x00);   // DMP_ODR=0 (25Hz)
+		mdelay(1); 
+
+		// icm42688p_write_onereg(&icm42688pdev, ICM42688_SIGNAL_PATH_RESET, 0x20);  // DMP内存复位
+		// mdelay(1); 
+		// icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x04);
+		// icm42688p_write_onereg(&icm42688pdev, ICM42688_APEX_CONFIG4, 0x10);       // 静止时间阈值(4s)
+		// mdelay(1); 
+		// // icm42688p_write_onereg(&icm42688pdev, ICM42688_APEX_CONFIG5, 0x10);       // 传感器安装方向
+		// // mdelay(1); 
+		// icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x00);
+		// icm42688p_write_onereg(&icm42688pdev, ICM42688_SIGNAL_PATH_RESET, 0x40);  // 使能DMP
+
+		// icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x04);
+		// icm42688p_write_onereg(&icm42688pdev, ICM42688_INT_SOURCE6, 0x06);  // Wake/Sleep中断映射到INT1
+		// mdelay(50); 
+		// icm42688p_write_onereg(&icm42688pdev, ICM42688_REG_BANK_SEL, 0x00);
+		// icm42688p_write_onereg(&icm42688pdev, ICM42688_APEX_CONFIG0, 0x08); // 使能Wake/Sleep
+		
+
 
         return 0;
 	}
@@ -259,34 +329,6 @@ static void icm42688p_readdata(struct icm42688p_dev *dev) {
 }
 
 
-/* @description		: 中断服务函数
- * @param - irq 	: 中断号 
- * @param - dev_id	: 设备结构。
- * @return 			: 中断执行结果
- */
-static irqreturn_t spi_handler(int irq, void *dev_id)
-{
-	struct icm42688p_dev *dev = (struct icm42688p_dev *)dev_id;
-
-    // u8 int_status;
-    
-    // // 必须读取中断状态寄存器来清除中断标志
-    // int_status = icm42688p_read_onereg(dev, ICM42688_INT_STATUS);
-    
-    // // 简单打印调试信息（可选）
-    // if (int_status & 0x08) { // 数据就绪中断
-    //     printk("icm42688p: Data ready\n");
-    // }
-
-	// printk("icm42688p: Data ready\n");
-	
-	if (dev->async_queue)
-		kill_fasync(&dev->async_queue, SIGIO, POLL_IN);
-
-	// printk("spi_handler\n");
-
-	return IRQ_RETVAL(IRQ_HANDLED);
-}
 
 
 /*
@@ -435,10 +477,13 @@ static int icm42688p_probe(struct spi_device *spi)
 	printk("icm42688p-irq:gpio=%d, irqnum=%d\r\n", icm42688pdev.irq_gpio, 
 										icm42688pdev.irq);
 
+	// 初始化work									
+	INIT_WORK(&icm42688pdev.irq_work, work_function);									
 	// 申请中断 
 	icm42688pdev.handler = spi_handler;
 	ret = devm_request_irq(dev, icm42688pdev.irq, icm42688pdev.handler, 
 						IRQF_TRIGGER_FALLING, "icm42688p_irq", &icm42688pdev);
+
 	if(ret < 0) {
 		printk("irq %d request failed!\r\n", icm42688pdev.irq);
 		return -EFAULT;

@@ -43,6 +43,26 @@ void IMUReader::sigio_signal_handler(int signum)
 // 实际信号处理函数
 void IMUReader::handleSigio(int signum) {
 
+//    static struct timespec last_ts = {0, 0};
+//    struct timespec now;
+//    int64_t interval_ns = 0;
+
+//    clock_gettime(CLOCK_MONOTONIC, &now);
+
+//    if (last_ts.tv_sec != 0) {
+//        interval_ns =
+//            (int64_t)(now.tv_sec - last_ts.tv_sec) * 1000000000LL +
+//            (int64_t)(now.tv_nsec - last_ts.tv_nsec);
+
+//        // 你要 us / ms 都行
+//        printf("SIGIO interval: %.3f ms\n", interval_ns / 1e6);
+//        // printf("SIGIO interval: %lld us\n", interval_ns / 1000);
+//    }
+
+//    last_ts = now;
+
+//    /* ===== 下面是你原来的代码 ===== */
+
     int ret = 0;
 
     signed short databuf[7];
