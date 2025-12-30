@@ -47,8 +47,8 @@ public slots:
     void showPrevPhoto();
     void PicListItemClicked(QListWidgetItem *item);
     void VideoListItemClicked(QListWidgetItem *item);
-    void stop_imu_record();
-    void start_imu_record();
+//    void stop_imu_record();
+//    void start_imu_record();
 
 
 signals:
@@ -76,7 +76,7 @@ private:
 
     int picture_current_index; // 当前显示图片的索引
 
-    QTimer IMUTimer;
+//    QTimer IMUTimer;
 
 
 

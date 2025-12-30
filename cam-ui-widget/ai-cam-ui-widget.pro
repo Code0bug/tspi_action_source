@@ -32,6 +32,7 @@ HEADERS += \
     imureader.h \
     include/rk_mpi.h \
     keycontrol.h \
+    safeQueue.h \
     savepicture.h \
     savevideo.h \
     videodecget.h \

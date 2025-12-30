@@ -326,7 +326,7 @@ Widget::Widget(QWidget *parent)
     // 连接信号
     connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示
     connect(cameracap, &CameraCapture::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
-    connect(cameracap, &CameraCapture::videoFinishedToIMURecord, imureader, &IMUReader::imu_record_init);  // 开始录像时IMU做初始化准备
+    connect(cameracap, &CameraCapture::videoFinishedToIMURecord, imureader, &IMUReader::record_imu_data);  // 开始录像时IMU开始记录
     connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);  // 保存录像
     connect(cameracap, &CameraCapture::photoFinishedToSave, savepicture, &SavePicture::do_save_picture);  // 保存照片
     connect(savepicture, &SavePicture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 保存照片后更新相册列表
@@ -337,8 +337,8 @@ Widget::Widget(QWidget *parent)
     connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);  // 开始拍照
     connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);// 开始录像
     connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);  // 停止录像
-    connect(keycontrol, &KeyControl::keyToStopvideo, imureader, &IMUReader::stop_imu_record_txt);                  // IMU停止记录数据
-    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stop_imu_record);                              // 通知IMU停止记录，关闭文件
+    connect(keycontrol, &KeyControl::keyToStopvideo, imureader, &IMUReader::stop_imu_record_txt, Qt::DirectConnection);                  // IMU停止记录数据
+//    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stop_imu_record);                              // 通知IMU停止记录，关闭文件
     connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stopVideo);                                    // 停止录像时标记flag为0
     connect(keycontrol, &KeyControl::keyToStartvideo, this, &Widget::switchToPage5);                               // 开始录像时切换到录像页
     connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::switchToPage0);                                // 停止录像时切回预览页
@@ -367,8 +367,8 @@ Widget::Widget(QWidget *parent)
     connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
     connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
 
-    connect(&IMUTimer, &QTimer::timeout, imureader, &IMUReader::record_imu_data);
-    connect(imureader, &IMUReader::IMUinitToWidget, this, &Widget::start_imu_record); // 开始录制后，IMU要先记录时间戳，初始化计数变量，然后才开启定时器进行记录
+//    connect(&IMUTimer, &QTimer::timeout, imureader, &IMUReader::record_imu_data);
+//    connect(imureader, &IMUReader::IMUinitToWidget, this, &Widget::start_imu_record); // 开始录制后，IMU要先记录时间戳，初始化计数变量，然后才开启定时器进行记录
 
     video_flag = 0; // video_flag初始化为0，不初始化会有个野值
     // 开启线程
@@ -387,15 +387,15 @@ Widget::~Widget()
     delete ui;
 }
 
-void Widget::start_imu_record()
-{
-    IMUTimer.start(20); // 20ms->50hz
-}
+//void Widget::start_imu_record()
+//{
+//    IMUTimer.start(20); // 20ms->50hz
+//}
 
-void Widget::stop_imu_record()
-{
-    IMUTimer.stop();
-}
+//void Widget::stop_imu_record()
+//{
+//    IMUTimer.stop();
+//}
 
 
 void Widget::doShow(cv::Mat img)  // 预览和录像
