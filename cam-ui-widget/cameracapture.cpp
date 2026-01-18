@@ -33,25 +33,6 @@ void CameraCapture::startCapture()
     vi_chn_init(0, 3264, 2448);   // channel 0 最大支持8M  3264*2448
     vi_chn_init(1, 1920, 1080);   // channel 1 最大支持1920*1080
 
-//    rk_aiq_sys_ctx_t* rkaiq_ctx = rk_aiq_uapi2_sysctl_init("m00_b_ov8858 4-0036", "/etc/iqfiles", NULL, NULL);
-
-//    opMode_t mode;
-//    XCamReturn ret;
-//    ret = rk_aiq_uapi2_getExpMode(rkaiq_ctx, &mode);
-//    if (ret < 0) {
-//        printf("getExpMode failed! ret = %d\r\n", ret);
-//    }
-
-//    paRange_t _gainRange;
-//    ret = rk_aiq_uapi2_getExpGainRange(rkaiq_ctx, &_gainRange);
-//    if (ret == 0) {
-//        printf("ExpGainRange is (%f, %f)\r\n", _gainRange.min, _gainRange.max);
-//    }
-//    ret = rk_aiq_uapi_setManualExp(rkaiq_ctx, 100, 100);
-//    if (ret < 0) {
-//        printf("setManualExp failed! ret = %d\r\n", ret);
-//    }
-
 
     isRunning = 1;
     while (isRunning) {
