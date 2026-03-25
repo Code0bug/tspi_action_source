@@ -6,7 +6,7 @@
 #include <iostream>
 #include "rk_mpi.h"
 #include <opencv2/opencv.hpp>
-#include <opencv/cv.hpp>
+//#include <opencv/cv.hpp>
 #include "image_utils.h"
 #include "widget.h"
 

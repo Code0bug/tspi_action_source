@@ -3,7 +3,7 @@
 
 #include <QObject>
 #include <opencv2/opencv.hpp>
-#include <opencv/cv.hpp>
+//#include <opencv/cv.hpp>
 #include "yolov5.h"
 #include "image_drawing.h"
 

@@ -37,6 +37,7 @@ HEADERS += \
 # 添加rockit/opencv/rknn头文件和动态库 $$PWD表示.pro文件所在目录
 INCLUDEPATH += \
     $$PWD/include \
+    $$PWD/include/opencv4 \
     $$PWD/include/mpi/example \
     $$PWD/include/mpi/sdk \
     $$PWD/include/rknn/rknpu2 \
@@ -52,14 +53,16 @@ LIBS += \
         -L$$PWD/lib \
         -lrockit \
         -lrt_test_comm \
+        -lrknnrt \
+        -lrga \
+        -lturbojpeg \
+        -lmk_api \
+        -L/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib \
         -lopencv_core \
         -lopencv_highgui \
         -lopencv_imgproc \
         -lopencv_imgcodecs \
-        -lrknnrt \
-        -lrga \
-        -lturbojpeg \
-        -lmk_api
+        -lopencv_video \
 
 FORMS += \
     widget.ui
