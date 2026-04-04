@@ -20,6 +20,7 @@ SOURCES += \
     imureader.cpp \
     keycontrol.cpp \
     main.cpp \
+    mp4muxdemux.cpp \
     rk_mpi.cpp \
     savepicture.cpp \
     savevideo.cpp \
@@ -32,6 +33,7 @@ HEADERS += \
     imureader.h \
     include/rk_mpi.h \
     keycontrol.h \
+    mp4muxdemux.h \
     safeQueue.h \
     savepicture.h \
     savevideo.h \
@@ -45,6 +47,7 @@ INCLUDEPATH += \
     $$PWD/include/mpi/sdk \
     $$PWD/include/opencv4 \
     $$PWD/include/rga \
+    /home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include
 #    $$PWD/include/rkaiq/uAPI \
 #    $$PWD/include/rkaiq/uAPI2 \
 #    $$PWD/include/rkaiq/xcore \
@@ -65,6 +68,11 @@ LIBS += \
         -lopencv_imgcodecs \
         -lopencv_video \
         -lrga \
+        -lavformat \
+        -lavcodec \
+        -lavutil \
+        -lswresample \
+        -lswscale
 #        -lrkaiq
 
 FORMS += \

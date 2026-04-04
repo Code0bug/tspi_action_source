@@ -73,6 +73,7 @@ void CameraCapture::startCapture()
                     QString fileName = current.toString("yyyyMMdd_hhmmss");
                     // 录像保存路径
                     QString savePath = "/userdata/video/" + fileName + ".bin";
+                    QString savePath_mp4 = "/userdata/video/" + fileName + ".mp4";
                     video_fp = fopen(savePath.toStdString().c_str(), "wb");
                     if (!video_fp) {
                         perror("fopen");
@@ -88,6 +89,7 @@ void CameraCapture::startCapture()
 
                     emit videoFinishedToUpdate(savePath, ui_frame); // 更新录像列表
                     emit videoFinishedToIMURecord(fileName);  // 将开始录像的时间戳发送给imu记录文件
+                    emit sigVideoMp4Init(savePath_mp4);  // MP4初始化
                 }
 
                 rga_buffer_t dst_img_video = wrapbuffer_virtualaddr(video_frame.data, width, height, RK_FORMAT_BGR_888);
@@ -197,6 +199,7 @@ void CameraCapture::startVideo()
 void CameraCapture::stopVideo()
 {
     video_flag = 0;
+    emit videoFinishedToMP4();
 }
 
 

@@ -20,6 +20,7 @@
 #include "videodecsend.h"
 #include "imureader.h"
 #include "rk_mpi.h"
+#include "mp4muxdemux.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class Widget; }
@@ -70,6 +71,7 @@ private:
     QThread *videodecsendThread;
     QThread *videodecgetThread;
     QThread *imuThread;
+    QThread *mp4muxThread;
 
     uint8_t video_flag;
     QDateTime recordStartTime;

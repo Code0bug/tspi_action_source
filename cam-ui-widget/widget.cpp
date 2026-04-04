@@ -1,5 +1,6 @@
 #include "widget.h"
 #include "ui_widget.h"
+#include <cstdint>
 
 // 用于fps显示
 static char fps_text[16];
@@ -34,6 +35,7 @@ Widget::Widget(QWidget *parent)
     ui->setupUi(this);
 
     qRegisterMetaType<cv::Mat>("cv::Mat");
+    qRegisterMetaType<uint64_t>("uint64_t");
 
 //    ui->video_label->setStyleSheet("text-align:center;font-size:1px;");
 //    ui->video_label->setContentsMargins(0,0,0,0);
@@ -304,6 +306,11 @@ Widget::Widget(QWidget *parent)
     SaveVideo* savevideo = new SaveVideo();
     savevideo->moveToThread(savevideoThread);
 
+    // MP4封装和解封装
+    mp4muxThread = new QThread();
+    Mp4MuxDemux *mp4mux = new Mp4MuxDemux();
+    mp4mux->moveToThread(mp4muxThread);
+
     // 按键控制
     keycontrolThread = new QThread();
     KeyControl* keycontrol = new KeyControl();
@@ -328,6 +335,7 @@ Widget::Widget(QWidget *parent)
     connect(cameracap, &CameraCapture::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
     connect(cameracap, &CameraCapture::videoFinishedToIMURecord, imureader, &IMUReader::record_imu_data);  // 开始录像时IMU开始记录
     connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);  // 保存录像
+    // connect(savevideo, &SaveVideo::sigVideoEncoded, mp4mux, &Mp4MuxDemux::slotWriteVideoEncoded, Qt::QueuedConnection); // 编码流送mp4封装
     connect(cameracap, &CameraCapture::photoFinishedToSave, savepicture, &SavePicture::do_save_picture);  // 保存照片
     connect(savepicture, &SavePicture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 保存照片后更新相册列表
 
@@ -337,8 +345,22 @@ Widget::Widget(QWidget *parent)
     connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);  // 开始拍照
     connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);// 开始录像
     connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);  // 停止录像
+
+    connect(cameracap, &CameraCapture::sigVideoMp4Init, savevideo, &SaveVideo::initMp4Mux); // 开始录像时，MP4初始化
+    connect(cameracap, &CameraCapture::videoFinishedToMP4, savevideo, &SaveVideo::closeMp4Mux); // 结束录像时，MP4关闭
+    
+    // connect(keycontrol, &KeyControl::keyToStartvideo, this, [mp4mux]() {  // 开始录像时打开mp4封装
+    //     const QString mp4Path = "/userdata/video/" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".mp4";
+    //     QMetaObject::invokeMethod(mp4mux, "slotStartMux", Qt::QueuedConnection,
+    //                               Q_ARG(QString, mp4Path),
+    //                               Q_ARG(int, encWidth),
+    //                               Q_ARG(int, encHeight),
+    //                               Q_ARG(int, 30));
+    // }); 
+    // connect(cameracap, &CameraCapture::videoFinishedToMP4, mp4mux, &Mp4MuxDemux::slotStopMux, Qt::QueuedConnection); // 停止录像时关闭mp4封装
+
     connect(keycontrol, &KeyControl::keyToStopvideo, imureader, &IMUReader::stop_imu_record_txt, Qt::DirectConnection);                  // IMU停止记录数据
-//    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stop_imu_record);                              // 通知IMU停止记录，关闭文件
+//    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stop_imu_record);                            // 通知IMU停止记录，关闭文件
     connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stopVideo);                                    // 停止录像时标记flag为0
     connect(keycontrol, &KeyControl::keyToStartvideo, this, &Widget::switchToPage5);                               // 开始录像时切换到录像页
     connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::switchToPage0);                                // 停止录像时切回预览页
@@ -379,6 +401,7 @@ Widget::Widget(QWidget *parent)
     videodecsendThread->start();
     videodecgetThread->start();
     imuThread->start();
+    // mp4muxThread->start();
 
 }
 
@@ -593,4 +616,3 @@ void Widget::VideoListItemClicked(QListWidgetItem *item)
     QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
     emit WidgetToStartDecVideo(path);
 }
-

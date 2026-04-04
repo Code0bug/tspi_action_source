@@ -8,7 +8,13 @@
                 "${workspaceFolder}/include/opencv4/**",
                 "${workspaceFolder}/include/rga/**",
                 "${workspaceFolder}/include/**",
-                "/usr/local/arm/qt5.12.8_aarch64/include/**"
+                "/usr/local/arm/qt5.12.8_aarch64/include/**",
+                "/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/**",
+                "/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/libavcodec/**",
+                "/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/libavformat/**",
+                "/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/libavutil/**",
+                "/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/libswresample/**",
+                "/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/libswscale/**"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

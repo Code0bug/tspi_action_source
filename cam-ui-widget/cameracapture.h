@@ -52,6 +52,8 @@ signals:
     void videoFinishedToUpdate(QString path, cv::Mat first_frame);
     void videoFinishedToIMURecord(QString path);
     void photoFinishedToSave(QString path, cv::Mat frame);
+    void videoFinishedToMP4();
+    void sigVideoMp4Init(QString path);
 
 
 
