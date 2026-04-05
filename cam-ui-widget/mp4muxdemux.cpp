@@ -1,88 +1,169 @@
+/**
+ * MP4封装和解封装
+ * 1. H.264 -> MP4
+ * - H.264 有两种主要的封装格式，一种是 Annex-B 格式，一种是 AVCC 格式
+ * - 编码器输出的H.264码流是Annex-B格式的裸码流，因此需要将其手动转为AVCC格式，再写入MP4
+ * - MP4文件头需要SPS和PPS信息，注意这里也要转为AVCC格式，否则MP4文件无法播放
+ * - 因此封装MP4的基本步骤为：
+ *      ① 开始写MP4，初始化MP4容器输出上下文 
+ *      ② 读取H.264裸码流，从中提取出SPS和PPS信息
+ *      ③ 添加视频流，将SPS+PPS封装为AVCC，然后写MP4容器头
+ *      ④ 将Annex-B码流转换为AVCC格式，然后写入MP4帧
+ *      ⑤ 结束写MP4，释放相关变量
+ */
 #include "mp4muxdemux.h"
-
-#include <QList>
+#include <iostream>
+#include <string>
 #include <cstring>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
-#include <libavutil/avutil.h>
-#include <libavutil/mathematics.h>
+#include <libavutil/error.h>
 }
 
 namespace {
-static QString ffErr(int errnum)
+constexpr int kEncWidth = 1920;
+constexpr int kEncHeight = 1080;
+
+std::string ffErrStr(int errnum)
 {
     char errbuf[AV_ERROR_MAX_STRING_SIZE] = {0};
     av_strerror(errnum, errbuf, sizeof(errbuf));
-    return QString::fromLatin1(errbuf);
+    return std::string(errbuf);
 }
 
-static bool findStartCode(const uint8_t *buf, int size, int start, int *scPos, int *scLen)
-{
-    for (int i = start; i + 3 < size; ++i) {
-        if (buf[i] == 0x00 && buf[i + 1] == 0x00) {
-            if (buf[i + 2] == 0x01) {
-                *scPos = i;
-                *scLen = 3;
-                return true;
-            }
-            if (i + 4 < size && buf[i + 2] == 0x00 && buf[i + 3] == 0x01) {
-                *scPos = i;
-                *scLen = 4;
-                return true;
-            }
-        }
-    }
-    return false;
-}
 
-static QByteArray buildAvccFromSpsPps(const QByteArray &sps, const QByteArray &pps)
+/*
+ * 将 Annex-B 中提取出的 SPS/PPS 组装为 MP4(H.264) 需要的 avcC 数据块
+ * (AVCDecoderConfigurationRecord)。
+ *
+ * 为什么需要它：
+ * - MP4 容器中的 H.264 轨道不会直接在头部保存 Annex-B 起始码格式参数；
+ * - 解码初始化信息要放在 codec extradata 中，格式即 avcC；
+ * - 后续写 header 时会把该返回值写入 AVCodecParameters::extradata。
+ *
+ * 入参：
+ * - sps: 不带起始码的 SPS NALU 原始字节（通常 nal_type=7）
+ * - pps: 不带起始码的 PPS NALU 原始字节（通常 nal_type=8）
+ *
+ * 返回：
+ * - 成功：符合 avcC 结构的字节序列
+ * - 失败：空 QByteArray（例如 SPS 太短或 PPS 为空）
+ *
+ * avcC 结构（本实现只写单个 SPS + 单个 PPS）：
+ * - configurationVersion = 0x01
+ * - AVCProfileIndication / profile_compatibility / AVCLevelIndication <- 来自 SPS[1..3]
+ * - lengthSizeMinusOne = 3（即 NALU 长度前缀 4 字节）
+ * - numOfSequenceParameterSets = 1，随后写 SPS 长度和内容
+ * - numOfPictureParameterSets  = 1，随后写 PPS 长度和内容
+ */
+QByteArray buildAvccFromSpsPps(const QByteArray &sps, const QByteArray &pps)
 {
     if (sps.size() < 4 || pps.isEmpty()) {
         return QByteArray();
     }
-
     QByteArray avcc;
     avcc.reserve(11 + sps.size() + pps.size());
-
     avcc.append(char(0x01));
     avcc.append(sps[1]);
     avcc.append(sps[2]);
     avcc.append(sps[3]);
-    avcc.append(char(0xFF)); // 111111 + lengthSizeMinusOne(3 => 4 bytes)
-
-    avcc.append(char(0xE1)); // 111 + numOfSPS(1)
+    avcc.append(char(0xFF));
+    avcc.append(char(0xE1));
     avcc.append(char((sps.size() >> 8) & 0xFF));
     avcc.append(char(sps.size() & 0xFF));
     avcc.append(sps);
-
-    avcc.append(char(0x01)); // numOfPPS
+    avcc.append(char(0x01));
     avcc.append(char((pps.size() >> 8) & 0xFF));
     avcc.append(char(pps.size() & 0xFF));
     avcc.append(pps);
-
     return avcc;
 }
 
-static bool hasAnnexBStartCode(const uint8_t *data, int size)
+/*
+ * 在 Annex-B 格式的 H.264 码流中查找下一个起始码（start code）位置。
+ *
+ * 参数说明：
+ * - buf:
+ *   输入码流缓冲区首地址。
+ * - size:
+ *   缓冲区总长度（字节数）。
+ * - from:
+ *   查找起始偏移（从 buf[from] 开始向后扫描）。
+ * - scLen:
+ *   输出参数，返回匹配到的起始码长度：
+ *     3 -> 00 00 01
+ *     4 -> 00 00 00 01
+ *
+ * 返回值：
+ * - >= 0:
+ *   找到起始码时，返回起始码第一个字节在 buf 中的下标（offset）。
+ * - -1:
+ *   未找到起始码，或输入参数无效（如 buf/scLen 为空，from >= size）。
+ */
+int findAnnexbStartCode(const uint8_t *buf, uint32_t size, uint32_t from, uint32_t *scLen)
 {
-    if (!data || size < 4) {
-        return false;
+    if (!buf || !scLen || from >= size) {
+        return -1;
     }
-    return (data[0] == 0x00 && data[1] == 0x00 &&
-            ((data[2] == 0x01) || (data[2] == 0x00 && data[3] == 0x01)));
+    for (uint32_t p = from; p + 3 < size; ++p) {
+        if (buf[p] != 0x00 || buf[p + 1] != 0x00) {
+            continue;
+        }
+        if (buf[p + 2] == 0x01) {
+            *scLen = 3;
+            return static_cast<int>(p);
+        }
+        if (p + 4 < size && buf[p + 2] == 0x00 && buf[p + 3] == 0x01) {
+            *scLen = 4;
+            return static_cast<int>(p);
+        }
+    }
+    return -1;
 }
 
-static quint32 readBeN(const uint8_t *p, int n)
+bool annexbToAvcc(const uint8_t *data, uint32_t size, QByteArray &out)
 {
-    quint32 v = 0;
-    for (int i = 0; i < n; ++i) {
-        v = (v << 8) | p[i];
+    out.clear();
+    if (!data || size == 0) {
+        return false;
     }
-    return v;
+
+    uint32_t scLen = 0;
+    int start = findAnnexbStartCode(data, size, 0, &scLen);
+    if (start < 0) {
+        out.resize(static_cast<int>(4 + size));
+        out[0] = char((size >> 24) & 0xFF);
+        out[1] = char((size >> 16) & 0xFF);
+        out[2] = char((size >> 8) & 0xFF);
+        out[3] = char(size & 0xFF);
+        memcpy(out.data() + 4, data, size);
+        return true;
+    }
+
+    while (start >= 0) {
+        uint32_t naluStart = static_cast<uint32_t>(start) + scLen;
+        uint32_t nextScLen = 0;
+        int next = findAnnexbStartCode(data, size, naluStart, &nextScLen);
+        uint32_t naluEnd = next >= 0 ? static_cast<uint32_t>(next) : size;
+        if (naluEnd > naluStart) {
+            uint32_t naluLen = naluEnd - naluStart;
+            char lenBytes[4] = {
+                char((naluLen >> 24) & 0xFF),
+                char((naluLen >> 16) & 0xFF),
+                char((naluLen >> 8) & 0xFF),
+                char(naluLen & 0xFF)
+            };
+            out.append(lenBytes, 4);
+            out.append(reinterpret_cast<const char *>(data + naluStart), static_cast<int>(naluLen));
+        }
+        start = next;
+        scLen = nextScLen;
+    }
+    return !out.isEmpty();
 }
-}
+} // namespace
 
 Mp4MuxDemux::Mp4MuxDemux(QObject *parent)
     : QObject(parent)
@@ -91,670 +172,282 @@ Mp4MuxDemux::Mp4MuxDemux(QObject *parent)
 
 Mp4MuxDemux::~Mp4MuxDemux()
 {
-    closeWrite();
-    closeRead();
+    closeMp4Mux();
 }
 
-bool Mp4MuxDemux::openForWrite(const QString &path, const VideoConfig &videoCfg)
-{
-    closeWrite();
-    m_lastError.clear();
 
-    m_videoCfg = videoCfg;
-    m_sps.clear();
-    m_pps.clear();
-    m_headerWritten = false;
-    m_writeOpened = false;
-    clearPendingVideo();
+bool Mp4MuxDemux::initMp4Mux(const QString &filename)
+{
+    closeMp4Mux();
 
     // 创建 MP4 输出上下文（容器级）
-    int ret = avformat_alloc_output_context2(&m_outFmt, nullptr, "mp4", path.toUtf8().constData());
+    int ret = avformat_alloc_output_context2(&m_outFmt, nullptr, "mp4", filename.toUtf8().constData());
     if (ret < 0 || !m_outFmt) {
-        m_lastError = QString("avformat_alloc_output_context2 failed: %1").arg(ffErr(ret));
+        std::cerr << "avformat_alloc_output_context2 failed: "
+                  << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
         return false;
     }
 
-    // 新建视频流（这里不做编码，只声明“这是 H264 码流”）
-    m_videoOutStream = avformat_new_stream(m_outFmt, nullptr);
-    if (!m_videoOutStream) {
-        m_lastError = "avformat_new_stream(video) failed";
-        closeWrite();
-        return false;
-    }
-
-    m_videoOutStream->time_base = AVRational{m_videoCfg.timebaseNum, m_videoCfg.timebaseDen};
-    AVCodecParameters *videoPar = m_videoOutStream->codecpar;
-    videoPar->codec_type = AVMEDIA_TYPE_VIDEO;
-    videoPar->codec_id = AV_CODEC_ID_H264;
-    videoPar->width = m_videoCfg.width;
-    videoPar->height = m_videoCfg.height;
-    videoPar->format = AV_PIX_FMT_RGB24;
-
-    // 打开输出文件句柄
     if (!(m_outFmt->oformat->flags & AVFMT_NOFILE)) {
-        ret = avio_open(&m_outFmt->pb, path.toUtf8().constData(), AVIO_FLAG_WRITE);
+        ret = avio_open(&m_outFmt->pb, filename.toUtf8().constData(), AVIO_FLAG_WRITE);
         if (ret < 0) {
-            m_lastError = QString("avio_open failed: %1").arg(ffErr(ret));
-            closeWrite();
+            std::cerr << "avio_open failed: "
+                      << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+            avformat_free_context(m_outFmt);
+            m_outFmt = nullptr;
             return false;
         }
     }
 
-    m_writeOpened = true;
+    m_videoStreamIndex = -1;
+    m_audioStreamIndex = -1;
+    m_headerWritten = false;
+    m_videoPtsInited = false;
+    m_videoPtsBaseUs = 0;
+    m_sps.clear();
+    m_pps.clear();
+
     return true;
 }
 
-bool Mp4MuxDemux::setAudioConfigForWrite(const AudioConfig &audioCfg)
+void Mp4MuxDemux::closeMp4Mux()
 {
-    if (!m_outFmt || !m_writeOpened) {
-        m_lastError = "setAudioConfigForWrite called before openForWrite";
-        return false;
+    if (!m_outFmt) {
+        return;
     }
-    if (m_headerWritten) {
-        m_lastError = "setAudioConfigForWrite must be called before header is written";
-        return false;
+    if (m_headerWritten && m_videoStreamIndex >= 0 && m_outFmt->pb) {
+        int ret = av_write_trailer(m_outFmt);
+        if (ret < 0) {
+            std::cerr << "av_write_trailer failed: "
+                      << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        }
     }
-
-    if (m_audioOutStream) {
-        return true;
+    if (!(m_outFmt->oformat->flags & AVFMT_NOFILE) && m_outFmt->pb) {
+        avio_closep(&m_outFmt->pb);
     }
-
-    m_audioCfg = audioCfg;
-    m_audioOutStream = avformat_new_stream(m_outFmt, nullptr);
-    if (!m_audioOutStream) {
-        m_lastError = "avformat_new_stream(audio) failed";
-        return false;
-    }
-
-    AVCodecParameters *audioPar = m_audioOutStream->codecpar;
-    audioPar->codec_type = AVMEDIA_TYPE_AUDIO;
-    audioPar->codec_id = m_audioCfg.codecId > 0 ? AVCodecID(m_audioCfg.codecId) : AV_CODEC_ID_AAC;
-    audioPar->sample_rate = m_audioCfg.sampleRate;
-    audioPar->channels = m_audioCfg.channels;
-    audioPar->channel_layout = av_get_default_channel_layout(m_audioCfg.channels);
-    audioPar->bit_rate = m_audioCfg.bitRate;
-
-    m_audioOutStream->time_base = AVRational{1, (m_audioCfg.sampleRate > 0 ? m_audioCfg.sampleRate : 48000)};
-    m_audioConfigured = true;
-    return true;
+    avformat_free_context(m_outFmt);
+    m_outFmt = nullptr;
+    m_videoStreamIndex = -1;
+    m_audioStreamIndex = -1;
+    m_headerWritten = false;
+    m_videoPtsInited = false;
+    m_videoPtsBaseUs = 0;
+    m_sps.clear();
+    m_pps.clear();
 }
 
-bool Mp4MuxDemux::buildVideoExtradataFromAnnexB(const uint8_t *data, int size)
+int Mp4MuxDemux::addMp4Stream()
 {
-    if (!data || size <= 0) {
-        return false;
+    if (!m_outFmt) {
+        return -1;
+    }
+    if (m_videoStreamIndex >= 0) {
+        return 0;
     }
 
-    // 从 AnnexB 码流中解析 SPS/PPS，用于生成 MP4 所需 avcC(extradata)
-    int pos = 0;
-    while (pos < size) {
-        int scPos = -1;
-        int scLen = 0;
-        if (!findStartCode(data, size, pos, &scPos, &scLen)) {
-            break;
-        }
-
-        int nalStart = scPos + scLen;
-        int nextScPos = -1;
-        int nextScLen = 0;
-        if (!findStartCode(data, size, nalStart, &nextScPos, &nextScLen)) {
-            nextScPos = size;
-        }
-
-        int nalLen = nextScPos - nalStart;
-        if (nalLen > 0) {
-            uint8_t nalType = data[nalStart] & 0x1F;
-            if (nalType == 7 && m_sps.isEmpty()) {
-                m_sps = QByteArray(reinterpret_cast<const char *>(data + nalStart), nalLen);
-            } else if (nalType == 8 && m_pps.isEmpty()) {
-                m_pps = QByteArray(reinterpret_cast<const char *>(data + nalStart), nalLen);
-            }
-        }
-
-        pos = nextScPos;
+    AVOutputFormat *outFmt = m_outFmt->oformat;
+    if (!outFmt || outFmt->video_codec == AV_CODEC_ID_NONE) {
+        std::cerr << "addMp4Stream: invalid video codec id from output format" << std::endl;
+        return -1;
     }
 
-    if (m_sps.isEmpty() || m_pps.isEmpty()) {
-        return false;
+    const AVCodec *vcodec = avcodec_find_encoder(outFmt->video_codec);
+    if (!vcodec) {
+        std::cerr << "addMp4Stream: could not find video encoder" << std::endl;
+        return -1;
+    }
+    AVStream *vst = avformat_new_stream(m_outFmt, vcodec);
+    if (!vst) {
+        std::cerr << "addMp4Stream: avformat_new_stream(video) failed" << std::endl;
+        return -1;
+    }
+    vst->id = static_cast<int>(m_outFmt->nb_streams - 1);
+    vst->time_base = AVRational{1, 1000000};  // 设置时间基：时间戳单位为us
+
+    // 配置编码参数
+    AVCodecParameters *vpar = vst->codecpar;  // 流的参数结构体
+    vpar->codec_type = AVMEDIA_TYPE_VIDEO; // 视频流
+    vpar->codec_id = AV_CODEC_ID_H264;     // 码流类型
+    vpar->bit_rate = 4 * 1000 * 1000;      // 码率
+    vpar->width = kEncWidth;
+    vpar->height = kEncHeight;
+    vpar->format = AV_PIX_FMT_YUV420P;
+
+    m_videoStreamIndex = vst->index;
+    return 0;
+}
+
+/*
+ * 在 MP4 封装流程中完成“创建视频轨道配置 + 写容器头”。
+ * - 在从H264码流中获取到SPS和PPS信息后，执行此函数
+ * - 将SPS和PPS封装为avcc格式，然后写入AVCodecParameters结构体的extradata变量中
+ * - 如果没有SPS和PPS信息就直接写header，会导致MP4文件无法打开，avcc格式的SPS+PPS信息就是告诉解码器如何解码视频帧的
+ */
+int Mp4MuxDemux::addSpsPpsAndWriteHeader()
+{
+    if (!m_outFmt || m_sps.isEmpty() || m_pps.isEmpty()) {
+        return -1;
+    }
+    if (addMp4Stream() < 0) {  // 添加MP4视频流
+        return -1;
+    }
+    if (m_videoStreamIndex < 0) {
+        return -1;
     }
 
-    // 将 SPS/PPS 组装成 AVCDecoderConfigurationRecord(avcC)
-    QByteArray avcc = buildAvccFromSpsPps(m_sps, m_pps);
+    AVStream *vst = m_outFmt->streams[m_videoStreamIndex];
+    AVCodecParameters *par = vst->codecpar;
+
+    QByteArray avcc = buildAvccFromSpsPps(m_sps, m_pps);  // 将SPS和PPS封装为AVCC格式
     if (avcc.isEmpty()) {
-        return false;
+        std::cerr << "buildAvccFromSpsPps failed" << std::endl;
+        return -1;
     }
 
-    AVCodecParameters *par = m_videoOutStream->codecpar;
     av_freep(&par->extradata);
-    par->extradata_size = 0;
-
-    par->extradata = reinterpret_cast<uint8_t *>(av_malloc(static_cast<size_t>(avcc.size()) + AV_INPUT_BUFFER_PADDING_SIZE));
+    par->extradata = reinterpret_cast<uint8_t *>(av_malloc(avcc.size() + AV_INPUT_BUFFER_PADDING_SIZE));
     if (!par->extradata) {
-        m_lastError = "alloc video extradata failed";
-        return false;
+        return -1;
     }
-
     memcpy(par->extradata, avcc.constData(), static_cast<size_t>(avcc.size()));
     memset(par->extradata + avcc.size(), 0, AV_INPUT_BUFFER_PADDING_SIZE);
     par->extradata_size = avcc.size();
-    return true;
-}
 
-bool Mp4MuxDemux::ensureWriteHeader()
-{
-    if (m_headerWritten) {
-        return true;
-    }
-
-    if (!m_videoOutStream || !m_outFmt) {
-        m_lastError = "mux context not ready";
-        return false;
-    }
-
-    // MP4 写头前必须有 H264 extradata（也就是 SPS/PPS 形成的 avcC）
-    if (m_videoOutStream->codecpar->extradata_size <= 0) {
-        return false;
-    }
-
-    int ret = avformat_write_header(m_outFmt, nullptr);
+    int ret = avformat_write_header(m_outFmt, nullptr); // 写MP4容器头
     if (ret < 0) {
-        m_lastError = QString("avformat_write_header failed: %1").arg(ffErr(ret));
-        return false;
+        std::cerr << "avformat_write_header failed: "
+                  << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        return -1;
     }
-
     m_headerWritten = true;
-
-    // 写头成功后，回放之前缓存的前几帧视频包
-    for (const PendingVideo &pv : m_pendingVideo) {
-        if (!cacheOrWriteVideo(reinterpret_cast<const uint8_t *>(pv.data.constData()), pv.data.size(), pv.ptsUs, pv.keyFrame)) {
-            return false;
-        }
-    }
-    clearPendingVideo();
-    return true;
+    return 0;
 }
 
-void Mp4MuxDemux::clearPendingVideo()
+int Mp4MuxDemux::writeVideoToMp4(VENC_STREAM_S *pstStream)
 {
-    m_pendingVideo.clear();
-}
-
-qint64 Mp4MuxDemux::rescaleToStreamTimebase(qint64 ptsUs, const AVRational &tb) const
-{
-    return av_rescale_q(ptsUs, AVRational{1, 1000000}, tb);
-}
-
-qint64 Mp4MuxDemux::rescaleToUs(qint64 ts, const AVRational &tb) const
-{
-    return av_rescale_q(ts, tb, AVRational{1, 1000000});
-}
-
-bool Mp4MuxDemux::cacheOrWriteVideo(const uint8_t *data, int size, qint64 ptsUs, bool keyFrame)
-{
-    if (!m_headerWritten) {
-        // 还没写 header 时先缓存，避免丢掉首帧
-        PendingVideo pv;
-        pv.data = QByteArray(reinterpret_cast<const char *>(data), size);
-        pv.ptsUs = ptsUs;
-        pv.keyFrame = keyFrame;
-        m_pendingVideo.push_back(pv);
-        return true;
+    if (!m_outFmt || !pstStream || pstStream->u32PackCount == 0 || !pstStream->pstPack) {
+        return 0;
     }
 
-    AVPacket pkt;
-    av_init_packet(&pkt);
-    pkt.data = const_cast<uint8_t *>(data);
-    pkt.size = size;
-    pkt.stream_index = m_videoOutStream->index;
-    pkt.flags = keyFrame ? AV_PKT_FLAG_KEY : 0;
+    uint8_t spsBuf[128] = {0};     // 存储sps帧的缓冲区
+    uint8_t ppsBuf[128] = {0};     // 存储pps帧的缓冲区
+    uint32_t spsLen = 0;
+    uint32_t ppsLen = 0;
 
-    qint64 ts = rescaleToStreamTimebase(ptsUs, m_videoOutStream->time_base);
-    pkt.pts = ts;
-    pkt.dts = ts;
-    pkt.duration = av_rescale_q(1, AVRational{1, m_videoCfg.fps > 0 ? m_videoCfg.fps : 30}, m_videoOutStream->time_base);
-
-    int ret = av_interleaved_write_frame(m_outFmt, &pkt);
-    if (ret < 0) {
-        m_lastError = QString("av_interleaved_write_frame(video) failed: %1").arg(ffErr(ret));
-        return false;
-    }
-
-    return true;
-}
-
-bool Mp4MuxDemux::writeVideoPacket(const uint8_t *data, int size, qint64 ptsUs, bool keyFrame)
-{
-    if (!m_writeOpened || !m_outFmt || !m_videoOutStream) {
-        m_lastError = "writeVideoPacket called before openForWrite";
-        return false;
-    }
-    if (!data || size <= 0) {
-        m_lastError = "writeVideoPacket invalid data";
-        return false;
-    }
-
-    // 首次写视频时尽量从码流里提取 SPS/PPS，供后续写 header
-    if (m_videoOutStream->codecpar->extradata_size <= 0) {
-        buildVideoExtradataFromAnnexB(data, size);
-    }
-
-    if (!m_headerWritten) {
-        if (!ensureWriteHeader()) {
-            // header not ready yet, packet has been cached when needed
-            if (m_videoOutStream->codecpar->extradata_size <= 0) {
-                PendingVideo pv;
-                pv.data = QByteArray(reinterpret_cast<const char *>(data), size);
-                pv.ptsUs = ptsUs;
-                pv.keyFrame = keyFrame;
-                m_pendingVideo.push_back(pv);
-                return true;
-            }
-            return false;
-        }
-    }
-
-    return cacheOrWriteVideo(data, size, ptsUs, keyFrame);
-}
-
-bool Mp4MuxDemux::writeAudioPacket(const uint8_t *data, int size, qint64 ptsUs)
-{
-    if (!m_writeOpened || !m_outFmt) {
-        m_lastError = "writeAudioPacket called before openForWrite";
-        return false;
-    }
-    if (!m_audioOutStream) {
-        m_lastError = "audio stream not configured";
-        return false;
-    }
-    if (!m_headerWritten) {
-        if (!ensureWriteHeader()) {
-            m_lastError = "header is not ready before writeAudioPacket";
-            return false;
-        }
-    }
-
-    AVPacket pkt;
-    av_init_packet(&pkt);
-    pkt.data = const_cast<uint8_t *>(data);
-    pkt.size = size;
-    pkt.stream_index = m_audioOutStream->index;
-    qint64 ts = rescaleToStreamTimebase(ptsUs, m_audioOutStream->time_base);
-    pkt.pts = ts;
-    pkt.dts = ts;
-
-    int ret = av_interleaved_write_frame(m_outFmt, &pkt);
-    if (ret < 0) {
-        m_lastError = QString("av_interleaved_write_frame(audio) failed: %1").arg(ffErr(ret));
-        return false;
-    }
-
-    return true;
-}
-
-void Mp4MuxDemux::closeWrite()
-{
-    if (m_outFmt) {
-        if (m_headerWritten) {
-            // 结束 MP4：写 trailer（moov 等索引信息在这里落盘）
-            av_write_trailer(m_outFmt);
-        }
-
-        if (!(m_outFmt->oformat->flags & AVFMT_NOFILE) && m_outFmt->pb) {
-            avio_closep(&m_outFmt->pb);
-        }
-
-        avformat_free_context(m_outFmt);
-    }
-
-    m_outFmt = nullptr;
-    m_videoOutStream = nullptr;
-    m_audioOutStream = nullptr;
-    m_writeOpened = false;
-    m_headerWritten = false;
-    m_audioConfigured = false;
-    clearPendingVideo();
-    m_sps.clear();
-    m_pps.clear();
-}
-
-bool Mp4MuxDemux::openForRead(const QString &path)
-{
-    closeRead();
-    m_lastError.clear();
-
-    // 打开输入文件并解析流信息
-    int ret = avformat_open_input(&m_inFmt, path.toUtf8().constData(), nullptr, nullptr);
-    if (ret < 0) {
-        m_lastError = QString("avformat_open_input failed: %1").arg(ffErr(ret));
-        return false;
-    }
-
-    ret = avformat_find_stream_info(m_inFmt, nullptr);
-    if (ret < 0) {
-        m_lastError = QString("avformat_find_stream_info failed: %1").arg(ffErr(ret));
-        closeRead();
-        return false;
-    }
-
-    for (unsigned int i = 0; i < m_inFmt->nb_streams; ++i) {
-        AVCodecParameters *par = m_inFmt->streams[i]->codecpar;
-        if (par->codec_type == AVMEDIA_TYPE_VIDEO && m_videoIndex < 0) {
-            m_videoIndex = static_cast<int>(i);
-        } else if (par->codec_type == AVMEDIA_TYPE_AUDIO && m_audioIndex < 0) {
-            m_audioIndex = static_cast<int>(i);
-        }
-    }
-
-    if (m_videoIndex < 0 && m_audioIndex < 0) {
-        m_lastError = "no audio/video streams in file";
-        closeRead();
-        return false;
-    }
-
-    // 如果是 H264，解析 avcC，准备把 MP4 的 AVCC 包还原为 AnnexB 包
-    if (m_videoIndex >= 0) {
-        AVCodecParameters *vpar = m_inFmt->streams[m_videoIndex]->codecpar;
-        if (vpar->codec_id == AV_CODEC_ID_H264) {
-            if (!initH264AvccInfoFromExtradata()) {
-                closeRead();
-                return false;
-            }
-        }
-    }
-
-    m_readOpened = true;
-    return true;
-}
-
-bool Mp4MuxDemux::initH264AvccInfoFromExtradata()
-{
-    m_h264NalLenSize = 4;
-    m_h264AnnexbExtradata.clear();
-
-    if (m_videoIndex < 0 || !m_inFmt) {
-        m_lastError = "invalid video stream for avcc init";
-        return false;
-    }
-
-    AVCodecParameters *vpar = m_inFmt->streams[m_videoIndex]->codecpar;
-    if (!vpar || !vpar->extradata || vpar->extradata_size < 7) {
-        // Some files may already be annexb-like packets; fallback to 4-byte NAL size parsing.
-        return true;
-    }
-
-    const uint8_t *p = vpar->extradata;
-    int sz = vpar->extradata_size;
-
-    // 解析 AVCDecoderConfigurationRecord(avcC)：
-    // - 提取 NAL 长度字段字节数（1~4）
-    // - 提取 SPS/PPS 并转成 AnnexB 前缀，后续关键帧前可注入
-    if (p[0] != 1) {
-        return true;
-    }
-
-    m_h264NalLenSize = (p[4] & 0x03) + 1;
-    if (m_h264NalLenSize < 1 || m_h264NalLenSize > 4) {
-        m_h264NalLenSize = 4;
-    }
-
-    int offset = 5;
-    int numSps = p[offset] & 0x1F;
-    ++offset;
-
-    QByteArray annexbExtra;
-    for (int i = 0; i < numSps; ++i) {
-        if (offset + 2 > sz) {
-            break;
-        }
-        int spsLen = (p[offset] << 8) | p[offset + 1];
-        offset += 2;
-        if (offset + spsLen > sz) {
-            break;
-        }
-        annexbExtra.append("\x00\x00\x00\x01", 4);
-        annexbExtra.append(reinterpret_cast<const char *>(p + offset), spsLen);
-        offset += spsLen;
-    }
-
-    if (offset >= sz) {
-        m_h264AnnexbExtradata = annexbExtra;
-        return true;
-    }
-
-    int numPps = p[offset];
-    ++offset;
-    for (int i = 0; i < numPps; ++i) {
-        if (offset + 2 > sz) {
-            break;
-        }
-        int ppsLen = (p[offset] << 8) | p[offset + 1];
-        offset += 2;
-        if (offset + ppsLen > sz) {
-            break;
-        }
-        annexbExtra.append("\x00\x00\x00\x01", 4);
-        annexbExtra.append(reinterpret_cast<const char *>(p + offset), ppsLen);
-        offset += ppsLen;
-    }
-
-    m_h264AnnexbExtradata = annexbExtra;
-    return true;
-}
-
-QByteArray Mp4MuxDemux::convertH264AvccToAnnexB(const uint8_t *data, int size, bool keyFrame) const
-{
-    QByteArray out;
-    if (!data || size <= 0) {
-        return out;
-    }
-
-    // 已是 AnnexB 则直接透传
-    if (hasAnnexBStartCode(data, size)) {
-        out.append(reinterpret_cast<const char *>(data), size);
-        return out;
-    }
-
-    if (m_h264NalLenSize < 1 || m_h264NalLenSize > 4) {
-        return out;
-    }
-
-    // 关键帧前补一份 SPS/PPS，便于下游硬解码器独立起播
-    if (keyFrame && !m_h264AnnexbExtradata.isEmpty()) {
-        out.append(m_h264AnnexbExtradata);
-    }
-
-    int off = 0;
-    while (off + m_h264NalLenSize <= size) {
-        quint32 nalLen = readBeN(data + off, m_h264NalLenSize);
-        off += m_h264NalLenSize;
-        if (nalLen == 0) {
+    for (uint32_t i = 0; i < pstStream->u32PackCount; ++i) {  // u32PackCount 实际为1
+        VENC_PACK_S *pack = &pstStream->pstPack[i];
+        uint8_t *packBase = reinterpret_cast<uint8_t *>(RK_MPI_MB_Handle2VirAddr(pack->pMbBlk));
+        if (!packBase || pack->u32Offset > pack->u32Len) {
             continue;
         }
-        if (off + static_cast<int>(nalLen) > size) {
-            out.clear();
-            return out;
+        uint8_t *payload = packBase + pack->u32Offset;  // RK中u32Offset无效 这里就是0
+        uint32_t payloadLen = pack->u32Len - pack->u32Offset;
+        if (payloadLen == 0) {
+            continue;
         }
-        out.append("\x00\x00\x00\x01", 4);
-        out.append(reinterpret_cast<const char *>(data + off), static_cast<int>(nalLen));
-        off += static_cast<int>(nalLen);
-    }
 
-    if (out.isEmpty()) {
-        out.append(reinterpret_cast<const char *>(data), size);
-    }
+        /**
+         * 从 Annex-B 码流数据中找到PPS和SPS信息
+         * - Annex-B 格式的H264码流由 起始码 和 NALU序列 组成 
+         * - 每个 NALU 代表一段视频数据，比如一个 I 帧、一部分 P 帧、SPS、PPS 等
+         * - 所以逻辑就是：
+         * - 1. 先跳过起始码，找到有效NALU数据的位置
+         * - 2. NALU数据的第一个字节的低5位存储了类型信息，找到SPS和PPS，然后将其保存
+         */
+        bool hasVideoSlice = m_headerWritten;  // 是否有视频帧
+        if (!m_headerWritten) {  // 只写一次头 写完之后就不用再重复找PPS和SPS了 因为后面的PPS和SPS信息都是一样的
+            uint32_t scLen = 0;
+            int start = findAnnexbStartCode(payload, payloadLen, 0, &scLen);  // 查找起始码 返回起始码的开始位置
+            if (start >= 0) {
+                while (start >= 0) {
+                    uint32_t naluStart = static_cast<uint32_t>(start) + scLen;  // 有效NALU数据的起始位置
+                    uint32_t nextScLen = 0;
+                    // 找下一个起始码 返回下一个起始码的开始位置 也就是当前NALU数据的结束位置
+                    int next = findAnnexbStartCode(payload, payloadLen, naluStart, &nextScLen);  
+                    uint32_t naluEnd = next >= 0 ? static_cast<uint32_t>(next) : payloadLen;  // 当前NALU数据的结束位置
 
-    return out;
-}
+                    if (naluEnd > naluStart) {
+                        /**
+                         * 从NALU头中获取类型信息
+                         * nalType = 7 -> SPS
+                         * nalType = 8 -> PPS
+                         * nalType = 5 -> IDR
+                         * nalType = 1 -> 非 IDR slice
+                         */
+                        uint8_t nalType = payload[naluStart] & 0x1F;  // 提取低5位为类型信息
 
-bool Mp4MuxDemux::handleDemuxPacket(AVPacket *pkt, Packet *outPacket)
-{
-    if (!pkt || !outPacket) {
-        m_lastError = "handleDemuxPacket invalid argument";
-        return false;
-    }
+                        if (nalType == 7 && m_sps.isEmpty()) {        // SPS
+                            spsLen = naluEnd - naluStart;             // SPS数据段长度
+                            if (spsLen > sizeof(spsBuf)) spsLen = sizeof(spsBuf);  // 防止越界 实测SPS数据占27个字节 所以这里无影响
+                            // printf("spsLen = %d\r\n", spsLen);
+                            memcpy(spsBuf, payload + naluStart, spsLen);  // 将SPS数据拷贝进缓冲区spsBuf
+                            m_sps = QByteArray(reinterpret_cast<const char *>(spsBuf), static_cast<int>(spsLen));  // 写入上下文SPS变量
 
-    outPacket->eof = false;
+                        } else if (nalType == 8 && m_pps.isEmpty()) {  // PPS
+                            ppsLen = naluEnd - naluStart;              // PPS数据段长度
+                            if (ppsLen > sizeof(ppsBuf)) ppsLen = sizeof(ppsBuf);  // 防止越界 实测PPS数据占5个字节 所以这里无影响
+                            // printf("ppsLen = %d\r\n", ppsLen);
+                            memcpy(ppsBuf, payload + naluStart, ppsLen);  // 将PPS数据拷贝进缓冲区ppsBuf
+                            m_pps = QByteArray(reinterpret_cast<const char *>(ppsBuf), static_cast<int>(ppsLen));  // 写入上下文PPS变量
 
-    if (pkt->stream_index == m_videoIndex) {
-        outPacket->type = StreamVideo;
-        outPacket->keyFrame = (pkt->flags & AV_PKT_FLAG_KEY) != 0;
-        outPacket->ptsUs = pkt->pts == AV_NOPTS_VALUE ? -1 : rescaleToUs(pkt->pts, m_inFmt->streams[m_videoIndex]->time_base);
-        outPacket->dtsUs = pkt->dts == AV_NOPTS_VALUE ? -1 : rescaleToUs(pkt->dts, m_inFmt->streams[m_videoIndex]->time_base);
-
-        // 对 H264 视频包做 AVCC->AnnexB，和你当前 VDEC 喂流方式对齐
-        AVCodecParameters *vpar = m_inFmt->streams[m_videoIndex]->codecpar;
-        if (vpar && vpar->codec_id == AV_CODEC_ID_H264) {
-            outPacket->data = convertH264AvccToAnnexB(pkt->data, pkt->size, outPacket->keyFrame);
-            if (outPacket->data.isEmpty() && pkt->size > 0) {
-                m_lastError = "convertH264AvccToAnnexB failed";
-                return false;
+                        } else if (nalType == 1 || nalType == 5) {    // IDR 或者 非IDR slice
+                            hasVideoSlice = true;
+                        }
+                    }
+                    start = next;
+                    scLen = nextScLen;
+                }
+            } else {
+                hasVideoSlice = true;
             }
-        } else {
-            outPacket->data = QByteArray(reinterpret_cast<const char *>(pkt->data), pkt->size);
         }
-        return true;
+
+        // 用提取出SPS和PPS初始化 MP4 视频轨并写容器头
+        if (!m_headerWritten && !m_sps.isEmpty() && !m_pps.isEmpty()) {
+            if (addSpsPpsAndWriteHeader() < 0) {  // 写容器头
+                return -1;
+            }
+        }
+
+        if (m_videoStreamIndex < 0 || !m_headerWritten || !hasVideoSlice) {
+            continue;
+        }
+
+        if (!m_videoPtsInited) {
+            m_videoPtsInited = true;
+            m_videoPtsBaseUs = pack->u64PTS;
+        }
+        AVPacket pkt;
+        av_init_packet(&pkt);
+        pkt.flags = (pack->DataType.enH264EType == H264E_NALU_IDRSLICE ||
+                     pack->DataType.enH264EType == H264E_NALU_ISLICE) ? AV_PKT_FLAG_KEY : 0;
+        AVStream *vst = m_outFmt->streams[m_videoStreamIndex];
+        pkt.stream_index = vst->index;
+        int64_t deltaUs = static_cast<int64_t>(pack->u64PTS - m_videoPtsBaseUs);
+        if (deltaUs < 0) deltaUs = 0;
+        pkt.pos = -1;
+        QByteArray avccPacket;
+        if (!annexbToAvcc(payload, payloadLen, avccPacket)) {
+            continue;
+        }
+        if (av_new_packet(&pkt, avccPacket.size()) < 0) {
+            std::cerr << "av_new_packet failed, len=" << payloadLen << std::endl;
+            return -1;
+        }
+        memcpy(pkt.data, avccPacket.constData(), static_cast<size_t>(avccPacket.size()));
+        pkt.size = avccPacket.size();
+        pkt.stream_index = m_videoStreamIndex;
+        pkt.pts = deltaUs;
+        pkt.dts = deltaUs;
+        pkt.duration = 33333;
+
+        int ret = av_interleaved_write_frame(m_outFmt, &pkt);
+        av_packet_unref(&pkt);
+        if (ret < 0) {
+            std::cerr << "av_interleaved_write_frame(video) failed: "
+                      << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+            return -1;
+        }
     }
-
-    if (pkt->stream_index == m_audioIndex) {
-        outPacket->type = StreamAudio;
-        outPacket->keyFrame = false;
-        outPacket->ptsUs = pkt->pts == AV_NOPTS_VALUE ? -1 : rescaleToUs(pkt->pts, m_inFmt->streams[m_audioIndex]->time_base);
-        outPacket->dtsUs = pkt->dts == AV_NOPTS_VALUE ? -1 : rescaleToUs(pkt->dts, m_inFmt->streams[m_audioIndex]->time_base);
-        outPacket->data = QByteArray(reinterpret_cast<const char *>(pkt->data), pkt->size);
-        return true;
-    }
-
-    outPacket->type = StreamUnknown;
-    outPacket->data.clear();
-    outPacket->ptsUs = -1;
-    outPacket->dtsUs = -1;
-    outPacket->keyFrame = false;
-    return true;
-}
-
-bool Mp4MuxDemux::readNextPacket(Packet *outPacket)
-{
-    if (!m_readOpened || !m_inFmt) {
-        m_lastError = "readNextPacket called before openForRead";
-        return false;
-    }
-    if (!outPacket) {
-        m_lastError = "readNextPacket output is null";
-        return false;
-    }
-
-    AVPacket pkt;
-    av_init_packet(&pkt);
-
-    int ret = av_read_frame(m_inFmt, &pkt);
-    if (ret == AVERROR_EOF) {
-        outPacket->type = StreamUnknown;
-        outPacket->data.clear();
-        outPacket->ptsUs = -1;
-        outPacket->dtsUs = -1;
-        outPacket->keyFrame = false;
-        outPacket->eof = true;
-        return true;
-    }
-    if (ret < 0) {
-        m_lastError = QString("av_read_frame failed: %1").arg(ffErr(ret));
-        return false;
-    }
-
-    bool ok = handleDemuxPacket(&pkt, outPacket);
-    av_packet_unref(&pkt);
-    return ok;
-}
-
-void Mp4MuxDemux::closeRead()
-{
-    if (m_inFmt) {
-        avformat_close_input(&m_inFmt);
-        m_inFmt = nullptr;
-    }
-
-    m_videoIndex = -1;
-    m_audioIndex = -1;
-    m_h264NalLenSize = 4;
-    m_h264AnnexbExtradata.clear();
-    m_readOpened = false;
-}
-
-QString Mp4MuxDemux::lastError() const
-{
-    return m_lastError;
-}
-
-void Mp4MuxDemux::slotStartMux(const QString &path, int width, int height, int fps)
-{
-    VideoConfig cfg;
-    cfg.width = width;
-    cfg.height = height;
-    cfg.fps = fps;
-
-    bool ok = openForWrite(path, cfg);
-    if (ok) {
-        emit sigMuxOpened(true, QStringLiteral("mp4 mux opened"));
-    } else {
-        emit sigMuxOpened(false, m_lastError);
-        emit sigMuxError(m_lastError);
-    }
-}
-
-void Mp4MuxDemux::slotStopMux()
-{
-    closeWrite();
-    printf("slotStopMux\r\n");
-    emit sigMuxClosed();
-}
-
-void Mp4MuxDemux::slotWriteVideoEncoded(const QByteArray &data, qint64 ptsUs, bool keyFrame)
-{
-    bool ok = writeVideoPacket(reinterpret_cast<const uint8_t *>(data.constData()), data.size(), ptsUs, keyFrame);
-    if (!ok) {
-        emit sigMuxError(m_lastError);
-    }
-}
-
-void Mp4MuxDemux::slotWriteAudioEncoded(const QByteArray &data, qint64 ptsUs)
-{
-    bool ok = writeAudioPacket(reinterpret_cast<const uint8_t *>(data.constData()), data.size(), ptsUs);
-    if (!ok) {
-        emit sigMuxError(m_lastError);
-    }
-}
-
-void Mp4MuxDemux::slotStartDemux(const QString &path)
-{
-    bool ok = openForRead(path);
-    if (ok) {
-        emit sigDemuxOpened(true, QStringLiteral("mp4 demux opened"));
-    } else {
-        emit sigDemuxOpened(false, m_lastError);
-        emit sigDemuxError(m_lastError);
-    }
-}
-
-void Mp4MuxDemux::slotStopDemux()
-{
-    closeRead();
-    emit sigDemuxClosed();
-}
-
-void Mp4MuxDemux::slotPullNextPacket()
-{
-    Packet pkt;
-    bool ok = readNextPacket(&pkt);
-    if (!ok) {
-        emit sigDemuxError(m_lastError);
-        return;
-    }
-
-    if (pkt.eof) {
-        emit sigDemuxPacketReady(StreamUnknown, QByteArray(), -1, -1, false, true);
-        emit sigDemuxEof();
-        return;
-    }
-
-    emit sigDemuxPacketReady(pkt.type, pkt.data, pkt.ptsUs, pkt.dtsUs, pkt.keyFrame, false);
+    return 0;
 }

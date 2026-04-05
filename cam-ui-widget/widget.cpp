@@ -346,8 +346,9 @@ Widget::Widget(QWidget *parent)
     connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);// 开始录像
     connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);  // 停止录像
 
-    connect(cameracap, &CameraCapture::sigVideoMp4Init, savevideo, &SaveVideo::initMp4Mux); // 开始录像时，MP4初始化
-    connect(cameracap, &CameraCapture::videoFinishedToMP4, savevideo, &SaveVideo::closeMp4Mux); // 结束录像时，MP4关闭
+    connect(cameracap, &CameraCapture::sigVideoMp4Init, mp4mux, &Mp4MuxDemux::initMp4Mux); // 开始录像时，MP4初始化
+    connect(cameracap, &CameraCapture::videoFinishedToMP4, mp4mux, &Mp4MuxDemux::closeMp4Mux); // 结束录像时，MP4关闭
+    connect(savevideo, &SaveVideo::sigVideo2Mp4Mux, mp4mux, &Mp4MuxDemux::writeVideoToMp4);
     
     // connect(keycontrol, &KeyControl::keyToStartvideo, this, [mp4mux]() {  // 开始录像时打开mp4封装
     //     const QString mp4Path = "/userdata/video/" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".mp4";
@@ -401,7 +402,7 @@ Widget::Widget(QWidget *parent)
     videodecsendThread->start();
     videodecgetThread->start();
     imuThread->start();
-    // mp4muxThread->start();
+    mp4muxThread->start();
 
 }
 
