@@ -311,6 +311,11 @@ Widget::Widget(QWidget *parent)
     Mp4MuxDemux *mp4mux = new Mp4MuxDemux();
     mp4mux->moveToThread(mp4muxThread);
 
+    // 音频采集
+    audiocapThread = new QThread();
+    AudioCapture *audiocap = new AudioCapture();
+    audiocap->moveToThread(audiocapThread);
+
     // 按键控制
     keycontrolThread = new QThread();
     KeyControl* keycontrol = new KeyControl();
@@ -346,20 +351,13 @@ Widget::Widget(QWidget *parent)
     connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);// 开始录像
     connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);  // 停止录像
 
+    connect(cameracap, &CameraCapture::sigVideoMp4Init, audiocap, &AudioCapture::startCapture, Qt::QueuedConnection); // 开始录像时，开启音频采集
     connect(cameracap, &CameraCapture::sigVideoMp4Init, mp4mux, &Mp4MuxDemux::initMp4Mux); // 开始录像时，MP4初始化
-    connect(cameracap, &CameraCapture::videoFinishedToMP4, mp4mux, &Mp4MuxDemux::closeMp4Mux); // 结束录像时，MP4关闭
+    connect(cameracap, &CameraCapture::videoFinishedToMP4, audiocap, &AudioCapture::stopCapture, Qt::DirectConnection); // 结束录像时，先停音频采集
+    connect(cameracap, &CameraCapture::videoFinishedToMP4, mp4mux, &Mp4MuxDemux::closeMp4Mux); // 结束录像时，再关闭MP4
     connect(savevideo, &SaveVideo::sigVideo2Mp4Mux, mp4mux, &Mp4MuxDemux::writeVideoToMp4);
+    connect(audiocap, &AudioCapture::capFinishedToAudio, mp4mux, &Mp4MuxDemux::writeAudioToMp4);
     
-    // connect(keycontrol, &KeyControl::keyToStartvideo, this, [mp4mux]() {  // 开始录像时打开mp4封装
-    //     const QString mp4Path = "/userdata/video/" + QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss") + ".mp4";
-    //     QMetaObject::invokeMethod(mp4mux, "slotStartMux", Qt::QueuedConnection,
-    //                               Q_ARG(QString, mp4Path),
-    //                               Q_ARG(int, encWidth),
-    //                               Q_ARG(int, encHeight),
-    //                               Q_ARG(int, 30));
-    // }); 
-    // connect(cameracap, &CameraCapture::videoFinishedToMP4, mp4mux, &Mp4MuxDemux::slotStopMux, Qt::QueuedConnection); // 停止录像时关闭mp4封装
-
     connect(keycontrol, &KeyControl::keyToStopvideo, imureader, &IMUReader::stop_imu_record_txt, Qt::DirectConnection);                  // IMU停止记录数据
 //    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stop_imu_record);                            // 通知IMU停止记录，关闭文件
     connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stopVideo);                                    // 停止录像时标记flag为0
@@ -403,6 +401,7 @@ Widget::Widget(QWidget *parent)
     videodecgetThread->start();
     imuThread->start();
     mp4muxThread->start();
+    audiocapThread->start();
 
 }
 

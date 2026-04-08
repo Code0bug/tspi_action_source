@@ -12,6 +12,7 @@
  *      ⑤ 结束写MP4，释放相关变量
  */
 #include "mp4muxdemux.h"
+#include "audiocapture.h"
 #include <iostream>
 #include <string>
 #include <cstring>
@@ -20,17 +21,26 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/error.h>
+#include <libavutil/opt.h>
+#include <libavutil/channel_layout.h>
+#include <libswresample/swresample.h>
 }
 
 namespace {
 constexpr int kEncWidth = 1920;
 constexpr int kEncHeight = 1080;
+constexpr int kAudioBitrate = 64000; // 语音场景下 AAC 64kbps 一般足够
 
 std::string ffErrStr(int errnum)
 {
     char errbuf[AV_ERROR_MAX_STRING_SIZE] = {0};
     av_strerror(errnum, errbuf, sizeof(errbuf));
     return std::string(errbuf);
+}
+
+uint64_t channelLayoutFromChannels(int channels)
+{
+    return channels == 2 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
 }
 
 
@@ -203,9 +213,23 @@ bool Mp4MuxDemux::initMp4Mux(const QString &filename)
     m_audioStreamIndex = -1;
     m_headerWritten = false;
     m_videoPtsInited = false;
+    m_audioPtsInited = false;
+    m_syncBaseInited = false;
     m_videoPtsBaseUs = 0;
+    m_syncBaseUs = 0;
+    m_audioNextPts = 0;
+    m_audioInputChannels = gAudioCaptureConfig.outChannel;
+    m_audioInputBytesPerSample = 2; // AudioCapture 当前输出 s16
+    m_audioPcmCache.clear();
+    m_pendingAudioChunks.clear();
     m_sps.clear();
     m_pps.clear();
+
+    // 先创建音频编码器和音频流。MP4 header 尚未写，等拿到视频 SPS/PPS 后一起写 header。
+    if (initAudioEncoder() != 0) {
+        closeMp4Mux();
+        return false;
+    }
 
     return true;
 }
@@ -215,7 +239,11 @@ void Mp4MuxDemux::closeMp4Mux()
     if (!m_outFmt) {
         return;
     }
-    if (m_headerWritten && m_videoStreamIndex >= 0 && m_outFmt->pb) {
+    if (m_headerWritten) {
+        flushAudioEncoder();
+    }
+
+    if (m_headerWritten && m_outFmt->pb) {
         int ret = av_write_trailer(m_outFmt);
         if (ret < 0) {
             std::cerr << "av_write_trailer failed: "
@@ -225,15 +253,274 @@ void Mp4MuxDemux::closeMp4Mux()
     if (!(m_outFmt->oformat->flags & AVFMT_NOFILE) && m_outFmt->pb) {
         avio_closep(&m_outFmt->pb);
     }
+    releaseAudioEncoder();
     avformat_free_context(m_outFmt);
     m_outFmt = nullptr;
     m_videoStreamIndex = -1;
     m_audioStreamIndex = -1;
     m_headerWritten = false;
     m_videoPtsInited = false;
+    m_audioPtsInited = false;
+    m_syncBaseInited = false;
     m_videoPtsBaseUs = 0;
+    m_syncBaseUs = 0;
+    m_audioNextPts = 0;
+    m_audioPcmCache.clear();
+    m_pendingAudioChunks.clear();
     m_sps.clear();
     m_pps.clear();
+}
+
+void Mp4MuxDemux::ensureSyncBase(uint64_t tsUs)
+{
+    // 音视频统一同步基准：
+    // - 第一份到达的音频/视频时间戳作为 m_syncBaseUs
+    // - 后续所有流都减去该基准，得到同一“录制起点”下的相对时间
+    if (!m_syncBaseInited) {
+        m_syncBaseInited = true;
+        m_syncBaseUs = tsUs;
+    }
+}
+
+int Mp4MuxDemux::initAudioEncoder()
+{
+    if (!m_outFmt || m_audioEncCtx) {
+        return -1;
+    }
+
+    const AVCodec *acodec = avcodec_find_encoder(AV_CODEC_ID_AAC);
+    if (!acodec) {
+        std::cerr << "initAudioEncoder: avcodec_find_encoder(AAC) failed" << std::endl;
+        return -1;
+    }
+
+    m_audioEncCtx = avcodec_alloc_context3(acodec);
+    if (!m_audioEncCtx) {
+        return -1;
+    }
+
+    const int outSampleRate = gAudioCaptureConfig.outSampleRate > 0 ? gAudioCaptureConfig.outSampleRate : 16000;
+    m_audioInputChannels = gAudioCaptureConfig.outChannel == 2 ? 2 : 1;
+    const uint64_t inLayout = channelLayoutFromChannels(m_audioInputChannels);
+
+    m_audioEncCtx->codec_type = AVMEDIA_TYPE_AUDIO;
+    m_audioEncCtx->codec_id = AV_CODEC_ID_AAC;
+    m_audioEncCtx->sample_rate = outSampleRate;
+    m_audioEncCtx->channel_layout = inLayout;
+    m_audioEncCtx->channels = m_audioInputChannels;
+    m_audioEncCtx->bit_rate = kAudioBitrate;
+    m_audioEncCtx->time_base = AVRational{1, outSampleRate};
+    m_audioEncCtx->sample_fmt = acodec->sample_fmts ? acodec->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
+    if (m_outFmt->oformat->flags & AVFMT_GLOBALHEADER) {
+        m_audioEncCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+    }
+
+    int ret = avcodec_open2(m_audioEncCtx, acodec, nullptr);
+    if (ret < 0) {
+        std::cerr << "avcodec_open2(aac) failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        return -1;
+    }
+
+    AVStream *ast = avformat_new_stream(m_outFmt, nullptr);
+    if (!ast) {
+        std::cerr << "avformat_new_stream(audio) failed" << std::endl;
+        return -1;
+    }
+    ast->id = static_cast<int>(m_outFmt->nb_streams - 1);
+    ast->time_base = AVRational{1, outSampleRate};
+
+    ret = avcodec_parameters_from_context(ast->codecpar, m_audioEncCtx);
+    if (ret < 0) {
+        std::cerr << "avcodec_parameters_from_context(audio) failed: "
+                  << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        return -1;
+    }
+    m_audioStreamIndex = ast->index;
+
+    // 输入是 AudioCapture 输出的 s16 PCM；AAC 编码器通常是 fltp，需要 swr 做格式转换。
+    m_swrCtx = swr_alloc_set_opts(
+        nullptr,
+        m_audioEncCtx->channel_layout,
+        m_audioEncCtx->sample_fmt,
+        m_audioEncCtx->sample_rate,
+        inLayout,
+        AV_SAMPLE_FMT_S16,
+        outSampleRate,
+        0,
+        nullptr
+    );
+    if (!m_swrCtx) {
+        std::cerr << "swr_alloc_set_opts failed" << std::endl;
+        return -1;
+    }
+    ret = swr_init(m_swrCtx);
+    if (ret < 0) {
+        std::cerr << "swr_init failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        return -1;
+    }
+
+    m_audioFrame = av_frame_alloc();
+    if (!m_audioFrame) {
+        return -1;
+    }
+    m_audioFrame->format = m_audioEncCtx->sample_fmt;
+    m_audioFrame->channel_layout = m_audioEncCtx->channel_layout;
+    m_audioFrame->sample_rate = m_audioEncCtx->sample_rate;
+    m_audioFrame->nb_samples = m_audioEncCtx->frame_size > 0 ? m_audioEncCtx->frame_size : 1024;
+    ret = av_frame_get_buffer(m_audioFrame, 0);
+    if (ret < 0) {
+        std::cerr << "av_frame_get_buffer(audio) failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        return -1;
+    }
+
+    return 0;
+}
+
+void Mp4MuxDemux::releaseAudioEncoder()
+{
+    if (m_audioFrame) {
+        av_frame_free(&m_audioFrame);
+    }
+    if (m_swrCtx) {
+        swr_free(&m_swrCtx);
+    }
+    if (m_audioEncCtx) {
+        avcodec_free_context(&m_audioEncCtx);
+    }
+}
+
+int Mp4MuxDemux::writeAudioFrame(AVFrame *frame)
+{
+    if (!m_outFmt || !m_audioEncCtx || m_audioStreamIndex < 0) {
+        return -1;
+    }
+    int ret = avcodec_send_frame(m_audioEncCtx, frame);
+    if (ret < 0) {
+        std::cerr << "avcodec_send_frame(audio) failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        return -1;
+    }
+
+    while (true) {
+        AVPacket pkt;
+        av_init_packet(&pkt);
+        pkt.data = nullptr;
+        pkt.size = 0;
+
+        ret = avcodec_receive_packet(m_audioEncCtx, &pkt);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+            av_packet_unref(&pkt);
+            break;
+        }
+        if (ret < 0) {
+            std::cerr << "avcodec_receive_packet(audio) failed: "
+                      << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+            av_packet_unref(&pkt);
+            return -1;
+        }
+
+        AVStream *ast = m_outFmt->streams[m_audioStreamIndex];
+        av_packet_rescale_ts(&pkt, m_audioEncCtx->time_base, ast->time_base);
+        pkt.stream_index = m_audioStreamIndex;
+        pkt.pos = -1;
+
+        ret = av_interleaved_write_frame(m_outFmt, &pkt);
+        av_packet_unref(&pkt);
+        if (ret < 0) {
+            std::cerr << "av_interleaved_write_frame(audio) failed: "
+                      << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int Mp4MuxDemux::processAudioChunk(const QByteArray &pcmData, uint64_t captureTsUs)
+{
+    if (!m_audioEncCtx || !m_audioFrame || !m_swrCtx) {
+        return -1;
+    }
+
+    ensureSyncBase(captureTsUs);
+    if (!m_audioPtsInited) {
+        // 关键同步点：
+        // - 音频首块的采集时间与全局基准做差，映射到“采样数时间轴”
+        // - 后续按编码帧样本数递增，避免受线程抖动影响
+        int64_t deltaUs = static_cast<int64_t>(captureTsUs - m_syncBaseUs);
+        if (deltaUs < 0) deltaUs = 0;
+        m_audioNextPts = av_rescale_q(deltaUs, AVRational{1, 1000000}, m_audioEncCtx->time_base);
+        m_audioPtsInited = true;
+    }
+
+    m_audioPcmCache.append(pcmData);
+
+    const int samplesPerFrame = m_audioFrame->nb_samples;
+    const int bytesPerInputSample = m_audioInputChannels * m_audioInputBytesPerSample;
+    const int bytesPerCodecFrame = samplesPerFrame * bytesPerInputSample;
+
+    while (m_audioPcmCache.size() >= bytesPerCodecFrame) {
+        int ret = av_frame_make_writable(m_audioFrame);
+        if (ret < 0) {
+            std::cerr << "av_frame_make_writable(audio) failed: "
+                      << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+            return -1;
+        }
+
+        const uint8_t *srcData[1] = {
+            reinterpret_cast<const uint8_t *>(m_audioPcmCache.constData())
+        };
+        ret = swr_convert(
+            m_swrCtx,
+            m_audioFrame->data,
+            samplesPerFrame,
+            srcData,
+            samplesPerFrame
+        );
+        if (ret < 0) {
+            std::cerr << "swr_convert failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+            return -1;
+        }
+
+        m_audioFrame->pts = m_audioNextPts;
+        m_audioNextPts += m_audioFrame->nb_samples;
+
+        if (writeAudioFrame(m_audioFrame) < 0) {
+            return -1;
+        }
+
+        m_audioPcmCache.remove(0, bytesPerCodecFrame);
+    }
+    return 0;
+}
+
+void Mp4MuxDemux::flushPendingAudio()
+{
+    if (!m_headerWritten || m_pendingAudioChunks.isEmpty()) {
+        return;
+    }
+
+    for (const AudioChunk &chunk : m_pendingAudioChunks) {
+        processAudioChunk(chunk.pcm, chunk.tsUs);
+    }
+    m_pendingAudioChunks.clear();
+}
+
+void Mp4MuxDemux::flushAudioEncoder()
+{
+    if (!m_audioEncCtx || !m_audioFrame || !m_swrCtx) {
+        return;
+    }
+
+    if (!m_audioPcmCache.isEmpty()) {
+        // 收尾时不足一帧的 PCM，补 0 到完整 AAC 帧，避免尾音丢失。
+        const int bytesPerInputSample = m_audioInputChannels * m_audioInputBytesPerSample;
+        const int bytesPerCodecFrame = m_audioFrame->nb_samples * bytesPerInputSample;
+        if (m_audioPcmCache.size() < bytesPerCodecFrame) {
+            m_audioPcmCache.append(QByteArray(bytesPerCodecFrame - m_audioPcmCache.size(), '\0'));
+        }
+        processAudioChunk(QByteArray(), m_syncBaseUs);
+    }
+
+    writeAudioFrame(nullptr); // flush encoder delayed packets
 }
 
 int Mp4MuxDemux::addMp4Stream()
@@ -320,7 +607,23 @@ int Mp4MuxDemux::addSpsPpsAndWriteHeader()
         return -1;
     }
     m_headerWritten = true;
+    flushPendingAudio();
     return 0;
+}
+
+int Mp4MuxDemux::writeAudioToMp4(QByteArray pcmData, uint64_t captureTsUs)
+{
+    if (!m_outFmt || !m_audioEncCtx || pcmData.isEmpty()) {
+        return 0;
+    }
+
+    if (!m_headerWritten) {
+        // MP4 header 写完前不能写包；先缓存，待拿到 SPS/PPS 写完 header 后再补写。
+        m_pendingAudioChunks.push_back({pcmData, captureTsUs});
+        return 0;
+    }
+
+    return processAudioChunk(pcmData, captureTsUs);
 }
 
 int Mp4MuxDemux::writeVideoToMp4(VENC_STREAM_S *pstStream)
@@ -413,9 +716,10 @@ int Mp4MuxDemux::writeVideoToMp4(VENC_STREAM_S *pstStream)
             continue;
         }
 
+        ensureSyncBase(pack->u64PTS);
         if (!m_videoPtsInited) {
             m_videoPtsInited = true;
-            m_videoPtsBaseUs = pack->u64PTS;
+            m_videoPtsBaseUs = m_syncBaseUs;
         }
         AVPacket pkt;
         av_init_packet(&pkt);
@@ -423,6 +727,7 @@ int Mp4MuxDemux::writeVideoToMp4(VENC_STREAM_S *pstStream)
                      pack->DataType.enH264EType == H264E_NALU_ISLICE) ? AV_PKT_FLAG_KEY : 0;
         AVStream *vst = m_outFmt->streams[m_videoStreamIndex];
         pkt.stream_index = vst->index;
+        // 视频时间戳与音频共享同一个同步基准 m_syncBaseUs。
         int64_t deltaUs = static_cast<int64_t>(pack->u64PTS - m_videoPtsBaseUs);
         if (deltaUs < 0) deltaUs = 0;
         pkt.pos = -1;

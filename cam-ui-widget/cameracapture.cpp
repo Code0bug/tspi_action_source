@@ -44,6 +44,8 @@ void CameraCapture::startCapture()
 
         if(s32Ret == RK_SUCCESS) {
 
+            // printf("Camera PTS = %ld\r\n", stViFrame.stVFrame.u64PTS);
+
             unsigned char* dat = reinterpret_cast<unsigned char*>(RK_MPI_MB_Handle2VirAddr(stViFrame.stVFrame.pMbBlk));
 
             // 转换为RGB888格式
