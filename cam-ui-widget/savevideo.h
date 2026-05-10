@@ -24,7 +24,7 @@ public:
     ~SaveVideo();
 
 public slots:
-    void do_save_video(cv::Mat buf,  FILE* fp);
+    void do_save_video(cv::Mat buf, FILE* fp, uint64_t pts);
 
 signals:
     void sigVideo2Mp4Mux(VENC_STREAM_S *pstStream);

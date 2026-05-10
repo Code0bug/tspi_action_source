@@ -98,7 +98,7 @@ void CameraCapture::startCapture()
 //                rga_buffer_t dst_img_video_rotate = wrapbuffer_virtualaddr(video_frame_rotate.data, width, height, RK_FORMAT_BGR_888);
                 imcvtcolor(src_img, dst_img_video, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);
 //                imrotate(dst_img_video, dst_img_video_rotate, IM_HAL_TRANSFORM_ROT_180);  // 设置旋转
-                capFinishedToVideo(video_frame, video_fp);
+                capFinishedToVideo(video_frame, video_fp, stViFrame.stVFrame.u64PTS);
             }
 
             emit capFinishedToUI(ui_frame);

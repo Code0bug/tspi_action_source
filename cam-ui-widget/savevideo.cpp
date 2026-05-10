@@ -8,16 +8,6 @@ extern "C" {
 #include <iostream>
 #include <string>
 #include <cstring>
-#include <time.h>
-
-
-uint64_t nowUsMonotonic()
-{
-    timespec ts{};
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return static_cast<uint64_t>(ts.tv_sec) * 1000000ULL +
-           static_cast<uint64_t>(ts.tv_nsec) / 1000ULL;
-}
 
 
 SaveVideo::SaveVideo()
@@ -74,19 +64,19 @@ SaveVideo::~SaveVideo()
 }
 
 
-void SaveVideo::do_save_video(cv::Mat buf, FILE* fp)
+void SaveVideo::do_save_video(cv::Mat buf, FILE* fp, uint64_t pts)
 {
 //    printf("start video===\n");
 
     memcpy(data, buf.data, encWidth * encHeight * 3);
-    
+
     /**************************
      * 向VENC发送原始图像进行编码
      * 0为编码通道号
      * h264_frame 为原始图像信息
      * -1 表示阻塞，发送成功后释放
      **************************/
-    h264_frame.stVFrame.u64PTS = nowUsMonotonic();  // 更新时间戳
+    h264_frame.stVFrame.u64PTS = pts;
     RK_MPI_VENC_SendFrame(0, &h264_frame, -1);
 
     /**************************

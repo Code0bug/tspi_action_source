@@ -47,7 +47,7 @@ private:
 
 signals:
     void capFinishedToUI(cv::Mat imgbuf);
-    void capFinishedToVideo(cv::Mat buf, FILE* fp);
+    void capFinishedToVideo(cv::Mat buf, FILE* fp, uint64_t pts);
 //    void photoFinishedToUpdate(QString path);
     void videoFinishedToUpdate(QString path, cv::Mat first_frame);
     void videoFinishedToIMURecord(QString path);

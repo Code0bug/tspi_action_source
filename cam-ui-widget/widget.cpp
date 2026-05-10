@@ -28,6 +28,25 @@ QPixmap makeRoundThumb(const QPixmap &src, int size)
 }
 
 
+static void setupButton(QPushButton *btn, const QString &iconPath)
+{
+    btn->setIcon(QIcon(QPixmap(iconPath)));
+    btn->setFixedSize(80, 80);
+    btn->setIconSize(QSize(80, 80));
+    btn->setStyleSheet(
+        "QPushButton {"
+        "  border: none;"
+        "  background: transparent;"
+        "}"
+        "QPushButton:pressed {"
+        "  background: transparent;"
+        "}"
+        "QPushButton:focus {"
+        "   outline: none;"
+        "}"
+    );
+}
+
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::Widget)
@@ -37,151 +56,15 @@ Widget::Widget(QWidget *parent)
     qRegisterMetaType<cv::Mat>("cv::Mat");
     qRegisterMetaType<uint64_t>("uint64_t");
 
-//    ui->video_label->setStyleSheet("text-align:center;font-size:1px;");
-//    ui->video_label->setContentsMargins(0,0,0,0);
-//    ui->stackedWidget->setContentsMargins(0,0,0,0);
-//    ui->page0->setContentsMargins(0,0,0,0);
-
-    QPixmap photo1back_button_pix("/root/back.png");  // 加载图标
-    ui->photo1back_button->setIcon(QIcon(photo1back_button_pix));
-    ui->photo1back_button->setFixedSize(80, 80);     // 设置点击区域大小
-    ui->photo1back_button->setIconSize(QSize(80, 80)); // 设置图标大小
-    ui->photo1back_button->setStyleSheet( // 设置原按钮透明
-        "QPushButton {"
-        "  border: none;"
-        "  background: transparent;"
-        "}"
-        "QPushButton:pressed {"
-        "  background: transparent;"
-        "}"
-        "QPushButton:focus {"
-        "   outline: none;"  // 禁用焦点矩形
-        "}"
-    );
-
-
-    QPixmap video1back_button_pix("/root/back.png");  // 加载图标
-    ui->video1back_button->setIcon(QIcon(video1back_button_pix));
-    ui->video1back_button->setFixedSize(80, 80);     // 设置点击区域大小
-    ui->video1back_button->setIconSize(QSize(80, 80)); // 设置图标大小
-    ui->video1back_button->setStyleSheet( // 设置原按钮透明
-        "QPushButton {"
-        "  border: none;"
-        "  background: transparent;"
-        "}"
-        "QPushButton:pressed {"
-        "  background: transparent;"
-        "}"
-        "QPushButton:focus {"
-        "   outline: none;"  // 禁用焦点矩形
-        "}"
-    );
-
-    QPixmap switch2video_button_pix("/root/video1.png");  // 加载图标
-    ui->switch2video_button->setIcon(QIcon(switch2video_button_pix));
-    ui->switch2video_button->setFixedSize(80, 80);     // 设置点击区域大小
-    ui->switch2video_button->setIconSize(QSize(80, 80)); // 设置图标大小
-    ui->switch2video_button->setStyleSheet( // 设置原按钮透明
-        "QPushButton {"
-        "  border: none;"
-        "  background: transparent;"
-        "}"
-        "QPushButton:pressed {"
-        "  background: transparent;"
-        "}"
-        "QPushButton:focus {"
-        "   outline: none;"  // 禁用焦点矩形
-        "}"
-    );
-
-    QPixmap switch2photo_button_pix("/root/photo1.png");  // 加载图标
-    ui->switch2photo_button->setIcon(QIcon(switch2photo_button_pix));
-    ui->switch2photo_button->setFixedSize(80, 80);     // 设置点击区域大小
-    ui->switch2photo_button->setIconSize(QSize(80, 80)); // 设置图标大小
-    ui->switch2photo_button->setStyleSheet( // 设置原按钮透明
-        "QPushButton {"
-        "  border: none;"
-        "  background: transparent;"
-        "}"
-        "QPushButton:pressed {"
-        "  background: transparent;"
-        "}"
-        "QPushButton:focus {"
-        "   outline: none;"  // 禁用焦点矩形
-        "}"
-    );
-
-    QPixmap photoback_button_pix("/root/back.png");  // 加载图标
-    ui->photoback_button->setIcon(QIcon(photoback_button_pix));
-    ui->photoback_button->setFixedSize(80, 80);     // 设置点击区域大小
-    ui->photoback_button->setIconSize(QSize(80, 80)); // 设置图标大小
-    ui->photoback_button->setStyleSheet( // 设置原按钮透明
-        "QPushButton {"
-        "  border: none;"
-        "  background: transparent;"
-        "}"
-        "QPushButton:pressed {"
-        "  background: transparent;"
-        "}"
-        "QPushButton:focus {"
-        "   outline: none;"  // 禁用焦点矩形
-        "}"
-    );
-
-
-    QPixmap videoback_button_pix("/root/back.png");  // 加载图标
-    ui->videoback_button->setIcon(QIcon(videoback_button_pix));
-    ui->videoback_button->setFixedSize(80, 80);     // 设置点击区域大小
-    ui->videoback_button->setIconSize(QSize(80, 80)); // 设置图标大小
-    ui->videoback_button->setStyleSheet( // 设置原按钮透明
-        "QPushButton {"
-        "  border: none;"
-        "  background: transparent;"
-        "}"
-        "QPushButton:pressed {"
-        "  background: transparent;"
-        "}"
-        "QPushButton:focus {"
-        "   outline: none;"  // 禁用焦点矩形
-        "}"
-    );
-
-    QPixmap prev_button_pix("/root/chevron-left.png");  // 加载图标
-    ui->prev_button->setIcon(QIcon(prev_button_pix));
-    ui->prev_button->setFixedSize(80, 80);     // 设置点击区域大小
-    ui->prev_button->setIconSize(QSize(80, 80)); // 设置图标大小
-    ui->prev_button->setStyleSheet( // 设置原按钮透明
-        "QPushButton {"
-        "  border: none;"
-        "  background: transparent;"
-        "}"
-        "QPushButton:pressed {"
-        "  background: transparent;"
-        "}"
-        "QPushButton:focus {"
-        "   outline: none;"  // 禁用焦点矩形
-        "}"
-    );
-
-    QPixmap next_button_pix("/root/chevron-right.png");  // 加载图标
-    ui->next_button->setIcon(QIcon(next_button_pix));
-    ui->next_button->setFixedSize(80, 80);     // 设置点击区域大小
-    ui->next_button->setIconSize(QSize(80, 80)); // 设置图标大小
-    ui->next_button->setStyleSheet( // 设置原按钮透明
-        "QPushButton {"
-        "  border: none;"
-        "  background: transparent;"
-        "}"
-        "QPushButton:pressed {"
-        "  background: transparent;"
-        "}"
-        "QPushButton:focus {"
-        "   outline: none;"  // 禁用焦点矩形
-        "}"
-    );
-
-
-
+    // 设置按钮样式
+    setupButton(ui->photo1back_button,   "/root/back.png");
+    setupButton(ui->video1back_button,   "/root/back.png");
+    setupButton(ui->switch2video_button, "/root/video1.png");
+    setupButton(ui->switch2photo_button, "/root/photo1.png");
+    setupButton(ui->photoback_button,    "/root/back.png");
+    setupButton(ui->videoback_button,    "/root/back.png");
+    setupButton(ui->prev_button,         "/root/chevron-left.png");
+    setupButton(ui->next_button,         "/root/chevron-right.png");
 
     // 垂直滚动条样式
     ui->picture_listWidget->verticalScrollBar()->setStyleSheet(
