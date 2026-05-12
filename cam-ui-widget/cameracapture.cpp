@@ -89,7 +89,7 @@ void CameraCapture::startCapture()
                     fsync(fd);
                     close(fd);
 
-                    emit videoFinishedToUpdate(savePath, ui_frame); // 更新录像列表
+                    emit videoFinishedToUpdate(savePath_mp4, ui_frame); // 更新录像列表
                     emit videoFinishedToIMURecord(fileName);  // 将开始录像的时间戳发送给imu记录文件
                     emit sigVideoMp4Init(savePath_mp4);  // MP4初始化
                 }
@@ -203,6 +203,5 @@ void CameraCapture::stopVideo()
     video_flag = 0;
     emit videoFinishedToMP4();
 }
-
 
 

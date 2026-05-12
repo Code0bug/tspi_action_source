@@ -155,7 +155,7 @@ Widget::Widget(QWidget *parent)
     // 更新视频列表
     QDir videoDir(video_dirPath);
     QStringList videoFilters;
-    videoFilters << "*.bin"; // H.264 原始流
+    videoFilters << "*.mp4";
     QFileInfoList videoFileList = videoDir.entryInfoList(videoFilters, QDir::Files);
 
     for (auto &videoFile : videoFileList) {
@@ -196,7 +196,7 @@ Widget::Widget(QWidget *parent)
 
     // 音频采集
     audiocapThread = new QThread();
-    AudioCapture *audiocap = new AudioCapture();
+    AudioManager *audiocap = new AudioManager();
     audiocap->moveToThread(audiocapThread);
 
     // 按键控制
@@ -234,12 +234,15 @@ Widget::Widget(QWidget *parent)
     connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);// 开始录像
     connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);  // 停止录像
 
-    connect(cameracap, &CameraCapture::sigVideoMp4Init, audiocap, &AudioCapture::startCapture, Qt::QueuedConnection); // 开始录像时，开启音频采集
+    connect(cameracap, &CameraCapture::sigVideoMp4Init, audiocap, &AudioManager::startCapture, Qt::QueuedConnection); // 开始录像时，开启音频采集
     connect(cameracap, &CameraCapture::sigVideoMp4Init, mp4mux, &Mp4MuxDemux::initMp4Mux); // 开始录像时，MP4初始化
-    connect(cameracap, &CameraCapture::videoFinishedToMP4, audiocap, &AudioCapture::stopCapture, Qt::DirectConnection); // 结束录像时，先停音频采集
+    connect(cameracap, &CameraCapture::videoFinishedToMP4, audiocap, &AudioManager::stopCapture, Qt::DirectConnection); // 结束录像时，先停音频采集
     connect(cameracap, &CameraCapture::videoFinishedToMP4, mp4mux, &Mp4MuxDemux::closeMp4Mux); // 结束录像时，再关闭MP4
     connect(savevideo, &SaveVideo::sigVideo2Mp4Mux, mp4mux, &Mp4MuxDemux::writeVideoToMp4);
-    connect(audiocap, &AudioCapture::capFinishedToAudio, mp4mux, &Mp4MuxDemux::writeAudioToMp4);
+    connect(audiocap, &AudioManager::capFinishedToAudio, mp4mux, &Mp4MuxDemux::writeAudioToMp4);
+    connect(videodecsend, &VideoDecSend::audioStreamStarted, audiocap, &AudioManager::startPlayback, Qt::QueuedConnection);
+    connect(videodecsend, &VideoDecSend::audioPacketReady, audiocap, &AudioManager::playEncodedAudioPacket, Qt::QueuedConnection);
+    connect(videodecsend, &VideoDecSend::audioStreamFinished, audiocap, &AudioManager::stopPlayback, Qt::QueuedConnection);
     
     connect(keycontrol, &KeyControl::keyToStopvideo, imureader, &IMUReader::stop_imu_record_txt, Qt::DirectConnection);                  // IMU停止记录数据
 //    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stop_imu_record);                            // 通知IMU停止记录，关闭文件
@@ -254,6 +257,7 @@ Widget::Widget(QWidget *parent)
     connect(ui->video1back_button, &QPushButton::clicked, this, &Widget::switchToPage2);    // 录像播放页回退至录像首页
     connect(ui->video1back_button, &QPushButton::clicked, videodecsend, &VideoDecSend::do_stop_send_frame, Qt::DirectConnection);  // 录像播放页回退至录像首页时停止发送解码帧
     connect(ui->video1back_button, &QPushButton::clicked, videodecget, &VideoDecGet::do_stop_get_frame, Qt::DirectConnection);    // 录像播放页回退至录像首页时停止获取解码帧
+    connect(ui->video1back_button, &QPushButton::clicked, audiocap, &AudioManager::stopPlayback, Qt::QueuedConnection);           // 录像播放页回退至录像首页时停止音频播放
     connect(ui->photo1back_button, &QPushButton::clicked, this, &Widget::switchToPage1);    // 照片查看页回退至相册首页
     connect(ui->next_button, &QPushButton::clicked, this, &Widget::showNextPhoto);          // 照片查看切换下一张
     connect(ui->prev_button, &QPushButton::clicked, this, &Widget::showPrevPhoto);          // 照片查看切换上一张

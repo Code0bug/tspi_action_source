@@ -20,6 +20,9 @@ class Mp4MuxDemux : public QObject
 public:
     explicit Mp4MuxDemux(QObject *parent = nullptr);
     ~Mp4MuxDemux();
+    static int demuxMp4ToH264(const QString &mp4Path,
+                              const QString &h264OutPath,
+                              const QString &audioOutPath = QString());
 
 public slots:
     bool initMp4Mux(const QString &filename);

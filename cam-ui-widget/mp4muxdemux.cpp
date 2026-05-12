@@ -16,6 +16,8 @@
 #include <iostream>
 #include <string>
 #include <cstring>
+#include <cstdio>
+#include <cerrno>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -183,6 +185,148 @@ Mp4MuxDemux::Mp4MuxDemux(QObject *parent)
 Mp4MuxDemux::~Mp4MuxDemux()
 {
     closeMp4Mux();
+}
+
+int Mp4MuxDemux::demuxMp4ToH264(const QString &mp4Path,
+                                const QString &h264OutPath,
+                                const QString &audioOutPath)
+{
+    Q_UNUSED(audioOutPath); // 预留音频解封装接口，当前播放链路先只接视频。
+
+    AVFormatContext *inFmt = nullptr;
+    AVBSFContext *bsfCtx = nullptr;
+    FILE *videoFp = nullptr;
+    int videoStreamIndex = -1;
+    int ret = 0;
+
+    ret = avformat_open_input(&inFmt, mp4Path.toUtf8().constData(), nullptr, nullptr);
+    if (ret < 0) {
+        std::cerr << "avformat_open_input failed: "
+                  << ffErrStr(ret) << " path=" << mp4Path.toStdString() << std::endl;
+        return ret;
+    }
+
+    ret = avformat_find_stream_info(inFmt, nullptr);
+    if (ret < 0) {
+        std::cerr << "avformat_find_stream_info failed: "
+                  << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        avformat_close_input(&inFmt);
+        return ret;
+    }
+
+    ret = av_find_best_stream(inFmt, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    if (ret < 0) {
+        std::cerr << "av_find_best_stream(video) failed: "
+                  << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        avformat_close_input(&inFmt);
+        return ret;
+    }
+    videoStreamIndex = ret;
+
+    AVStream *videoStream = inFmt->streams[videoStreamIndex];
+    if (videoStream->codecpar->codec_id != AV_CODEC_ID_H264) {
+        std::cerr << "demuxMp4ToH264: unsupported video codec id="
+                  << videoStream->codecpar->codec_id << ", only H.264 is supported" << std::endl;
+        avformat_close_input(&inFmt);
+        return AVERROR(EINVAL);
+    }
+
+    const AVBitStreamFilter *bsf = av_bsf_get_by_name("h264_mp4toannexb");
+    if (!bsf) {
+        std::cerr << "av_bsf_get_by_name(h264_mp4toannexb) failed" << std::endl;
+        avformat_close_input(&inFmt);
+        return AVERROR_BSF_NOT_FOUND;
+    }
+
+    ret = av_bsf_alloc(bsf, &bsfCtx);
+    if (ret < 0) {
+        std::cerr << "av_bsf_alloc failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        avformat_close_input(&inFmt);
+        return ret;
+    }
+
+    ret = avcodec_parameters_copy(bsfCtx->par_in, videoStream->codecpar);
+    if (ret < 0) {
+        std::cerr << "avcodec_parameters_copy failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        av_bsf_free(&bsfCtx);
+        avformat_close_input(&inFmt);
+        return ret;
+    }
+    bsfCtx->time_base_in = videoStream->time_base;
+
+    ret = av_bsf_init(bsfCtx);
+    if (ret < 0) {
+        std::cerr << "av_bsf_init failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        av_bsf_free(&bsfCtx);
+        avformat_close_input(&inFmt);
+        return ret;
+    }
+
+    videoFp = fopen(h264OutPath.toUtf8().constData(), "wb");
+    if (!videoFp) {
+        perror("fopen h264OutPath");
+        av_bsf_free(&bsfCtx);
+        avformat_close_input(&inFmt);
+        return AVERROR(errno);
+    }
+
+    AVPacket pkt;
+    av_init_packet(&pkt);
+    while ((ret = av_read_frame(inFmt, &pkt)) >= 0) {
+        if (pkt.stream_index == videoStreamIndex) {
+            ret = av_bsf_send_packet(bsfCtx, &pkt);
+            av_packet_unref(&pkt);
+            if (ret < 0) {
+                std::cerr << "av_bsf_send_packet failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+                break;
+            }
+
+            while ((ret = av_bsf_receive_packet(bsfCtx, &pkt)) == 0) {
+                if (pkt.size > 0 && fwrite(pkt.data, 1, pkt.size, videoFp) != static_cast<size_t>(pkt.size)) {
+                    perror("fwrite h264");
+                    av_packet_unref(&pkt);
+                    ret = AVERROR(EIO);
+                    break;
+                }
+                av_packet_unref(&pkt);
+            }
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                ret = 0;
+            }
+            if (ret < 0) {
+                break;
+            }
+        } else {
+            av_packet_unref(&pkt);
+        }
+    }
+
+    if (ret == AVERROR_EOF) {
+        ret = 0;
+    }
+
+    if (ret == 0) {
+        ret = av_bsf_send_packet(bsfCtx, nullptr);
+        if (ret >= 0) {
+            while ((ret = av_bsf_receive_packet(bsfCtx, &pkt)) == 0) {
+                if (pkt.size > 0 && fwrite(pkt.data, 1, pkt.size, videoFp) != static_cast<size_t>(pkt.size)) {
+                    perror("fwrite h264 flush");
+                    av_packet_unref(&pkt);
+                    ret = AVERROR(EIO);
+                    break;
+                }
+                av_packet_unref(&pkt);
+            }
+            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+                ret = 0;
+            }
+        }
+    }
+
+    fclose(videoFp);
+    av_bsf_free(&bsfCtx);
+    avformat_close_input(&inFmt);
+    return ret;
 }
 
 

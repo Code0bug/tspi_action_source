@@ -93,7 +93,7 @@ void VideoDecGet::do_get_frame()
 
             RK_MPI_VDEC_ReleaseFrame(0, &sFrame);
 
-            usleep(20000); // 控制播放帧率
+            // MP4 播放时发送端已按容器时间戳节流，这里不再固定 sleep，避免视频时钟跑偏。
 
         } else {
             printf("get frame failed! 0x%08X\n", s32Ret);
