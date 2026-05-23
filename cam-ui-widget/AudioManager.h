@@ -1,5 +1,5 @@
-#ifndef AUDIOCAPTURE_H
-#define AUDIOCAPTURE_H
+#ifndef AUDIOMANAGER_H
+#define AUDIOMANAGER_H
 
 #include <QObject>
 #include <QByteArray>
@@ -75,4 +75,4 @@ private:
 
 using AudioCapture = AudioManager;
 
-#endif // AUDIOCAPTURE_H
+#endif // AUDIOMANAGER_H

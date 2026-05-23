@@ -12,7 +12,7 @@
  *      ⑤ 结束写MP4，释放相关变量
  */
 #include "mp4muxdemux.h"
-#include "audiocapture.h"
+#include "AudioManager.h"
 #include <iostream>
 #include <string>
 #include <cstring>

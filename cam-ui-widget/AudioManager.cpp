@@ -1,4 +1,4 @@
-#include "audiocapture.h"
+#include "AudioManager.h"
 
 #include <cstring>
 #include <climits>

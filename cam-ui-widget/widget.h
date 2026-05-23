@@ -21,7 +21,7 @@
 #include "imureader.h"
 #include "rk_mpi.h"
 #include "mp4muxdemux.h"
-#include "audiocapture.h"
+#include "AudioManager.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class Widget; }

@@ -497,6 +497,7 @@ void Widget::PicListItemClicked(QListWidgetItem *item)
 // 录像列表item被点击时的动作
 void Widget::VideoListItemClicked(QListWidgetItem *item)
 {
+    // 解码器初始化
     vdec_init(1920, 1080);
 
     ui->stackedWidget->setCurrentIndex(4);  // 切换到录像显示页

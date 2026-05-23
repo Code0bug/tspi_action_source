@@ -16,7 +16,7 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
-    audiocapture.cpp \
+    AudioManager.cpp \
     cameracapture.cpp \
     imureader.cpp \
     keycontrol.cpp \
@@ -30,7 +30,7 @@ SOURCES += \
     widget.cpp
 
 HEADERS += \
-    audiocapture.h \
+    AudioManager.h \
     cameracapture.h \
     imureader.h \
     include/rk_mpi.h \
