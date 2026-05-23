@@ -2,6 +2,12 @@
 
 Qt Widgets Rockchip 摄像头应用，支持实时预览、H.264/AAC MP4 录像、MP4 播放、硬件编解码。
 
+## 重构方案
+- AudioManager : 管理音频
+- VideoManager : 管理视频流 
+- CameraManager : 管理摄像头
+- Widget : 管理UI
+
 ## 构建
 
 ```bash
@@ -31,7 +37,8 @@ make -j2
 | `videodecsend.cpp/.h` | 播放输入：流式解封装 MP4，视频送 VDEC，音频发 AudioManager |
 | `videodecget.cpp/.h` | 播放输出：轮询 VDEC 解码帧，RGA 转 BGR，发给 UI |
 | `AudioManager.cpp/.h` | `AudioManager` 类，RK AI 采集 + AO 播放 + FFmpeg 解码 |
-| `rk_mpi.cpp/.h` | RK MPI 初始化封装（`vdec_init`、`venc_init`） |
+| `utils/rk_mpi.cpp/.h` | RK MPI 初始化封装（`vdec_init`、`venc_init`） |
+| `utils/safeQueue.h` | 线程安全队列模板（`SafeQueue<T>`） |
 | `widget.ui` | Qt Designer UI |
 
 ## 线程模型

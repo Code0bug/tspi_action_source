@@ -17,7 +17,7 @@ CXX           = /home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/aa
 DEFINES       = -DQT_DEPRECATED_WARNINGS -DQT_QML_DEBUG -DQT_WIDGETS_LIB -DQT_GUI_LIB -DQT_CORE_LIB
 CFLAGS        = -pipe -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -Os --sysroot=/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot -Wall -Wextra -D_REENTRANT -fPIC $(DEFINES)
 CXXFLAGS      = -pipe -D_LARGEFILE_SOURCE -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -Os --sysroot=/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot -std=gnu++11 -Wall -Wextra -D_REENTRANT -fPIC $(DEFINES)
-INCPATH       = -I../../cam-ui-widget -I. -I../include -I../include/mpi/sdk -I../include/opencv4 -I../include/rga -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I. -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++
+INCPATH       = -I../../cam-ui-widget -I. -I../include -I../utils -I../include/mpi/sdk -I../include/opencv4 -I../include/rga -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I. -I../../../linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++
 QMAKE         = /home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/qmake
 DEL_FILE      = rm -f
 CHK_DIR_EXISTS= test -d
@@ -58,7 +58,7 @@ SOURCES       = ../AudioManager.cpp \
 		../keycontrol.cpp \
 		../main.cpp \
 		../mp4muxdemux.cpp \
-		../rk_mpi.cpp \
+		../utils/rk_mpi.cpp \
 		../savepicture.cpp \
 		../savevideo.cpp \
 		../videodecget.cpp \
@@ -174,10 +174,10 @@ DIST          = ../../../../linux_sdk/buildroot/output/rockchip_rk3566/host/mksp
 		../../ai-cam-ui-widget.pro ../AudioManager.h \
 		../cameracapture.h \
 		../imureader.h \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../keycontrol.h \
 		../mp4muxdemux.h \
-		../safeQueue.h \
+		../utils/safeQueue.h \
 		../savepicture.h \
 		../savevideo.h \
 		../videodecget.h \
@@ -188,7 +188,7 @@ DIST          = ../../../../linux_sdk/buildroot/output/rockchip_rk3566/host/mksp
 		../keycontrol.cpp \
 		../main.cpp \
 		../mp4muxdemux.cpp \
-		../rk_mpi.cpp \
+		../utils/rk_mpi.cpp \
 		../savepicture.cpp \
 		../savevideo.cpp \
 		../videodecget.cpp \
@@ -375,8 +375,8 @@ distdir: FORCE
 	@test -d $(DISTDIR) || mkdir -p $(DISTDIR)
 	$(COPY_FILE) --parents $(DIST) $(DISTDIR)/
 	$(COPY_FILE) --parents ../../../linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/features/data/dummy.cpp $(DISTDIR)/
-	$(COPY_FILE) --parents ../AudioManager.h ../cameracapture.h ../imureader.h ../include/rk_mpi.h ../keycontrol.h ../mp4muxdemux.h ../safeQueue.h ../savepicture.h ../savevideo.h ../videodecget.h ../videodecsend.h ../widget.h $(DISTDIR)/
-	$(COPY_FILE) --parents ../AudioManager.cpp ../cameracapture.cpp ../imureader.cpp ../keycontrol.cpp ../main.cpp ../mp4muxdemux.cpp ../rk_mpi.cpp ../savepicture.cpp ../savevideo.cpp ../videodecget.cpp ../videodecsend.cpp ../widget.cpp $(DISTDIR)/
+	$(COPY_FILE) --parents ../AudioManager.h ../cameracapture.h ../imureader.h ../utils/rk_mpi.h ../keycontrol.h ../mp4muxdemux.h ../utils/safeQueue.h ../savepicture.h ../savevideo.h ../videodecget.h ../videodecsend.h ../widget.h $(DISTDIR)/
+	$(COPY_FILE) --parents ../AudioManager.cpp ../cameracapture.cpp ../imureader.cpp ../keycontrol.cpp ../main.cpp ../mp4muxdemux.cpp ../utils/rk_mpi.cpp ../savepicture.cpp ../savevideo.cpp ../videodecget.cpp ../videodecsend.cpp ../widget.cpp $(DISTDIR)/
 	$(COPY_FILE) --parents ../widget.ui $(DISTDIR)/
 
 
@@ -530,7 +530,7 @@ moc_AudioManager.cpp: ../AudioManager.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qcontainerfwd.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qobject_impl.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QByteArray \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/stdio.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__fpos_t.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__mbstate_t.h \
@@ -606,7 +606,7 @@ moc_AudioManager.cpp: ../AudioManager.h \
 		../include/mpi/sdk/rk_mpi_ao.h \
 		moc_predefs.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc
-	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../AudioManager.h -o moc_AudioManager.cpp
+	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/utils -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../AudioManager.h -o moc_AudioManager.cpp
 
 moc_cameracapture.cpp: ../cameracapture.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QObject \
@@ -733,7 +733,7 @@ moc_cameracapture.cpp: ../cameracapture.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qshareddata.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qhash.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QString \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/stdio.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__fpos_t.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__mbstate_t.h \
@@ -1070,7 +1070,7 @@ moc_cameracapture.cpp: ../cameracapture.h \
 		../videodecsend.h \
 		../imureader.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QFile \
-		../safeQueue.h \
+		../utils/safeQueue.h \
 		../mp4muxdemux.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QVector \
 		../AudioManager.h \
@@ -1079,7 +1079,7 @@ moc_cameracapture.cpp: ../cameracapture.h \
 		../include/mpi/sdk/rk_mpi_ao.h \
 		moc_predefs.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc
-	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../cameracapture.h -o moc_cameracapture.cpp
+	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/utils -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../cameracapture.h -o moc_cameracapture.cpp
 
 moc_imureader.cpp: ../imureader.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QObject \
@@ -1341,10 +1341,10 @@ moc_imureader.cpp: ../imureader.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/struct_sigstack.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/sigthread.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/signal_ext.h \
-		../safeQueue.h \
+		../utils/safeQueue.h \
 		moc_predefs.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc
-	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../imureader.h -o moc_imureader.cpp
+	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/utils -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../imureader.h -o moc_imureader.cpp
 
 moc_keycontrol.cpp: ../keycontrol.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QObject \
@@ -1610,7 +1610,7 @@ moc_keycontrol.cpp: ../keycontrol.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/linux/input-event-codes.h \
 		moc_predefs.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc
-	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../keycontrol.h -o moc_keycontrol.cpp
+	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/utils -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../keycontrol.h -o moc_keycontrol.cpp
 
 moc_mp4muxdemux.cpp: ../mp4muxdemux.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QObject \
@@ -1733,7 +1733,7 @@ moc_mp4muxdemux.cpp: ../mp4muxdemux.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QList \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QString \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QVector \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/stdio.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__fpos_t.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__mbstate_t.h \
@@ -1806,7 +1806,7 @@ moc_mp4muxdemux.cpp: ../mp4muxdemux.h \
 		../include/mpi/sdk/rk_mpi_mmz.h \
 		moc_predefs.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc
-	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../mp4muxdemux.h -o moc_mp4muxdemux.cpp
+	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/utils -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../mp4muxdemux.h -o moc_mp4muxdemux.cpp
 
 moc_savepicture.cpp: ../savepicture.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/fcntl.h \
@@ -2102,7 +2102,7 @@ moc_savepicture.cpp: ../savepicture.h \
 		../include/opencv4/opencv2/video/background_segm.hpp \
 		moc_predefs.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc
-	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../savepicture.h -o moc_savepicture.cpp
+	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/utils -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../savepicture.h -o moc_savepicture.cpp
 
 moc_savevideo.cpp: ../savevideo.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QObject \
@@ -2224,7 +2224,7 @@ moc_savevideo.cpp: ../savevideo.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QByteArray \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QList \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QString \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/stdio.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__fpos_t.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__mbstate_t.h \
@@ -2384,7 +2384,7 @@ moc_savevideo.cpp: ../savevideo.h \
 		../include/opencv4/opencv2/video/background_segm.hpp \
 		moc_predefs.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc
-	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../savevideo.h -o moc_savevideo.cpp
+	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/utils -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../savevideo.h -o moc_savevideo.cpp
 
 moc_videodecget.cpp: ../videodecget.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QObject \
@@ -2568,7 +2568,7 @@ moc_videodecget.cpp: ../videodecget.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qfiledevice.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui/qvector2d.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui/qtouchdevice.h \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/sys/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll2.h \
@@ -2719,7 +2719,7 @@ moc_videodecget.cpp: ../videodecget.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QByteArray \
 		moc_predefs.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc
-	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../videodecget.h -o moc_videodecget.cpp
+	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/utils -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../videodecget.h -o moc_videodecget.cpp
 
 moc_videodecsend.cpp: ../videodecsend.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QObject \
@@ -2904,7 +2904,7 @@ moc_videodecsend.cpp: ../videodecsend.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui/qvector2d.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui/qtouchdevice.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QByteArray \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/sys/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll2.h \
@@ -2963,7 +2963,7 @@ moc_videodecsend.cpp: ../videodecsend.h \
 		../include/mpi/sdk/rk_mpi_mmz.h \
 		moc_predefs.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc
-	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../videodecsend.h -o moc_videodecsend.cpp
+	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/utils -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../videodecsend.h -o moc_videodecsend.cpp
 
 moc_widget.cpp: ../widget.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets/QWidget \
@@ -3199,7 +3199,7 @@ moc_widget.cpp: ../widget.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QDateTime \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qdatetime.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QString \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/sys/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll2.h \
@@ -3424,7 +3424,7 @@ moc_widget.cpp: ../widget.h \
 		../videodecsend.h \
 		../imureader.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QFile \
-		../safeQueue.h \
+		../utils/safeQueue.h \
 		../mp4muxdemux.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QVector \
 		../AudioManager.h \
@@ -3436,7 +3436,7 @@ moc_widget.cpp: ../widget.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/linux/v4l2-controls.h \
 		moc_predefs.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc
-	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../widget.h -o moc_widget.cpp
+	/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/moc $(DEFINES) --include /home/lzp/rk-camera-display/cam-ui-widget/build-aarch64/moc_predefs.h -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/mkspecs/devices/linux-buildroot-g++ -I/home/lzp/rk-camera-display/cam-ui-widget -I/home/lzp/rk-camera-display/cam-ui-widget/include -I/home/lzp/rk-camera-display/cam-ui-widget/utils -I/home/lzp/rk-camera-display/cam-ui-widget/include/mpi/sdk -I/home/lzp/rk-camera-display/cam-ui-widget/include/opencv4 -I/home/lzp/rk-camera-display/cam-ui-widget/include/rga -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtWidgets -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore -I. -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0 -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include -I/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include ../widget.h -o moc_widget.cpp
 
 compiler_moc_objc_header_make_all:
 compiler_moc_objc_header_clean:
@@ -3577,7 +3577,7 @@ AudioManager.o: ../AudioManager.cpp ../AudioManager.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qcontainerfwd.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qobject_impl.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QByteArray \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/stdio.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__fpos_t.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__mbstate_t.h \
@@ -3813,7 +3813,7 @@ cameracapture.o: ../cameracapture.cpp ../cameracapture.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qshareddata.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qhash.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QString \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/stdio.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__fpos_t.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__mbstate_t.h \
@@ -4146,7 +4146,7 @@ cameracapture.o: ../cameracapture.cpp ../cameracapture.h \
 		../videodecsend.h \
 		../imureader.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QFile \
-		../safeQueue.h \
+		../utils/safeQueue.h \
 		../mp4muxdemux.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QVector \
 		../AudioManager.h \
@@ -4418,7 +4418,7 @@ imureader.o: ../imureader.cpp ../imureader.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/struct_sigstack.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/sigthread.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/signal_ext.h \
-		../safeQueue.h
+		../utils/safeQueue.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o imureader.o ../imureader.cpp
 
 keycontrol.o: ../keycontrol.cpp ../keycontrol.h \
@@ -4919,7 +4919,7 @@ main.o: ../main.cpp ../widget.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QDateTime \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qdatetime.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QString \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/sys/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll2.h \
@@ -5146,7 +5146,7 @@ main.o: ../main.cpp ../widget.h \
 		../videodecsend.h \
 		../imureader.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QFile \
-		../safeQueue.h \
+		../utils/safeQueue.h \
 		../mp4muxdemux.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QVector \
 		../AudioManager.h \
@@ -5294,7 +5294,7 @@ mp4muxdemux.o: ../mp4muxdemux.cpp ../mp4muxdemux.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QList \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QString \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QVector \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/stdio.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__fpos_t.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__mbstate_t.h \
@@ -5410,7 +5410,7 @@ mp4muxdemux.o: ../mp4muxdemux.cpp ../mp4muxdemux.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/libswresample/version.h
 	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o mp4muxdemux.o ../mp4muxdemux.cpp
 
-rk_mpi.o: ../rk_mpi.cpp ../include/rk_mpi.h \
+rk_mpi.o: ../utils/rk_mpi.cpp ../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/stdio.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/libc-header-start.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/features.h \
@@ -5516,7 +5516,7 @@ rk_mpi.o: ../rk_mpi.cpp ../include/rk_mpi.h \
 		../include/mpi/sdk/rk_comm_rgn.h \
 		../include/mpi/sdk/rk_mpi_cal.h \
 		../include/mpi/sdk/rk_mpi_mmz.h
-	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o rk_mpi.o ../rk_mpi.cpp
+	$(CXX) -c $(CXXFLAGS) $(INCPATH) -o rk_mpi.o ../utils/rk_mpi.cpp
 
 savepicture.o: ../savepicture.cpp ../savepicture.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/fcntl.h \
@@ -5932,7 +5932,7 @@ savevideo.o: ../savevideo.cpp ../savevideo.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QByteArray \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QList \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QString \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/stdio.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__fpos_t.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/types/__mbstate_t.h \
@@ -6300,7 +6300,7 @@ videodecget.o: ../videodecget.cpp ../videodecget.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qfiledevice.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui/qvector2d.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui/qtouchdevice.h \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/sys/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll2.h \
@@ -6634,7 +6634,7 @@ videodecsend.o: ../videodecsend.cpp ../videodecsend.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui/qvector2d.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtGui/qtouchdevice.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QByteArray \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/sys/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll2.h \
@@ -6966,7 +6966,7 @@ widget.o: ../widget.cpp ../widget.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QDateTime \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/qdatetime.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QString \
-		../include/rk_mpi.h \
+		../utils/rk_mpi.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/sys/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/bits/poll2.h \
@@ -7193,7 +7193,7 @@ widget.o: ../widget.cpp ../widget.h \
 		../videodecsend.h \
 		../imureader.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QFile \
-		../safeQueue.h \
+		../utils/safeQueue.h \
 		../mp4muxdemux.h \
 		../../../linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include/qt5/QtCore/QVector \
 		../AudioManager.h \

@@ -22,7 +22,7 @@ SOURCES += \
     keycontrol.cpp \
     main.cpp \
     mp4muxdemux.cpp \
-    rk_mpi.cpp \
+    utils/rk_mpi.cpp \
     savepicture.cpp \
     savevideo.cpp \
     videodecget.cpp \
@@ -33,10 +33,10 @@ HEADERS += \
     AudioManager.h \
     cameracapture.h \
     imureader.h \
-    include/rk_mpi.h \
+    utils/rk_mpi.h \
     keycontrol.h \
     mp4muxdemux.h \
-    safeQueue.h \
+    utils/safeQueue.h \
     savepicture.h \
     savevideo.h \
     videodecget.h \
@@ -46,6 +46,7 @@ HEADERS += \
 # 添加rockit/opencv/rknn头文件和动态库 $$PWD表示.pro文件所在目录
 INCLUDEPATH += \
     $$PWD/include \
+    $$PWD/utils \
     $$PWD/include/mpi/sdk \
     $$PWD/include/opencv4 \
     $$PWD/include/rga \
