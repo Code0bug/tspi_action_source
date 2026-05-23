@@ -3,9 +3,14 @@
 Qt Widgets Rockchip 摄像头应用，支持实时预览、H.264/AAC MP4 录像、MP4 播放、硬件编解码。
 
 ## 重构方案
-- AudioManager : 管理音频
-- VideoManager : 管理视频流 
-- CameraManager : 管理摄像头
+- AudioManager : 管理音频流
+- VideoManager : 管理视频流   
+
+- 硬件I/O
+  - CameraManager : 管理摄像头
+  - KeyManager : 管理按键输入
+  - ImuManager : 管理IMU
+
 - Widget : 管理UI
 
 ## 构建
