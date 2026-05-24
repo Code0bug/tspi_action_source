@@ -65,26 +65,29 @@ make -j2
 └─────────────┘     └──────────────────┘
 ```
 
-### 视频链路：摄像头 → MP4
+### 视频链路：摄像头 → MP4（零拷贝）
 
 ```
-VI 硬件 (RK_FMT_YUV420SP, 1920×1080)
+VI 硬件 (RK_FMT_YUV420SP, 1920×1080, DMA-BUF)
   │
   ▼
 CameraManager::startCapture (cameramanagerThread)
   │
-  ├── RGA imcvtcolor ──▶ RGB888 552×368 ──▶ capFinishedToUI ──▶ Widget::doShow (预览)
+  ├── 预览路径（不变）：
+  │   wrapbuffer_virtualaddr(dat) → RGA imcvtcolor → RGB888 552×368 → cv::Mat
+  │   └── capFinishedToUI ──▶ Widget::doShow
   │
-  └── RGA imcvtcolor ──▶ BGR888 1920×1080
-           │
-           │ capFinishedToVideo(cv::Mat BGR, FILE*, PTS)  ── 跨线程信号 ──▶
-           ▼
+  └── 录像路径（零拷贝）：
+      RK_MPI_MB_Handle2Fd(vi_frame) → src_fd
+      wrapbuffer_fd(src_fd) → RGA imcvtcolor → BGR888 1920×1080
+      └── 写入 bgr_fd_[idx]（DMA 双缓冲，无 CPU 拷贝）
+          │
+          │ capFinishedToVideo(void* MB_BLK, PTS)  ── 跨线程信号 ──▶
+          ▼
 VideoEncoder::do_save_video (videoencoderThread)
-  │  memcpy BGR → DMA buf
+  │  直接使用传入的 MB_BLK（零拷贝，无 memcpy）
   │  RK_MPI_VENC_SendFrame (BGR888 → H.264 硬件编码)
   │  RK_MPI_VENC_GetStream (得到 H.264 Annex-B 码流)
-  │
-  ├── fwrite → .bin 文件 (裸 H.264 Annex-B，调试用)
   │
   └── emit sigVideo2Mp4Mux(VENC_STREAM_S*)  ── 跨线程信号 ──▶
            │
@@ -99,6 +102,26 @@ Mp4Muxer::writeVideoToMp4 (mp4muxerThread)
   ▼
 MP4 文件 (.mp4)
 ```
+
+#### 零拷贝实现要点
+
+录像路径全程 DMA-BUF fd 操作，CPU 不碰像素数据：
+
+- **RGA 源**：`RK_MPI_MB_Handle2Fd` 提取 VI 帧的 DMA-BUF fd，用 `wrapbuffer_fd` 传给 RGA，避免 CPU 虚拟地址映射
+- **RGA 目标**：CameraManager 构造时分配 2 个 BGR DMA buffer（`RK_MPI_MMZ_Alloc` + `RK_MPI_MMZ_Handle2Fd`），RGA 直接写入，无 cv::Mat 堆分配
+- **双缓冲**：帧 N 写 `bgr_blk_[0]`，帧 N+1 写 `bgr_blk_[1]`，交替使用，避免 RGA 覆盖 VENC 还未读完的 buffer
+- **MB_BLK 传递**：信号 `capFinishedToVideo(void*, uint64_t)` 直接传 MB_BLK 指针，VideoEncoder 用 `reinterpret_cast<MB_BLK>` 还原后直接送 VENC
+- **无 memcpy**：整个录像路径 0 次 CPU 拷贝，VI → RGA → VENC 全部硬件 DMA 操作
+
+#### 性能数据（RK3566, 2026-05-24）
+
+| 指标 | 优化前 | 零拷贝后 | 提升 |
+|------|--------|---------|------|
+| 录像 RES | 199 MB | 118 MB | -40.7% |
+| 录像 %CPU | 169.9% | 117.6% | -30.8% |
+| 录像 %MEM | 10.1% | 6.0% | -40.6% |
+| 每帧 memcpy | 6 MB | 0 | 消除 |
+| cv::Mat 分配/帧 | 1 次 | 0 | 消除 |
 
 #### 视频格式转换：Annex-B vs AVCC
 
@@ -142,7 +165,7 @@ Mp4Muxer::writeAudioToMp4 (mp4muxerThread)
 
 ### 录像启动/停止
 
-**启动**：`KeyControl` 触发 → `CameraManager::startVideo` → 第一帧到达时创建 `.bin`/`.mp4`/`.jpg` → `sigVideoMp4Init` 同时触发 `AudioManager::startCapture` + `Mp4Muxer::initMp4Mux`
+**启动**：`KeyControl` 触发 → `CameraManager::startVideo` → 第一帧到达时创建 `.mp4`/`.jpg` → `sigVideoMp4Init` 同时触发 `AudioManager::startCapture` + `Mp4Muxer::initMp4Mux`
 
 **停止**：`CameraManager::stopVideo` → `videoFinishedToMP4` → 先停音频采集（`AudioManager::stopCapture`），再关 MP4 封装器（`Mp4Muxer::closeMp4Mux`：flush 音频编码器、写 MP4 trailer、关闭文件）
 
@@ -247,4 +270,4 @@ AudioManager::playEncodedAudioPacket (audiomanagerThread)
 - 播放有时间戳节流但不是完整 master clock 播放器
 - AO 缓冲可能引入固定延迟，需硬件实测后 offset 补偿
 - UI 通过 Qt signal 传 `cv::Mat`，UI 忙时影响流畅度
-- `.bin`/裸 H.264 fallback 路径仍保留，正常播放应使用 `.mp4`
+- 正常播放应使用 `.mp4`

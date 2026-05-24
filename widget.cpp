@@ -55,6 +55,7 @@ Widget::Widget(QWidget *parent)
 
     qRegisterMetaType<cv::Mat>("cv::Mat");
     qRegisterMetaType<uint64_t>("uint64_t");
+    qRegisterMetaType<void*>("void*");
 
     // 设置按钮样式
     setupButton(ui->photo1back_button,   "/root/back.png");

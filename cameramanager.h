@@ -43,11 +43,15 @@ private:
     uint8_t photo_flag;
     uint8_t video_flag;
     uint8_t first_video_frame;
-    FILE* video_fp;
+
+    // 零拷贝录像：BGR 输出 DMA 双缓冲
+    MB_BLK bgr_blk_[2];
+    RK_S32 bgr_fd_[2];
+    int write_idx_;
 
 signals:
     void capFinishedToUI(cv::Mat imgbuf);
-    void capFinishedToVideo(cv::Mat buf, FILE* fp, uint64_t pts);
+    void capFinishedToVideo(void* mbBlk, uint64_t pts);
 //    void photoFinishedToUpdate(QString path);
     void videoFinishedToUpdate(QString path, cv::Mat first_frame);
     void videoFinishedToIMURecord(QString path);
