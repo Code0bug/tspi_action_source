@@ -1,4 +1,4 @@
-#include "videodecsend.h"
+#include "mp4demuxer.h"
 
 #include <QFileInfo>
 
@@ -43,12 +43,12 @@ static RK_S32 mpi_vdec_free(void *opaque) {
     return 0;
 }
 
-VideoDecSend::VideoDecSend(QObject *parent) : QObject(parent)
+Mp4Demuxer::Mp4Demuxer(QObject *parent) : QObject(parent)
 {
 
 }
 
-int VideoDecSend::send_stream_data(const uint8_t *src, RK_U32 len, bool eos, bool endOfFrame, uint64_t ptsUs)
+int Mp4Demuxer::send_stream_data(const uint8_t *src, RK_U32 len, bool eos, bool endOfFrame, uint64_t ptsUs)
 {
     MB_EXT_CONFIG_S pstMbExtConfig;
     MB_BLK buffer = RK_NULL;
@@ -97,7 +97,7 @@ int VideoDecSend::send_stream_data(const uint8_t *src, RK_U32 len, bool eos, boo
     return s32Ret;
 }
 
-int VideoDecSend::do_send_mp4_frame(const QString &path)
+int Mp4Demuxer::do_send_mp4_frame(const QString &path)
 {
     AVFormatContext *inFmt = nullptr;  // FFmpeg 解封装上下文，持有 MP4 文件的全部信息（流、编解码器、时长等）
     AVBSFContext *bsfCtx = nullptr;    // Bitstream Filter 上下文，用于 H.264 AVCC → Annex-B 转换
@@ -291,7 +291,7 @@ int VideoDecSend::do_send_mp4_frame(const QString &path)
     return ret;
 }
 
-void VideoDecSend::do_send_frame(QString path)
+void Mp4Demuxer::do_send_frame(QString path)
 {
     RK_S32 s32ReachEOS = 0;
 
@@ -332,7 +332,7 @@ void VideoDecSend::do_send_frame(QString path)
 }
 
 
-void VideoDecSend::do_stop_send_frame()
+void Mp4Demuxer::do_stop_send_frame()
 {
     stop_send_frame = 1;
 }

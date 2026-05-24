@@ -12,16 +12,16 @@
 #include <QPainterPath>
 #include <QListWidgetItem>
 
-#include "cameracapture.h"
-#include "savevideo.h"
+#include "cameramanager.h"
+#include "videoencoder.h"
 #include "savepicture.h"
 #include "keycontrol.h"
-#include "videodecget.h"
-#include "videodecsend.h"
+#include "videodecoder.h"
+#include "mp4demuxer.h"
 #include "imureader.h"
 #include "rk_mpi.h"
-#include "mp4muxdemux.h"
-#include "AudioManager.h"
+#include "mp4muxer.h"
+#include "audiomanager.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class Widget; }
@@ -64,16 +64,15 @@ private slots:
 
 private:
     Ui::Widget *ui;
-    QThread *cameracapThread;
-    QThread *savevideoThread;
-    QThread *savepictureThread;
-    QThread *keycontrolThread;
-    QThread *playvideoThread;
-    QThread *videodecsendThread;
-    QThread *videodecgetThread;
-    QThread *imuThread;
-    QThread *mp4muxThread;
-    QThread *audiocapThread;
+    QThread *cameraManagerThread;
+    QThread *videoEncoderThread;
+    QThread *savePictureThread;
+    QThread *keyControlThread;
+    QThread *mp4DemuxerThread;
+    QThread *videoDecoderThread;
+    QThread *imuReaderThread;
+    QThread *mp4MuxerThread;
+    QThread *audioManagerThread;
 
     uint8_t video_flag;
     QDateTime recordStartTime;

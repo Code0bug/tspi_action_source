@@ -1,5 +1,5 @@
-#ifndef VIDEODECGET_H
-#define VIDEODECGET_H
+#ifndef VIDEODECODER_H
+#define VIDEODECODER_H
 
 #include <QObject>
 #include <QWidget>
@@ -8,13 +8,13 @@
 #include "im2d.h"
 #include "rga.h"
 #include "RgaUtils.h"
-#include "videodecsend.h"
+#include "mp4demuxer.h"
 
-class VideoDecGet : public QObject
+class VideoDecoder : public QObject
 {
     Q_OBJECT
 public:
-    explicit VideoDecGet(QObject *parent = nullptr);
+    explicit VideoDecoder(QObject *parent = nullptr);
 
 signals:
     void VideodecToUI(cv::Mat img);
@@ -28,4 +28,4 @@ private:
 
 };
 
-#endif // VIDEODECGET_H
+#endif // VIDEODECODER_H

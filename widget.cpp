@@ -175,89 +175,89 @@ Widget::Widget(QWidget *parent)
 
 
     // 视频采集线程
-    cameracapThread = new QThread();
-    CameraCapture* cameracap = new CameraCapture();
-    cameracap->moveToThread(cameracapThread);
+    cameraManagerThread = new QThread();
+    CameraManager* cameraManager = new CameraManager();
+    cameraManager->moveToThread(cameraManagerThread);
 
     // 照片保存线程
-    savepictureThread = new QThread();
-    SavePicture* savepicture = new SavePicture();
-    savepicture->moveToThread(savepictureThread);
+    savePictureThread = new QThread();
+    SavePicture* savePicture = new SavePicture();
+    savePicture->moveToThread(savePictureThread);
 
     // 视频编码保存
-    savevideoThread = new QThread();
-    SaveVideo* savevideo = new SaveVideo();
-    savevideo->moveToThread(savevideoThread);
+    videoEncoderThread = new QThread();
+    VideoEncoder* videoEncoder = new VideoEncoder();
+    videoEncoder->moveToThread(videoEncoderThread);
 
     // MP4封装和解封装
-    mp4muxThread = new QThread();
-    Mp4MuxDemux *mp4mux = new Mp4MuxDemux();
-    mp4mux->moveToThread(mp4muxThread);
+    mp4MuxerThread = new QThread();
+    Mp4Muxer *mp4Muxer = new Mp4Muxer();
+    mp4Muxer->moveToThread(mp4MuxerThread);
 
     // 音频采集
-    audiocapThread = new QThread();
-    AudioManager *audiocap = new AudioManager();
-    audiocap->moveToThread(audiocapThread);
+    audioManagerThread = new QThread();
+    AudioManager *audioManager = new AudioManager();
+    audioManager->moveToThread(audioManagerThread);
 
     // 按键控制
-    keycontrolThread = new QThread();
-    KeyControl* keycontrol = new KeyControl();
-    keycontrol->moveToThread(keycontrolThread);
+    keyControlThread = new QThread();
+    KeyControl* keyControl = new KeyControl();
+    keyControl->moveToThread(keyControlThread);
 
     // IMU线程
-    imuThread = new QThread();
-    IMUReader* imureader = new IMUReader();
-    imureader->moveToThread(imuThread);
+    imuReaderThread = new QThread();
+    IMUReader* imuReader = new IMUReader();
+    imuReader->moveToThread(imuReaderThread);
 
     // 视频解码
-    videodecsendThread = new QThread();
-    VideoDecSend* videodecsend = new VideoDecSend();
-    videodecsend->moveToThread(videodecsendThread);
+    mp4DemuxerThread = new QThread();
+    Mp4Demuxer* mp4Demuxer = new Mp4Demuxer();
+    mp4Demuxer->moveToThread(mp4DemuxerThread);
 
-    videodecgetThread = new QThread();
-    VideoDecGet* videodecget = new VideoDecGet();
-    videodecget->moveToThread(videodecgetThread);
+    videoDecoderThread = new QThread();
+    VideoDecoder* videoDecoder = new VideoDecoder();
+    videoDecoder->moveToThread(videoDecoderThread);
 
     // 连接信号
-    connect(cameracap, &CameraCapture::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示
-    connect(cameracap, &CameraCapture::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
-    connect(cameracap, &CameraCapture::videoFinishedToIMURecord, imureader, &IMUReader::record_imu_data);  // 开始录像时IMU开始记录
-    connect(cameracap, &CameraCapture::capFinishedToVideo, savevideo, &SaveVideo::do_save_video);  // 保存录像
-    // connect(savevideo, &SaveVideo::sigVideoEncoded, mp4mux, &Mp4MuxDemux::slotWriteVideoEncoded, Qt::QueuedConnection); // 编码流送mp4封装
-    connect(cameracap, &CameraCapture::photoFinishedToSave, savepicture, &SavePicture::do_save_picture);  // 保存照片
-    connect(savepicture, &SavePicture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 保存照片后更新相册列表
+    connect(cameraManager, &CameraManager::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示
+    connect(cameraManager, &CameraManager::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
+    connect(cameraManager, &CameraManager::videoFinishedToIMURecord, imuReader, &IMUReader::record_imu_data);  // 开始录像时IMU开始记录
+    connect(cameraManager, &CameraManager::capFinishedToVideo, videoEncoder, &VideoEncoder::do_save_video);  // 保存录像
+    // connect(videoEncoder, &VideoEncoder::sigVideoEncoded, mp4Muxer, &Mp4Muxer::slotWriteVideoEncoded, Qt::QueuedConnection); // 编码流送mp4封装
+    connect(cameraManager, &CameraManager::photoFinishedToSave, savePicture, &SavePicture::do_save_picture);  // 保存照片
+    connect(savePicture, &SavePicture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 保存照片后更新相册列表
 
 
-    connect(videodecget, &VideoDecGet::VideodecToUI, this, &Widget::doShowVideo);                  // 解码录像并显示
+    connect(videoDecoder, &VideoDecoder::VideodecToUI, this, &Widget::doShowVideo);                  // 解码录像并显示
 
-    connect(keycontrol, &KeyControl::keyToTakephoto, cameracap, &CameraCapture::takePhoto, Qt::DirectConnection);  // 开始拍照
-    connect(keycontrol, &KeyControl::keyToStartvideo, cameracap, &CameraCapture::startVideo, Qt::DirectConnection);// 开始录像
-    connect(keycontrol, &KeyControl::keyToStopvideo, cameracap, &CameraCapture::stopVideo, Qt::DirectConnection);  // 停止录像
+    connect(keyControl, &KeyControl::keyToTakephoto, cameraManager, &CameraManager::takePhoto, Qt::DirectConnection);  // 开始拍照
+    connect(keyControl, &KeyControl::keyToStartvideo, cameraManager, &CameraManager::startVideo, Qt::DirectConnection);// 开始录像
+    connect(keyControl, &KeyControl::keyToStopvideo, cameraManager, &CameraManager::stopVideo, Qt::DirectConnection);  // 停止录像
 
-    connect(cameracap, &CameraCapture::sigVideoMp4Init, audiocap, &AudioManager::startCapture, Qt::QueuedConnection); // 开始录像时，开启音频采集
-    connect(cameracap, &CameraCapture::sigVideoMp4Init, mp4mux, &Mp4MuxDemux::initMp4Mux); // 开始录像时，MP4初始化
-    connect(cameracap, &CameraCapture::videoFinishedToMP4, audiocap, &AudioManager::stopCapture, Qt::DirectConnection); // 结束录像时，先停音频采集
-    connect(cameracap, &CameraCapture::videoFinishedToMP4, mp4mux, &Mp4MuxDemux::closeMp4Mux); // 结束录像时，再关闭MP4
-    connect(savevideo, &SaveVideo::sigVideo2Mp4Mux, mp4mux, &Mp4MuxDemux::writeVideoToMp4);
-    connect(audiocap, &AudioManager::capFinishedToAudio, mp4mux, &Mp4MuxDemux::writeAudioToMp4);
-    connect(videodecsend, &VideoDecSend::audioStreamStarted, audiocap, &AudioManager::startPlayback, Qt::QueuedConnection);
-    connect(videodecsend, &VideoDecSend::audioPacketReady, audiocap, &AudioManager::playEncodedAudioPacket, Qt::QueuedConnection);
-    connect(videodecsend, &VideoDecSend::audioStreamFinished, audiocap, &AudioManager::stopPlayback, Qt::QueuedConnection);
+    connect(cameraManager, &CameraManager::sigVideoMp4Init, audioManager, &AudioManager::startCapture, Qt::QueuedConnection); // 开始录像时，开启音频采集
+    connect(cameraManager, &CameraManager::sigVideoMp4Init, mp4Muxer, &Mp4Muxer::initMp4Mux); // 开始录像时，MP4初始化
+    connect(cameraManager, &CameraManager::videoFinishedToMP4, audioManager, &AudioManager::stopCapture, Qt::DirectConnection); // 结束录像时，先停音频采集
+    connect(cameraManager, &CameraManager::videoFinishedToMP4, mp4Muxer, &Mp4Muxer::closeMp4Mux); // 结束录像时，再关闭MP4
+    connect(videoEncoder, &VideoEncoder::sigVideo2Mp4Mux, mp4Muxer, &Mp4Muxer::writeVideoToMp4);
+    connect(audioManager, &AudioManager::capFinishedToAudio, mp4Muxer, &Mp4Muxer::writeAudioToMp4);
+    connect(mp4Demuxer, &Mp4Demuxer::audioStreamStarted, audioManager, &AudioManager::startPlayback, Qt::QueuedConnection);
+    connect(mp4Demuxer, &Mp4Demuxer::audioPacketReady, audioManager, &AudioManager::playEncodedAudioPacket, Qt::QueuedConnection);
+    connect(mp4Demuxer, &Mp4Demuxer::audioStreamFinished, audioManager, &AudioManager::stopPlayback, Qt::QueuedConnection);
     
-    connect(keycontrol, &KeyControl::keyToStopvideo, imureader, &IMUReader::stop_imu_record_txt, Qt::DirectConnection);                  // IMU停止记录数据
-//    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stop_imu_record);                            // 通知IMU停止记录，关闭文件
-    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::stopVideo);                                    // 停止录像时标记flag为0
-    connect(keycontrol, &KeyControl::keyToStartvideo, this, &Widget::switchToPage5);                               // 开始录像时切换到录像页
-    connect(keycontrol, &KeyControl::keyToStopvideo, this, &Widget::switchToPage0);                                // 停止录像时切回预览页
+    connect(keyControl, &KeyControl::keyToStopvideo, imuReader, &IMUReader::stop_imu_record_txt, Qt::DirectConnection);                  // IMU停止记录数据
+//    connect(keyControl, &KeyControl::keyToStopvideo, this, &Widget::stop_imu_record);                            // 通知IMU停止记录，关闭文件
+    connect(keyControl, &KeyControl::keyToStopvideo, this, &Widget::stopVideo);                                    // 停止录像时标记flag为0
+    connect(keyControl, &KeyControl::keyToStartvideo, this, &Widget::switchToPage5);                               // 开始录像时切换到录像页
+    connect(keyControl, &KeyControl::keyToStopvideo, this, &Widget::switchToPage0);                                // 停止录像时切回预览页
 
     connect(ui->switch2photo_button, &QPushButton::clicked, this, &Widget::switchToPage1);  // 切换到相册首页
     connect(ui->switch2video_button, &QPushButton::clicked, this, &Widget::switchToPage2);  // 切换到录像首页
     connect(ui->photoback_button, &QPushButton::clicked, this, &Widget::switchToPage0);     // 从相册首页切换回预览页
     connect(ui->videoback_button, &QPushButton::clicked, this, &Widget::switchToPage0);     // 从录像首页切换回预览页
     connect(ui->video1back_button, &QPushButton::clicked, this, &Widget::switchToPage2);    // 录像播放页回退至录像首页
-    connect(ui->video1back_button, &QPushButton::clicked, videodecsend, &VideoDecSend::do_stop_send_frame, Qt::DirectConnection);  // 录像播放页回退至录像首页时停止发送解码帧
-    connect(ui->video1back_button, &QPushButton::clicked, videodecget, &VideoDecGet::do_stop_get_frame, Qt::DirectConnection);    // 录像播放页回退至录像首页时停止获取解码帧
-    connect(ui->video1back_button, &QPushButton::clicked, audiocap, &AudioManager::stopPlayback, Qt::QueuedConnection);           // 录像播放页回退至录像首页时停止音频播放
+    connect(ui->video1back_button, &QPushButton::clicked, mp4Demuxer, &Mp4Demuxer::do_stop_send_frame, Qt::DirectConnection);  // 录像播放页回退至录像首页时停止发送解码帧
+    connect(ui->video1back_button, &QPushButton::clicked, videoDecoder, &VideoDecoder::do_stop_get_frame, Qt::DirectConnection);    // 录像播放页回退至录像首页时停止获取解码帧
+    connect(ui->video1back_button, &QPushButton::clicked, audioManager, &AudioManager::stopPlayback, Qt::QueuedConnection);           // 录像播放页回退至录像首页时停止音频播放
     connect(ui->photo1back_button, &QPushButton::clicked, this, &Widget::switchToPage1);    // 照片查看页回退至相册首页
     connect(ui->next_button, &QPushButton::clicked, this, &Widget::showNextPhoto);          // 照片查看切换下一张
     connect(ui->prev_button, &QPushButton::clicked, this, &Widget::showPrevPhoto);          // 照片查看切换上一张
@@ -267,28 +267,28 @@ Widget::Widget(QWidget *parent)
     // 点击播放视频
     connect(ui->video_listWidget, &QListWidget::itemClicked, this, &Widget::VideoListItemClicked);
 
-    connect(this, &Widget::WidgetToStartCapture, cameracap, &CameraCapture::startCapture);
-    connect(this, &Widget::WidgetToStopCapture, cameracap, &CameraCapture::stopCapture);
-    connect(this, &Widget::WidgetToStartDecVideo, videodecsend, &VideoDecSend::do_send_frame);
-    connect(this, &Widget::WidgetToStartDecVideo, videodecget, &VideoDecGet::do_get_frame);
+    connect(this, &Widget::WidgetToStartCapture, cameraManager, &CameraManager::startCapture);
+    connect(this, &Widget::WidgetToStopCapture, cameraManager, &CameraManager::stopCapture);
+    connect(this, &Widget::WidgetToStartDecVideo, mp4Demuxer, &Mp4Demuxer::do_send_frame);
+    connect(this, &Widget::WidgetToStartDecVideo, videoDecoder, &VideoDecoder::do_get_frame);
 
-    connect(keycontrolThread, &QThread::started, keycontrol, &KeyControl::key_query);
-    connect(cameracapThread, &QThread::started, cameracap, &CameraCapture::startCapture);
+    connect(keyControlThread, &QThread::started, keyControl, &KeyControl::key_query);
+    connect(cameraManagerThread, &QThread::started, cameraManager, &CameraManager::startCapture);
 
-//    connect(&IMUTimer, &QTimer::timeout, imureader, &IMUReader::record_imu_data);
-//    connect(imureader, &IMUReader::IMUinitToWidget, this, &Widget::start_imu_record); // 开始录制后，IMU要先记录时间戳，初始化计数变量，然后才开启定时器进行记录
+//    connect(&IMUTimer, &QTimer::timeout, imuReader, &IMUReader::record_imu_data);
+//    connect(imuReader, &IMUReader::IMUinitToWidget, this, &Widget::start_imu_record); // 开始录制后，IMU要先记录时间戳，初始化计数变量，然后才开启定时器进行记录
 
     video_flag = 0; // video_flag初始化为0，不初始化会有个野值
     // 开启线程
-    cameracapThread->start();
-    savepictureThread->start();
-    savevideoThread->start();
-    keycontrolThread->start();
-    videodecsendThread->start();
-    videodecgetThread->start();
-    imuThread->start();
-    mp4muxThread->start();
-    audiocapThread->start();
+    cameraManagerThread->start();
+    savePictureThread->start();
+    videoEncoderThread->start();
+    keyControlThread->start();
+    mp4DemuxerThread->start();
+    videoDecoderThread->start();
+    imuReaderThread->start();
+    mp4MuxerThread->start();
+    audioManagerThread->start();
 
 }
 

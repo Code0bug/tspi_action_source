@@ -2,17 +2,6 @@
 
 Qt Widgets Rockchip 摄像头应用，支持实时预览、H.264/AAC MP4 录像、MP4 播放、硬件编解码。
 
-## 重构方案
-- AudioManager : 管理音频流
-- VideoManager : 管理视频流   
-
-- 硬件I/O
-  - CameraManager : 管理摄像头
-  - KeyManager : 管理按键输入
-  - ImuManager : 管理IMU
-
-- Widget : 管理UI
-
 ## 构建
 
 ```bash
@@ -29,19 +18,19 @@ make -j2
   cd build-aarch64
   /home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/qmake -o Makefile ../ai-cam-ui-widget.pro -spec devices/linux-buildroot-g++ CONFIG+=debug CONFIG+=qml_debug
   ```
-- `videodecget.cpp` 有一个关于 `FRAME_FLAG_SNAP_END` 的 signed/unsigned warning，是既有问题，忽略即可
+- `videodecoder.cpp` 有一个关于 `FRAME_FLAG_SNAP_END` 的 signed/unsigned warning，是既有问题，忽略即可
 
 ## 关键文件
 
 | 文件 | 职责 |
 |------|------|
 | `widget.cpp/.h` | UI 初始化、线程创建、信号槽连接、相册/视频列表 |
-| `cameracapture.cpp/.h` | VI 摄像头采集、预览帧转换、录像路径、首帧缩略图 |
-| `savevideo.cpp/.h` | BGR 帧送 RK VENC 编码 H.264，发给 MP4 封装器 |
-| `mp4muxdemux.cpp/.h` | MP4 封装/解封装主逻辑，Annex-B↔AVCC 转换 |
-| `videodecsend.cpp/.h` | 播放输入：流式解封装 MP4，视频送 VDEC，音频发 AudioManager |
-| `videodecget.cpp/.h` | 播放输出：轮询 VDEC 解码帧，RGA 转 BGR，发给 UI |
-| `AudioManager.cpp/.h` | `AudioManager` 类，RK AI 采集 + AO 播放 + FFmpeg 解码 |
+| `cameramanager.cpp/.h` | VI 摄像头采集、预览帧转换、录像路径、首帧缩略图 |
+| `videoencoder.cpp/.h` | BGR 帧送 RK VENC 编码 H.264，发给 MP4 封装器 |
+| `mp4muxer.cpp/.h` | MP4 封装/解封装主逻辑，Annex-B↔AVCC 转换 |
+| `mp4demuxer.cpp/.h` | 播放输入：流式解封装 MP4，视频送 VDEC，音频发 AudioManager |
+| `videodecoder.cpp/.h` | 播放输出：轮询 VDEC 解码帧，RGA 转 BGR，发给 UI |
+| `audiomanager.cpp/.h` | `AudioManager` 类，RK AI 采集 + AO 播放 + FFmpeg 解码 |
 | `utils/rk_mpi.cpp/.h` | RK MPI 初始化封装（`vdec_init`、`venc_init`） |
 | `utils/safeQueue.h` | 线程安全队列模板（`SafeQueue<T>`） |
 | `widget.ui` | Qt Designer UI |
@@ -50,14 +39,14 @@ make -j2
 
 `Widget` 创建 worker 对象，移动到独立 QThread：
 
-- `CameraCapture` → `cameracapThread`
+- `CameraManager` → `cameramanagerThread`
 - `SavePicture` → `savepictureThread`
-- `SaveVideo` → `savevideoThread`
+- `VideoEncoder` → `videoencoderThread`
 - `KeyControl` → `keycontrolThread`
-- `VideoDecSend` → `videodecsendThread`
-- `VideoDecGet` → `videodecgetThread`
-- `Mp4MuxDemux` → `mp4muxThread`
-- `AudioManager` → `audiocapThread`
+- `Mp4Demuxer` → `mp4demuxerThread`
+- `VideoDecoder` → `videodecoderThread`
+- `Mp4Muxer` → `mp4muxerThread`
+- `AudioManager` → `audiomanagerThread`
 
 **注意**：worker slot 中不能无界阻塞，否则 queued signal 全部排队无法执行。这是"第二次播放没声音"类 bug 的常见根因。
 
@@ -67,12 +56,12 @@ make -j2
 
 ```
 ┌─────────────┐     ┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
-│  摄像头传感器  │────▶│   CameraCapture   │────▶│    SaveVideo      │────▶│   Mp4MuxDemux    │
-│  (VI 硬件)   │     │  cameracapThread  │     │  savevideoThread  │     │   mp4muxThread   │
+│  摄像头传感器  │────▶│   CameraManager   │────▶│    VideoEncoder      │────▶│   Mp4Muxer    │
+│  (VI 硬件)   │     │  cameramanagerThread  │     │  videoencoderThread  │     │   mp4muxerThread   │
 └─────────────┘     └──────────────────┘     └──────────────────┘     └──────────────────┘
 ┌─────────────┐     ┌──────────────────┐                                        ▲
 │  麦克风传感器  │────▶│   AudioManager    │──────────── capFinishedToAudio ────────────┘
-│  (AI 硬件)   │     │  audiocapThread   │
+│  (AI 硬件)   │     │  audiomanagerThread   │
 └─────────────┘     └──────────────────┘
 ```
 
@@ -82,7 +71,7 @@ make -j2
 VI 硬件 (RK_FMT_YUV420SP, 1920×1080)
   │
   ▼
-CameraCapture::startCapture (cameracapThread)
+CameraManager::startCapture (cameramanagerThread)
   │
   ├── RGA imcvtcolor ──▶ RGB888 552×368 ──▶ capFinishedToUI ──▶ Widget::doShow (预览)
   │
@@ -90,7 +79,7 @@ CameraCapture::startCapture (cameracapThread)
            │
            │ capFinishedToVideo(cv::Mat BGR, FILE*, PTS)  ── 跨线程信号 ──▶
            ▼
-SaveVideo::do_save_video (savevideoThread)
+VideoEncoder::do_save_video (videoencoderThread)
   │  memcpy BGR → DMA buf
   │  RK_MPI_VENC_SendFrame (BGR888 → H.264 硬件编码)
   │  RK_MPI_VENC_GetStream (得到 H.264 Annex-B 码流)
@@ -100,7 +89,7 @@ SaveVideo::do_save_video (savevideoThread)
   └── emit sigVideo2Mp4Mux(VENC_STREAM_S*)  ── 跨线程信号 ──▶
            │
            ▼
-Mp4MuxDemux::writeVideoToMp4 (mp4muxThread)
+Mp4Muxer::writeVideoToMp4 (mp4muxerThread)
   │  从 Annex-B 提取 SPS/PPS (首个关键帧)
   │  buildAvccFromSpsPps → 生成 avcC (AVCDecoderConfigurationRecord)
   │  addMp4Stream + avformat_write_header (写 MP4 moov)
@@ -126,12 +115,12 @@ MP4 文件 (.mp4)
 AI 硬件 (PCM s16, 2ch, 16kHz)
   │
   ▼
-AudioManager::startCapture (audiocapThread)
+AudioManager::startCapture (audiomanagerThread)
   │  RK_MPI_AI_GetFrame (阻塞读取一帧 PCM)
   │
   │ capFinishedToAudio(QByteArray PCM, timestamp)  ── 跨线程信号 ──▶
   ▼
-Mp4MuxDemux::writeAudioToMp4 (mp4muxThread)
+Mp4Muxer::writeAudioToMp4 (mp4muxerThread)
   │
   ├─ 若 MP4 header 未写 → 缓存到 m_pendingAudioChunks
   │
@@ -153,9 +142,9 @@ Mp4MuxDemux::writeAudioToMp4 (mp4muxThread)
 
 ### 录像启动/停止
 
-**启动**：`KeyControl` 触发 → `CameraCapture::startVideo` → 第一帧到达时创建 `.bin`/`.mp4`/`.jpg` → `sigVideoMp4Init` 同时触发 `AudioManager::startCapture` + `Mp4MuxDemux::initMp4Mux`
+**启动**：`KeyControl` 触发 → `CameraManager::startVideo` → 第一帧到达时创建 `.bin`/`.mp4`/`.jpg` → `sigVideoMp4Init` 同时触发 `AudioManager::startCapture` + `Mp4Muxer::initMp4Mux`
 
-**停止**：`CameraCapture::stopVideo` → `videoFinishedToMP4` → 先停音频采集（`AudioManager::stopCapture`），再关 MP4 封装器（`Mp4MuxDemux::closeMp4Mux`：flush 音频编码器、写 MP4 trailer、关闭文件）
+**停止**：`CameraManager::stopVideo` → `videoFinishedToMP4` → 先停音频采集（`AudioManager::stopCapture`），再关 MP4 封装器（`Mp4Muxer::closeMp4Mux`：flush 音频编码器、写 MP4 trailer、关闭文件）
 
 ---
 
@@ -165,12 +154,12 @@ Mp4MuxDemux::writeAudioToMp4 (mp4muxThread)
 
 ```
                                     ┌──────────────────────┐
-                               ┌───▶│    VideoDecGet        │───▶ 屏幕显示
-                               │    │   videodecgetThread    │
-MP4 文件 ──▶ VideoDecSend ─────┤    └──────────────────────┘
-            videodecsendThread │    ┌──────────────────────┐
+                               ┌───▶│    VideoDecoder        │───▶ 屏幕显示
+                               │    │   videodecoderThread    │
+MP4 文件 ──▶ Mp4Demuxer ─────┤    └──────────────────────┘
+            mp4demuxerThread │    ┌──────────────────────┐
                                └───▶│    AudioManager       │───▶ 扬声器播放
-                                    │   audiocapThread       │
+                                    │   audiomanagerThread       │
                                     └──────────────────────┘
 ```
 
@@ -180,7 +169,7 @@ MP4 文件 ──▶ VideoDecSend ─────┤    └───────
 MP4 文件
   │
   ▼
-VideoDecSend::do_send_mp4_frame (videodecsendThread)
+Mp4Demuxer::do_send_mp4_frame (mp4demuxerThread)
   │  avformat_open_input / av_read_frame (libavformat 解封装)
   │  选择 video stream (必须是 H.264)
   │
@@ -193,7 +182,7 @@ VideoDecSend::do_send_mp4_frame (videodecsendThread)
 Rockchip VDEC 硬件解码
   │
   ▼
-VideoDecGet::do_get_frame (videodecgetThread)
+VideoDecoder::do_get_frame (videodecoderThread)
   │  poll() 等待解码帧就绪
   │  RK_MPI_VDEC_GetFrame → YCrCb_420_SP (NV21)
   │  RGA imresize + imcvtcolor → BGR_888 (552×368)
@@ -210,12 +199,12 @@ Widget::doShowVideo
 ### 音频链路：MP4 → 扬声器
 
 ```
-MP4 文件 (VideoDecSend 解封装得到音频 packet)
+MP4 文件 (Mp4Demuxer 解封装得到音频 packet)
   │
   │ emit audioStreamStarted(codecId, sampleRate, channels, extradata)
   │ emit audioPacketReady(QByteArray 压缩数据, pts)
-  ▼ (QueuedConnection → audiocapThread)
-AudioManager::playEncodedAudioPacket (audiocapThread)
+  ▼ (QueuedConnection → audiomanagerThread)
+AudioManager::playEncodedAudioPacket (audiomanagerThread)
   │  avcodec_send_packet (FFmpeg 解码, 如 AAC → PCM)
   │  avcodec_receive_frame → decoded samples (如 fltp)
   │  swr_convert → S16 interleaved PCM
@@ -227,7 +216,7 @@ AudioManager::playEncodedAudioPacket (audiocapThread)
 
 ### 播放同步机制
 
-- `VideoDecSend` 的解封装线程作为 packet 分发时钟
+- `Mp4Demuxer` 的解封装线程作为 packet 分发时钟
 - 第一个 packet 的 PTS 记为 `firstMediaUs`，墙钟记为 `playStartUs`
 - 后续 packet 目标发送时间：`playStartUs + (pktMediaUs - firstMediaUs)`
 - 解封装线程 sleep 到目标时间再发包，避免瞬间塞满下游缓冲

@@ -1,5 +1,5 @@
-#ifndef MP4MUXDEMUX_H
-#define MP4MUXDEMUX_H
+#ifndef MP4MUXER_H
+#define MP4MUXER_H
 
 #include <QObject>
 #include <QByteArray>
@@ -14,12 +14,12 @@ struct AVCodecContext;
 struct AVFrame;
 struct SwrContext;
 
-class Mp4MuxDemux : public QObject
+class Mp4Muxer : public QObject
 {
     Q_OBJECT
 public:
-    explicit Mp4MuxDemux(QObject *parent = nullptr);
-    ~Mp4MuxDemux();
+    explicit Mp4Muxer(QObject *parent = nullptr);
+    ~Mp4Muxer();
     static int demuxMp4ToH264(const QString &mp4Path,
                               const QString &h264OutPath,
                               const QString &audioOutPath = QString());
@@ -67,4 +67,4 @@ private:
     QByteArray m_pps;
 };
 
-#endif // MP4MUXDEMUX_H
+#endif // MP4MUXER_H

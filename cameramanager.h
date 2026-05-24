@@ -1,5 +1,5 @@
-#ifndef CAMERACAPTURE_H
-#define CAMERACAPTURE_H
+#ifndef CAMERAMANAGER_H
+#define CAMERAMANAGER_H
 
 #include <QObject>
 #include <QTimer>
@@ -23,12 +23,12 @@
 
 
 
-class CameraCapture : public QObject
+class CameraManager : public QObject
 {
     Q_OBJECT
 public:
-    CameraCapture();
-    ~CameraCapture();
+    CameraManager();
+    ~CameraManager();
 
 public slots:
     void startCapture();
@@ -59,4 +59,4 @@ signals:
 
 };
 
-#endif // CAMERACAPTURE_H
+#endif // CAMERAMANAGER_H

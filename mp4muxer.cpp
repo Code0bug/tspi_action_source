@@ -11,8 +11,8 @@
  *      ④ 将Annex-B码流转换为AVCC格式，然后写入MP4帧
  *      ⑤ 结束写MP4，释放相关变量
  */
-#include "mp4muxdemux.h"
-#include "AudioManager.h"
+#include "mp4muxer.h"
+#include "audiomanager.h"
 #include <iostream>
 #include <string>
 #include <cstring>
@@ -177,17 +177,17 @@ bool annexbToAvcc(const uint8_t *data, uint32_t size, QByteArray &out)
 }
 } // namespace
 
-Mp4MuxDemux::Mp4MuxDemux(QObject *parent)
+Mp4Muxer::Mp4Muxer(QObject *parent)
     : QObject(parent)
 {
 }
 
-Mp4MuxDemux::~Mp4MuxDemux()
+Mp4Muxer::~Mp4Muxer()
 {
     closeMp4Mux();
 }
 
-int Mp4MuxDemux::demuxMp4ToH264(const QString &mp4Path,
+int Mp4Muxer::demuxMp4ToH264(const QString &mp4Path,
                                 const QString &h264OutPath,
                                 const QString &audioOutPath)
 {
@@ -330,7 +330,7 @@ int Mp4MuxDemux::demuxMp4ToH264(const QString &mp4Path,
 }
 
 
-bool Mp4MuxDemux::initMp4Mux(const QString &filename)
+bool Mp4Muxer::initMp4Mux(const QString &filename)
 {
     closeMp4Mux();
 
@@ -378,7 +378,7 @@ bool Mp4MuxDemux::initMp4Mux(const QString &filename)
     return true;
 }
 
-void Mp4MuxDemux::closeMp4Mux()
+void Mp4Muxer::closeMp4Mux()
 {
     if (!m_outFmt) {
         return;
@@ -415,7 +415,7 @@ void Mp4MuxDemux::closeMp4Mux()
     m_pps.clear();
 }
 
-void Mp4MuxDemux::ensureSyncBase(uint64_t tsUs)
+void Mp4Muxer::ensureSyncBase(uint64_t tsUs)
 {
     // 音视频统一同步基准：
     // - 第一份到达的音频/视频时间戳作为 m_syncBaseUs
@@ -426,7 +426,7 @@ void Mp4MuxDemux::ensureSyncBase(uint64_t tsUs)
     }
 }
 
-int Mp4MuxDemux::initAudioEncoder()
+int Mp4Muxer::initAudioEncoder()
 {
     if (!m_outFmt || m_audioEncCtx) {
         return -1;
@@ -520,7 +520,7 @@ int Mp4MuxDemux::initAudioEncoder()
     return 0;
 }
 
-void Mp4MuxDemux::releaseAudioEncoder()
+void Mp4Muxer::releaseAudioEncoder()
 {
     if (m_audioFrame) {
         av_frame_free(&m_audioFrame);
@@ -533,7 +533,7 @@ void Mp4MuxDemux::releaseAudioEncoder()
     }
 }
 
-int Mp4MuxDemux::writeAudioFrame(AVFrame *frame)
+int Mp4Muxer::writeAudioFrame(AVFrame *frame)
 {
     if (!m_outFmt || !m_audioEncCtx || m_audioStreamIndex < 0) {
         return -1;
@@ -578,7 +578,7 @@ int Mp4MuxDemux::writeAudioFrame(AVFrame *frame)
     return 0;
 }
 
-int Mp4MuxDemux::processAudioChunk(const QByteArray &pcmData, uint64_t captureTsUs)
+int Mp4Muxer::processAudioChunk(const QByteArray &pcmData, uint64_t captureTsUs)
 {
     if (!m_audioEncCtx || !m_audioFrame || !m_swrCtx) {
         return -1;
@@ -636,7 +636,7 @@ int Mp4MuxDemux::processAudioChunk(const QByteArray &pcmData, uint64_t captureTs
     return 0;
 }
 
-void Mp4MuxDemux::flushPendingAudio()
+void Mp4Muxer::flushPendingAudio()
 {
     if (!m_headerWritten || m_pendingAudioChunks.isEmpty()) {
         return;
@@ -648,7 +648,7 @@ void Mp4MuxDemux::flushPendingAudio()
     m_pendingAudioChunks.clear();
 }
 
-void Mp4MuxDemux::flushAudioEncoder()
+void Mp4Muxer::flushAudioEncoder()
 {
     if (!m_audioEncCtx || !m_audioFrame || !m_swrCtx) {
         return;
@@ -667,7 +667,7 @@ void Mp4MuxDemux::flushAudioEncoder()
     writeAudioFrame(nullptr); // flush encoder delayed packets
 }
 
-int Mp4MuxDemux::addMp4Stream()
+int Mp4Muxer::addMp4Stream()
 {
     if (!m_outFmt) {
         return -1;
@@ -714,7 +714,7 @@ int Mp4MuxDemux::addMp4Stream()
  * - 将SPS和PPS封装为avcc格式，然后写入AVCodecParameters结构体的extradata变量中
  * - 如果没有SPS和PPS信息就直接写header，会导致MP4文件无法打开，avcc格式的SPS+PPS信息就是告诉解码器如何解码视频帧的
  */
-int Mp4MuxDemux::addSpsPpsAndWriteHeader()
+int Mp4Muxer::addSpsPpsAndWriteHeader()
 {
     if (!m_outFmt || m_sps.isEmpty() || m_pps.isEmpty()) {
         return -1;
@@ -755,7 +755,7 @@ int Mp4MuxDemux::addSpsPpsAndWriteHeader()
     return 0;
 }
 
-int Mp4MuxDemux::writeAudioToMp4(QByteArray pcmData, uint64_t captureTsUs)
+int Mp4Muxer::writeAudioToMp4(QByteArray pcmData, uint64_t captureTsUs)
 {
     if (!m_outFmt || !m_audioEncCtx || pcmData.isEmpty()) {
         return 0;
@@ -770,7 +770,7 @@ int Mp4MuxDemux::writeAudioToMp4(QByteArray pcmData, uint64_t captureTsUs)
     return processAudioChunk(pcmData, captureTsUs);
 }
 
-int Mp4MuxDemux::writeVideoToMp4(VENC_STREAM_S *pstStream)
+int Mp4Muxer::writeVideoToMp4(VENC_STREAM_S *pstStream)
 {
     if (!m_outFmt || !pstStream || pstStream->u32PackCount == 0 || !pstStream->pstPack) {
         return 0;

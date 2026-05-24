@@ -1,4 +1,4 @@
-#include "savevideo.h"
+#include "videoencoder.h"
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -10,7 +10,7 @@ extern "C" {
 #include <cstring>
 
 
-SaveVideo::SaveVideo()
+VideoEncoder::VideoEncoder()
 {
 
     // RK_S32 s32Ret = 0;
@@ -55,7 +55,7 @@ SaveVideo::SaveVideo()
 
 }
 
-SaveVideo::~SaveVideo()
+VideoEncoder::~VideoEncoder()
 {
     if (stFrame.pstPack) {
         free(stFrame.pstPack);
@@ -64,7 +64,7 @@ SaveVideo::~SaveVideo()
 }
 
 
-void SaveVideo::do_save_video(cv::Mat buf, FILE* fp, uint64_t pts)
+void VideoEncoder::do_save_video(cv::Mat buf, FILE* fp, uint64_t pts)
 {
 //    printf("start video===\n");
 

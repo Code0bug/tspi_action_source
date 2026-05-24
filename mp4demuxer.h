@@ -1,16 +1,16 @@
-#ifndef VIDEODECSEND_H
-#define VIDEODECSEND_H
+#ifndef MP4DEMUXER_H
+#define MP4DEMUXER_H
 
 #include <QObject>
 #include <QWidget>
 #include <QByteArray>
 #include "rk_mpi.h"
 
-class VideoDecSend : public QObject
+class Mp4Demuxer : public QObject
 {
     Q_OBJECT
 public:
-    explicit VideoDecSend(QObject *parent = nullptr);
+    explicit Mp4Demuxer(QObject *parent = nullptr);
 
 signals:
     void audioStreamStarted(int codecId, int sampleRate, int channels, QByteArray extradata);
@@ -31,4 +31,4 @@ private:
 
 extern std::atomic<bool> ReachEOS;
 
-#endif // VIDEODECSEND_H
+#endif // MP4DEMUXER_H

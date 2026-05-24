@@ -1,4 +1,4 @@
-#include "videodecget.h"
+#include "videodecoder.h"
 
 
 RK_S32 mpi_vdec_poll_event(RK_S32 timeoutMsec, RK_S32 fd) {
@@ -20,12 +20,12 @@ RK_S32 mpi_vdec_poll_event(RK_S32 timeoutMsec, RK_S32 fd) {
     return ret;
 }
 
-VideoDecGet::VideoDecGet(QObject *parent) : QObject(parent)
+VideoDecoder::VideoDecoder(QObject *parent) : QObject(parent)
 {
 
 }
 
-void VideoDecGet::do_get_frame()
+void VideoDecoder::do_get_frame()
 {
     VIDEO_FRAME_INFO_S sFrame;
 
@@ -107,7 +107,7 @@ void VideoDecGet::do_get_frame()
     RK_MPI_VDEC_DestroyChn(0);
 }
 
-void VideoDecGet::do_stop_get_frame()
+void VideoDecoder::do_stop_get_frame()
 {
     stop_get_frame = 1;
 }

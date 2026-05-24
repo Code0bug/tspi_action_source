@@ -21,13 +21,13 @@ Widget (UI)
 ### 1.3 Manager 职责详情
 
 **CameraManager**
-- 持有：`CameraCapture` + `SavePicture`
+- 持有：`CameraManager` + `SavePicture`
 - 内部连接：`cameracap::photoFinishedToSave` → `savepicture::do_save_picture`
 - 对外信号：`previewFrame(cv::Mat)`、`photoSaved(QString)`、`videoFrameReady(cv::Mat, FILE*, uint64_t)`
 - 对外槽：`startCapture()`、`stopCapture()`、`takePhoto()`、`startVideo()`、`stopVideo()`
 
 **VideoManager**
-- 持有：`SaveVideo` + `Mp4MuxDemux` + `VideoDecSend` + `VideoDecGet`
+- 持有：`VideoEncoder` + `Mp4Muxer` + `Mp4Demuxer` + `VideoDecoder`
 - 内部连接：
   - `sigVideo2Mp4Mux` → `writeVideoToMp4`（录像视频写MP4）
   - `capFinishedToAudio` → `writeAudioToMp4`（录像音频写MP4，通过 AudioManager 提供接口）
@@ -127,7 +127,7 @@ wrapbuffer_fd(dst_fd, w, h, RK_FORMAT_BGR_888);
 
 **阶段四：码流零拷贝传递**
 
-- VENC 输出的码流 buffer 也通过 DMA-BUF fd 传递给 Mp4MuxDemux
+- VENC 输出的码流 buffer 也通过 DMA-BUF fd 传递给 Mp4Muxer
 - `av_read_frame` / `av_interleaved_write_frame` 的 buffer 可以用 `av_buffer_create` 包装 DMA-BUF fd
 - 避免码流数据从硬件 buffer memcpy 到用户态再拷给 FFmpeg
 

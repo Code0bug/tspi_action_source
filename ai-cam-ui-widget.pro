@@ -16,31 +16,31 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
-    AudioManager.cpp \
-    cameracapture.cpp \
+    audiomanager.cpp \
+    cameramanager.cpp \
     imureader.cpp \
     keycontrol.cpp \
     main.cpp \
-    mp4muxdemux.cpp \
+    mp4muxer.cpp \
     utils/rk_mpi.cpp \
     savepicture.cpp \
-    savevideo.cpp \
-    videodecget.cpp \
-    videodecsend.cpp \
+    videoencoder.cpp \
+    videodecoder.cpp \
+    mp4demuxer.cpp \
     widget.cpp
 
 HEADERS += \
-    AudioManager.h \
-    cameracapture.h \
+    audiomanager.h \
+    cameramanager.h \
     imureader.h \
     utils/rk_mpi.h \
     keycontrol.h \
-    mp4muxdemux.h \
+    mp4muxer.h \
     utils/safeQueue.h \
     savepicture.h \
-    savevideo.h \
-    videodecget.h \
-    videodecsend.h \
+    videoencoder.h \
+    videodecoder.h \
+    mp4demuxer.h \
     widget.h
 
 # 添加rockit/opencv/rknn头文件和动态库 $$PWD表示.pro文件所在目录

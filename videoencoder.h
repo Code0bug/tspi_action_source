@@ -1,5 +1,5 @@
-#ifndef SAVEVIDEO_H
-#define SAVEVIDEO_H
+#ifndef VIDEOENCODER_H
+#define VIDEOENCODER_H
 
 #include <QObject>
 #include <QByteArray>
@@ -16,12 +16,12 @@ struct AVStream;
 #define encHeight 1080
 
 
-class SaveVideo : public QObject
+class VideoEncoder : public QObject
 {
     Q_OBJECT
 public:
-    SaveVideo();
-    ~SaveVideo();
+    VideoEncoder();
+    ~VideoEncoder();
 
 public slots:
     void do_save_video(cv::Mat buf, FILE* fp, uint64_t pts);
@@ -36,4 +36,4 @@ private:
 
 };
 
-#endif // SAVEVIDEO_H
+#endif // VIDEOENCODER_H

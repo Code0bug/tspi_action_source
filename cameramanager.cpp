@@ -1,6 +1,6 @@
-#include "cameracapture.h"
+#include "cameramanager.h"
 
-CameraCapture::CameraCapture()
+CameraManager::CameraManager()
 {
 
     // rkmpi init
@@ -15,7 +15,7 @@ CameraCapture::CameraCapture()
 
 }
 
-CameraCapture::~CameraCapture()
+CameraManager::~CameraManager()
 {
 
     RK_MPI_VI_DisableChn(0, 0);
@@ -25,7 +25,7 @@ CameraCapture::~CameraCapture()
 }
 
 
-void CameraCapture::startCapture()
+void CameraManager::startCapture()
 {
     // vi init
     vi_dev_init();
@@ -53,18 +53,13 @@ void CameraCapture::startCapture()
             int width = stViFrame.stVFrame.u32Width;
 
             cv::Mat ui_frame(368, 552, CV_8UC3);
-//            cv::Mat ui_frame_rotate(480, 800, CV_8UC3);
             cv::Mat video_frame(height, width, CV_8UC3);
-//            cv::Mat video_frame_rotate(height, width, CV_8UC3);
 
             // 利用rga进行像素格式转换
             rga_buffer_t src_img = wrapbuffer_virtualaddr(dat, width, height, RK_FORMAT_YCrCb_420_SP);
             rga_buffer_t dst_img = wrapbuffer_virtualaddr(ui_frame.data, 552, 368, RK_FORMAT_RGB_888);
-//            rga_buffer_t dst_img_rotate = wrapbuffer_virtualaddr(ui_frame_rotate.data, 800, 480, RK_FORMAT_BGR_888);
             imresize(src_img, dst_img);
             imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_RGB_888);
-//            imrotate(dst_img, dst_img_rotate, IM_HAL_TRANSFORM_ROT_180);  // 设置旋转
-
 
             if (video_flag) { // 录像
 
@@ -95,9 +90,7 @@ void CameraCapture::startCapture()
                 }
 
                 rga_buffer_t dst_img_video = wrapbuffer_virtualaddr(video_frame.data, width, height, RK_FORMAT_BGR_888);
-//                rga_buffer_t dst_img_video_rotate = wrapbuffer_virtualaddr(video_frame_rotate.data, width, height, RK_FORMAT_BGR_888);
                 imcvtcolor(src_img, dst_img_video, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);
-//                imrotate(dst_img_video, dst_img_video_rotate, IM_HAL_TRANSFORM_ROT_180);  // 设置旋转
                 capFinishedToVideo(video_frame, video_fp, stViFrame.stVFrame.u64PTS);
             }
 
@@ -114,7 +107,7 @@ void CameraCapture::startCapture()
 }
 
 
-void CameraCapture::takePhoto()
+void CameraManager::takePhoto()
 {
     const int DROP_FRAMES = 5; // 丢掉前几帧
     int dropped = 0;
@@ -180,7 +173,7 @@ void CameraCapture::takePhoto()
 }
 
 
-void CameraCapture::stopCapture()
+void CameraManager::stopCapture()
 {
     isRunning = 0;
     RK_MPI_VI_DisableChn(0, 0);
@@ -190,7 +183,7 @@ void CameraCapture::stopCapture()
     RK_MPI_SYS_Exit();
 }
 
-void CameraCapture::startVideo()
+void CameraManager::startVideo()
 {
 
     video_flag = 1;
@@ -198,7 +191,7 @@ void CameraCapture::startVideo()
 
 }
 
-void CameraCapture::stopVideo()
+void CameraManager::stopVideo()
 {
     video_flag = 0;
     emit videoFinishedToMP4();
