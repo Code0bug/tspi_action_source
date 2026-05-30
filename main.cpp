@@ -4,6 +4,12 @@
 #include <QGraphicsView>
 #include <QGraphicsProxyWidget>
 #include <QFontDatabase>
+#include <csignal>
+
+static void shutdownHandler(int)
+{
+    QApplication::quit();
+}
 
 void checkAndCreateUserDataDirs()
 {
@@ -60,6 +66,8 @@ int main(int argc, char *argv[])
 
 
     view->show();
+
+    signal(SIGINT, shutdownHandler);
 
     return a.exec();
 }

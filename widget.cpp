@@ -295,6 +295,30 @@ Widget::Widget(QWidget *parent)
 
 Widget::~Widget()
 {
+    // 通知所有线程停止
+    cameraManagerThread->requestInterruption();
+    keyControlThread->quit();
+    savePictureThread->quit();
+    videoEncoderThread->quit();
+    mp4DemuxerThread->quit();
+    videoDecoderThread->quit();
+    imuReaderThread->quit();
+    mp4MuxerThread->quit();
+    audioManagerThread->quit();
+
+    // 等待线程结束，超时则强制终止
+    QThread *threads[] = {
+        cameraManagerThread, keyControlThread, savePictureThread,
+        videoEncoderThread, mp4DemuxerThread, videoDecoderThread,
+        imuReaderThread, mp4MuxerThread, audioManagerThread
+    };
+    for (QThread *t : threads) {
+        if (!t->wait(2000)) {
+            t->terminate();
+            t->wait(1000);
+        }
+    }
+
     delete ui;
 }
 

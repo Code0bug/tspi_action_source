@@ -62,7 +62,7 @@ void CameraManager::startCapture()
 
 
     isRunning = 1;
-    while (isRunning) {
+    while (isRunning && !QThread::currentThread()->isInterruptionRequested()) {
         // 视频图像帧信息结构体，存储采集视频帧
         VIDEO_FRAME_INFO_S stViFrame;
         // get vi frame

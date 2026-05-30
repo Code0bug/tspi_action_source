@@ -661,7 +661,9 @@ void Mp4Muxer::flushAudioEncoder()
         if (m_audioPcmCache.size() < bytesPerCodecFrame) {
             m_audioPcmCache.append(QByteArray(bytesPerCodecFrame - m_audioPcmCache.size(), '\0'));
         }
-        processAudioChunk(QByteArray(), m_syncBaseUs);
+        QByteArray lastChunk = m_audioPcmCache;  // 拷贝补零后的数据
+        m_audioPcmCache.clear();                  // 先清缓存，避免 processAudioChunk 重复 append
+        processAudioChunk(lastChunk, m_syncBaseUs);
     }
 
     writeAudioFrame(nullptr); // flush encoder delayed packets
