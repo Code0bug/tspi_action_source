@@ -10,6 +10,18 @@
  *      ③ 添加视频流，将SPS+PPS封装为AVCC，然后写MP4容器头
  *      ④ 将Annex-B码流转换为AVCC格式，然后写入MP4帧
  *      ⑤ 结束写MP4，释放相关变量
+ * 
+ * 2. PCM -> AAC -> MP4
+ * - 捕获的音频数据是原始PCM，需要封装成AVFrame进行AAC编码，再写入MP4
+ * - AAC编码要求一帧为1024个采样点，那么一个AVFrame的数据大小就应该是4096个字节（1024帧 x 2声道 x 2字节）
+ * - AAC要求的音频数据格式是32位浮点的fltp类型，而PCM原始数据是s16类型，因此要做转换
+ * - 音频的时间戳一般以采样点为单位，也就是1/采样频率，而输入时间戳是微秒单位，因此要做转换
+ * - 因此音频封装MP4的步骤为：
+ *      ① 初始化音频编码器和编码帧，创建音频流
+ *      ② 转换音频格式，转换时间戳
+ *      ③ 发送给编码器进行AAC编码，取出编码帧，然后写入MP4帧
+ *      ④ 结束写MP4前要进行flush操作，防止还有编码帧没有被写入
+ *      ⑤ 结束写MP4，释放相关变量
  */
 #include "mp4muxer.h"
 #include "audiomanager.h"
@@ -187,149 +199,6 @@ Mp4Muxer::~Mp4Muxer()
     closeMp4Mux();
 }
 
-int Mp4Muxer::demuxMp4ToH264(const QString &mp4Path,
-                                const QString &h264OutPath,
-                                const QString &audioOutPath)
-{
-    Q_UNUSED(audioOutPath); // 预留音频解封装接口，当前播放链路先只接视频。
-
-    AVFormatContext *inFmt = nullptr;
-    AVBSFContext *bsfCtx = nullptr;
-    FILE *videoFp = nullptr;
-    int videoStreamIndex = -1;
-    int ret = 0;
-
-    ret = avformat_open_input(&inFmt, mp4Path.toUtf8().constData(), nullptr, nullptr);
-    if (ret < 0) {
-        std::cerr << "avformat_open_input failed: "
-                  << ffErrStr(ret) << " path=" << mp4Path.toStdString() << std::endl;
-        return ret;
-    }
-
-    ret = avformat_find_stream_info(inFmt, nullptr);
-    if (ret < 0) {
-        std::cerr << "avformat_find_stream_info failed: "
-                  << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
-        avformat_close_input(&inFmt);
-        return ret;
-    }
-
-    ret = av_find_best_stream(inFmt, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
-    if (ret < 0) {
-        std::cerr << "av_find_best_stream(video) failed: "
-                  << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
-        avformat_close_input(&inFmt);
-        return ret;
-    }
-    videoStreamIndex = ret;
-
-    AVStream *videoStream = inFmt->streams[videoStreamIndex];
-    if (videoStream->codecpar->codec_id != AV_CODEC_ID_H264) {
-        std::cerr << "demuxMp4ToH264: unsupported video codec id="
-                  << videoStream->codecpar->codec_id << ", only H.264 is supported" << std::endl;
-        avformat_close_input(&inFmt);
-        return AVERROR(EINVAL);
-    }
-
-    const AVBitStreamFilter *bsf = av_bsf_get_by_name("h264_mp4toannexb");
-    if (!bsf) {
-        std::cerr << "av_bsf_get_by_name(h264_mp4toannexb) failed" << std::endl;
-        avformat_close_input(&inFmt);
-        return AVERROR_BSF_NOT_FOUND;
-    }
-
-    ret = av_bsf_alloc(bsf, &bsfCtx);
-    if (ret < 0) {
-        std::cerr << "av_bsf_alloc failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
-        avformat_close_input(&inFmt);
-        return ret;
-    }
-
-    ret = avcodec_parameters_copy(bsfCtx->par_in, videoStream->codecpar);
-    if (ret < 0) {
-        std::cerr << "avcodec_parameters_copy failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
-        av_bsf_free(&bsfCtx);
-        avformat_close_input(&inFmt);
-        return ret;
-    }
-    bsfCtx->time_base_in = videoStream->time_base;
-
-    ret = av_bsf_init(bsfCtx);
-    if (ret < 0) {
-        std::cerr << "av_bsf_init failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
-        av_bsf_free(&bsfCtx);
-        avformat_close_input(&inFmt);
-        return ret;
-    }
-
-    videoFp = fopen(h264OutPath.toUtf8().constData(), "wb");
-    if (!videoFp) {
-        perror("fopen h264OutPath");
-        av_bsf_free(&bsfCtx);
-        avformat_close_input(&inFmt);
-        return AVERROR(errno);
-    }
-
-    AVPacket pkt;
-    av_init_packet(&pkt);
-    while ((ret = av_read_frame(inFmt, &pkt)) >= 0) {
-        if (pkt.stream_index == videoStreamIndex) {
-            ret = av_bsf_send_packet(bsfCtx, &pkt);
-            av_packet_unref(&pkt);
-            if (ret < 0) {
-                std::cerr << "av_bsf_send_packet failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
-                break;
-            }
-
-            while ((ret = av_bsf_receive_packet(bsfCtx, &pkt)) == 0) {
-                if (pkt.size > 0 && fwrite(pkt.data, 1, pkt.size, videoFp) != static_cast<size_t>(pkt.size)) {
-                    perror("fwrite h264");
-                    av_packet_unref(&pkt);
-                    ret = AVERROR(EIO);
-                    break;
-                }
-                av_packet_unref(&pkt);
-            }
-            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                ret = 0;
-            }
-            if (ret < 0) {
-                break;
-            }
-        } else {
-            av_packet_unref(&pkt);
-        }
-    }
-
-    if (ret == AVERROR_EOF) {
-        ret = 0;
-    }
-
-    if (ret == 0) {
-        ret = av_bsf_send_packet(bsfCtx, nullptr);
-        if (ret >= 0) {
-            while ((ret = av_bsf_receive_packet(bsfCtx, &pkt)) == 0) {
-                if (pkt.size > 0 && fwrite(pkt.data, 1, pkt.size, videoFp) != static_cast<size_t>(pkt.size)) {
-                    perror("fwrite h264 flush");
-                    av_packet_unref(&pkt);
-                    ret = AVERROR(EIO);
-                    break;
-                }
-                av_packet_unref(&pkt);
-            }
-            if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
-                ret = 0;
-            }
-        }
-    }
-
-    fclose(videoFp);
-    av_bsf_free(&bsfCtx);
-    avformat_close_input(&inFmt);
-    return ret;
-}
-
-
 bool Mp4Muxer::initMp4Mux(const QString &filename)
 {
     closeMp4Mux();
@@ -342,6 +211,7 @@ bool Mp4Muxer::initMp4Mux(const QString &filename)
         return false;
     }
 
+    // 打开I/O上下文并关联到MP4文件
     if (!(m_outFmt->oformat->flags & AVFMT_NOFILE)) {
         ret = avio_open(&m_outFmt->pb, filename.toUtf8().constData(), AVIO_FLAG_WRITE);
         if (ret < 0) {
@@ -353,23 +223,7 @@ bool Mp4Muxer::initMp4Mux(const QString &filename)
         }
     }
 
-    m_videoStreamIndex = -1;
-    m_audioStreamIndex = -1;
-    m_headerWritten = false;
-    m_videoPtsInited = false;
-    m_audioPtsInited = false;
-    m_syncBaseInited = false;
-    m_videoPtsBaseUs = 0;
-    m_syncBaseUs = 0;
-    m_audioNextPts = 0;
-    m_audioInputChannels = gAudioCaptureConfig.outChannel;
-    m_audioInputBytesPerSample = 2; // AudioCapture 当前输出 s16
-    m_audioPcmCache.clear();
-    m_pendingAudioChunks.clear();
-    m_sps.clear();
-    m_pps.clear();
-
-    // 先创建音频编码器和音频流。MP4 header 尚未写，等拿到视频 SPS/PPS 后一起写 header。
+    // 创建音频编码器和音频流
     if (initAudioEncoder() != 0) {
         closeMp4Mux();
         return false;
@@ -383,12 +237,11 @@ void Mp4Muxer::closeMp4Mux()
     if (!m_outFmt) {
         return;
     }
-    if (m_headerWritten) {
-        flushAudioEncoder();
-    }
 
     if (m_headerWritten && m_outFmt->pb) {
-        int ret = av_write_trailer(m_outFmt);
+        writeAudioFrame(nullptr); // flush encoder delayed packets
+
+        int ret = av_write_trailer(m_outFmt); // 写MP4文件尾部
         if (ret < 0) {
             std::cerr << "av_write_trailer failed: "
                       << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
@@ -397,7 +250,18 @@ void Mp4Muxer::closeMp4Mux()
     if (!(m_outFmt->oformat->flags & AVFMT_NOFILE) && m_outFmt->pb) {
         avio_closep(&m_outFmt->pb);
     }
-    releaseAudioEncoder();
+
+    // 释放音频相关资源
+    if (m_audioFrame) {
+        av_frame_free(&m_audioFrame);
+    }
+    if (m_swrCtx) {
+        swr_free(&m_swrCtx);
+    }
+    if (m_audioEncCtx) {
+        avcodec_free_context(&m_audioEncCtx);
+    }
+
     avformat_free_context(m_outFmt);
     m_outFmt = nullptr;
     m_videoStreamIndex = -1;
@@ -405,74 +269,69 @@ void Mp4Muxer::closeMp4Mux()
     m_headerWritten = false;
     m_videoPtsInited = false;
     m_audioPtsInited = false;
-    m_syncBaseInited = false;
     m_videoPtsBaseUs = 0;
-    m_syncBaseUs = 0;
-    m_audioNextPts = 0;
-    m_audioPcmCache.clear();
-    m_pendingAudioChunks.clear();
+    m_audioPtsBaseUs = 0;
+    m_lastVideoPtsUs = -1;
     m_sps.clear();
     m_pps.clear();
 }
 
-void Mp4Muxer::ensureSyncBase(uint64_t tsUs)
-{
-    // 音视频统一同步基准：
-    // - 第一份到达的音频/视频时间戳作为 m_syncBaseUs
-    // - 后续所有流都减去该基准，得到同一“录制起点”下的相对时间
-    if (!m_syncBaseInited) {
-        m_syncBaseInited = true;
-        m_syncBaseUs = tsUs;
-    }
-}
-
 int Mp4Muxer::initAudioEncoder()
 {
+    /**
+     * 1. 查找 AAC 编码器，分配并配置编码上下文，avcodec_open2 打开编码器
+     * 2. avformat_new_stream 创建音频流，avcodec_parameters_from_context 同步参数
+     * 3. swr_alloc_set_opts 初始化重采样器（s16→fltp）
+     * 4. av_frame_alloc 分配编码输入帧 buffer
+     */
     if (!m_outFmt || m_audioEncCtx) {
         return -1;
     }
 
+    // 查找AAC编码器
     const AVCodec *acodec = avcodec_find_encoder(AV_CODEC_ID_AAC);
     if (!acodec) {
         std::cerr << "initAudioEncoder: avcodec_find_encoder(AAC) failed" << std::endl;
         return -1;
     }
 
+    // 分配编码上下文
     m_audioEncCtx = avcodec_alloc_context3(acodec);
     if (!m_audioEncCtx) {
         return -1;
     }
 
-    const int outSampleRate = gAudioCaptureConfig.outSampleRate > 0 ? gAudioCaptureConfig.outSampleRate : 16000;
-    m_audioInputChannels = gAudioCaptureConfig.outChannel == 2 ? 2 : 1;
-    const uint64_t inLayout = channelLayoutFromChannels(m_audioInputChannels);
-
-    m_audioEncCtx->codec_type = AVMEDIA_TYPE_AUDIO;
-    m_audioEncCtx->codec_id = AV_CODEC_ID_AAC;
-    m_audioEncCtx->sample_rate = outSampleRate;
-    m_audioEncCtx->channel_layout = inLayout;
-    m_audioEncCtx->channels = m_audioInputChannels;
-    m_audioEncCtx->bit_rate = kAudioBitrate;
-    m_audioEncCtx->time_base = AVRational{1, outSampleRate};
-    m_audioEncCtx->sample_fmt = acodec->sample_fmts ? acodec->sample_fmts[0] : AV_SAMPLE_FMT_FLTP;
+    // 配置编码上下文参数
+    m_audioEncCtx->codec_type = AVMEDIA_TYPE_AUDIO;                  // 音频流
+    m_audioEncCtx->codec_id = AV_CODEC_ID_AAC;                       // AAC编码
+    m_audioEncCtx->sample_rate = gAudioCaptureConfig.outSampleRate;  // 采样率
+    m_audioEncCtx->channel_layout = 
+        channelLayoutFromChannels(gAudioCaptureConfig.outChannel);   // 声道布局
+    m_audioEncCtx->channels = gAudioCaptureConfig.outChannel;        // 声道数
+    m_audioEncCtx->bit_rate = kAudioBitrate;                         // 比特率
+    m_audioEncCtx->time_base = AVRational{1, gAudioCaptureConfig.outSampleRate};  // 时间基
+    m_audioEncCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;                  // AAC 编码器只支持 fltp
     if (m_outFmt->oformat->flags & AVFMT_GLOBALHEADER) {
         m_audioEncCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }
 
+    // 打开编码器
     int ret = avcodec_open2(m_audioEncCtx, acodec, nullptr);
     if (ret < 0) {
         std::cerr << "avcodec_open2(aac) failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
         return -1;
     }
 
+    // 创建音频流
     AVStream *ast = avformat_new_stream(m_outFmt, nullptr);
     if (!ast) {
         std::cerr << "avformat_new_stream(audio) failed" << std::endl;
         return -1;
     }
-    ast->id = static_cast<int>(m_outFmt->nb_streams - 1);
-    ast->time_base = AVRational{1, outSampleRate};
+    ast->id = static_cast<int>(m_outFmt->nb_streams - 1);  // 流标识
+    ast->time_base = AVRational{1, gAudioCaptureConfig.outSampleRate};  // 时间基
 
+    // 把编码器上下文里的参数（codec_id、sample_rate、channels、extradata 等）复制到流的 codecpar 里
     ret = avcodec_parameters_from_context(ast->codecpar, m_audioEncCtx);
     if (ret < 0) {
         std::cerr << "avcodec_parameters_from_context(audio) failed: "
@@ -483,15 +342,15 @@ int Mp4Muxer::initAudioEncoder()
 
     // 输入是 AudioCapture 输出的 s16 PCM；AAC 编码器通常是 fltp，需要 swr 做格式转换。
     m_swrCtx = swr_alloc_set_opts(
-        nullptr,
-        m_audioEncCtx->channel_layout,
-        m_audioEncCtx->sample_fmt,
-        m_audioEncCtx->sample_rate,
-        inLayout,
-        AV_SAMPLE_FMT_S16,
-        outSampleRate,
-        0,
-        nullptr
+        nullptr,                              // swr ctx（nullptr 表示新建）
+        m_audioEncCtx->channel_layout,        // 输出声道布局（编码器要求的）
+        m_audioEncCtx->sample_fmt,            // 输出采样格式（fltp）
+        m_audioEncCtx->sample_rate,           // 输出采样率
+        AV_CH_LAYOUT_STEREO,                  // 输入声道布局（硬件采集的）
+        AV_SAMPLE_FMT_S16,                    // 输入采样格式（s16）
+        gAudioCaptureConfig.outSampleRate,    // 输入采样率
+        0,                                    // log offset
+        nullptr                               // log context
     );
     if (!m_swrCtx) {
         std::cerr << "swr_alloc_set_opts failed" << std::endl;
@@ -503,14 +362,16 @@ int Mp4Muxer::initAudioEncoder()
         return -1;
     }
 
+    // 分配编码用的 AVFrame
     m_audioFrame = av_frame_alloc();
     if (!m_audioFrame) {
         return -1;
     }
+    // 配置编码帧参数
     m_audioFrame->format = m_audioEncCtx->sample_fmt;
     m_audioFrame->channel_layout = m_audioEncCtx->channel_layout;
     m_audioFrame->sample_rate = m_audioEncCtx->sample_rate;
-    m_audioFrame->nb_samples = m_audioEncCtx->frame_size > 0 ? m_audioEncCtx->frame_size : 1024;
+    m_audioFrame->nb_samples = m_audioEncCtx->frame_size;  // 编码器要求的采样数（AAC为1024）
     ret = av_frame_get_buffer(m_audioFrame, 0);
     if (ret < 0) {
         std::cerr << "av_frame_get_buffer(audio) failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
@@ -518,19 +379,6 @@ int Mp4Muxer::initAudioEncoder()
     }
 
     return 0;
-}
-
-void Mp4Muxer::releaseAudioEncoder()
-{
-    if (m_audioFrame) {
-        av_frame_free(&m_audioFrame);
-    }
-    if (m_swrCtx) {
-        swr_free(&m_swrCtx);
-    }
-    if (m_audioEncCtx) {
-        avcodec_free_context(&m_audioEncCtx);
-    }
 }
 
 int Mp4Muxer::writeAudioFrame(AVFrame *frame)
@@ -578,95 +426,54 @@ int Mp4Muxer::writeAudioFrame(AVFrame *frame)
     return 0;
 }
 
-int Mp4Muxer::processAudioChunk(const QByteArray &pcmData, uint64_t captureTsUs)
+int Mp4Muxer::writeAudioToMp4(QByteArray pcmData, uint64_t captureTsUs)
 {
-    if (!m_audioEncCtx || !m_audioFrame || !m_swrCtx) {
+    if (!m_outFmt || !m_audioEncCtx || pcmData.isEmpty()) {
+        return 0;
+    }
+
+    // 等待 MP4 header 写完
+    if (!m_headerWritten) {
+        return 0;
+    }
+
+    if (!m_audioPtsInited) {
+        m_audioPtsInited = true;
+        m_audioPtsBaseUs = captureTsUs;
+    }
+    // 每次都用输入时间戳更新 PTS 基准，映射到编码器 time_base（采样点）
+    int64_t deltaUs = static_cast<int64_t>(captureTsUs - m_audioPtsBaseUs);
+    
+    // 确保buffer是可写的
+    int ret = av_frame_make_writable(m_audioFrame);
+    if (ret < 0) {
+        std::cerr << "av_frame_make_writable(audio) failed: "
+                  << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
         return -1;
     }
 
-    ensureSyncBase(captureTsUs);
-    if (!m_audioPtsInited) {
-        // 关键同步点：
-        // - 音频首块的采集时间与全局基准做差，映射到“采样数时间轴”
-        // - 后续按编码帧样本数递增，避免受线程抖动影响
-        int64_t deltaUs = static_cast<int64_t>(captureTsUs - m_syncBaseUs);
-        if (deltaUs < 0) deltaUs = 0;
-        m_audioNextPts = av_rescale_q(deltaUs, AVRational{1, 1000000}, m_audioEncCtx->time_base);
-        m_audioPtsInited = true;
+    const uint8_t *srcData[1] = {
+        reinterpret_cast<const uint8_t *>(pcmData.constData())
+    };
+    ret = swr_convert(  // 音频格式转换 s16 -> fltp
+        m_swrCtx,
+        m_audioFrame->data,
+        m_audioFrame->nb_samples,
+        srcData,
+        m_audioFrame->nb_samples
+    );
+    if (ret < 0) {
+        std::cerr << "swr_convert failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        return -1;
     }
 
-    m_audioPcmCache.append(pcmData);
+    // 时间戳需要进行转换
+    m_audioFrame->pts = av_rescale_q(deltaUs, AVRational{1, 1000000}, m_audioEncCtx->time_base);
 
-    const int samplesPerFrame = m_audioFrame->nb_samples;
-    const int bytesPerInputSample = m_audioInputChannels * m_audioInputBytesPerSample;
-    const int bytesPerCodecFrame = samplesPerFrame * bytesPerInputSample;
-
-    while (m_audioPcmCache.size() >= bytesPerCodecFrame) {
-        int ret = av_frame_make_writable(m_audioFrame);
-        if (ret < 0) {
-            std::cerr << "av_frame_make_writable(audio) failed: "
-                      << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
-            return -1;
-        }
-
-        const uint8_t *srcData[1] = {
-            reinterpret_cast<const uint8_t *>(m_audioPcmCache.constData())
-        };
-        ret = swr_convert(
-            m_swrCtx,
-            m_audioFrame->data,
-            samplesPerFrame,
-            srcData,
-            samplesPerFrame
-        );
-        if (ret < 0) {
-            std::cerr << "swr_convert failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
-            return -1;
-        }
-
-        m_audioFrame->pts = m_audioNextPts;
-        m_audioNextPts += m_audioFrame->nb_samples;
-
-        if (writeAudioFrame(m_audioFrame) < 0) {
-            return -1;
-        }
-
-        m_audioPcmCache.remove(0, bytesPerCodecFrame);
+    if (writeAudioFrame(m_audioFrame) < 0) {
+        return -1;
     }
     return 0;
-}
-
-void Mp4Muxer::flushPendingAudio()
-{
-    if (!m_headerWritten || m_pendingAudioChunks.isEmpty()) {
-        return;
-    }
-
-    for (const AudioChunk &chunk : m_pendingAudioChunks) {
-        processAudioChunk(chunk.pcm, chunk.tsUs);
-    }
-    m_pendingAudioChunks.clear();
-}
-
-void Mp4Muxer::flushAudioEncoder()
-{
-    if (!m_audioEncCtx || !m_audioFrame || !m_swrCtx) {
-        return;
-    }
-
-    if (!m_audioPcmCache.isEmpty()) {
-        // 收尾时不足一帧的 PCM，补 0 到完整 AAC 帧，避免尾音丢失。
-        const int bytesPerInputSample = m_audioInputChannels * m_audioInputBytesPerSample;
-        const int bytesPerCodecFrame = m_audioFrame->nb_samples * bytesPerInputSample;
-        if (m_audioPcmCache.size() < bytesPerCodecFrame) {
-            m_audioPcmCache.append(QByteArray(bytesPerCodecFrame - m_audioPcmCache.size(), '\0'));
-        }
-        QByteArray lastChunk = m_audioPcmCache;  // 拷贝补零后的数据
-        m_audioPcmCache.clear();                  // 先清缓存，避免 processAudioChunk 重复 append
-        processAudioChunk(lastChunk, m_syncBaseUs);
-    }
-
-    writeAudioFrame(nullptr); // flush encoder delayed packets
 }
 
 int Mp4Muxer::addMp4Stream()
@@ -753,23 +560,8 @@ int Mp4Muxer::addSpsPpsAndWriteHeader()
         return -1;
     }
     m_headerWritten = true;
-    flushPendingAudio();
+
     return 0;
-}
-
-int Mp4Muxer::writeAudioToMp4(QByteArray pcmData, uint64_t captureTsUs)
-{
-    if (!m_outFmt || !m_audioEncCtx || pcmData.isEmpty()) {
-        return 0;
-    }
-
-    if (!m_headerWritten) {
-        // MP4 header 写完前不能写包；先缓存，待拿到 SPS/PPS 写完 header 后再补写。
-        m_pendingAudioChunks.push_back({pcmData, captureTsUs});
-        return 0;
-    }
-
-    return processAudioChunk(pcmData, captureTsUs);
 }
 
 int Mp4Muxer::writeVideoToMp4(VENC_STREAM_S *pstStream)
@@ -862,20 +654,23 @@ int Mp4Muxer::writeVideoToMp4(VENC_STREAM_S *pstStream)
             continue;
         }
 
-        ensureSyncBase(pack->u64PTS);
         if (!m_videoPtsInited) {
             m_videoPtsInited = true;
-            m_videoPtsBaseUs = m_syncBaseUs;
+            m_videoPtsBaseUs = pack->u64PTS;
         }
         AVPacket pkt;
         av_init_packet(&pkt);
         pkt.flags = (pack->DataType.enH264EType == H264E_NALU_IDRSLICE ||
                      pack->DataType.enH264EType == H264E_NALU_ISLICE) ? AV_PKT_FLAG_KEY : 0;
-        AVStream *vst = m_outFmt->streams[m_videoStreamIndex];
-        pkt.stream_index = vst->index;
-        // 视频时间戳与音频共享同一个同步基准 m_syncBaseUs。
         int64_t deltaUs = static_cast<int64_t>(pack->u64PTS - m_videoPtsBaseUs);
-        if (deltaUs < 0) deltaUs = 0;
+        // printf("Video PTS = %ld  pack->u64PTS = %ld  m_videoPtsBaseUs = %ld\r\n", 
+        //     deltaUs, pack->u64PTS, m_videoPtsBaseUs);
+
+        if (deltaUs <= m_lastVideoPtsUs) {
+            // PTS 未递增，跳过此帧避免时间戳回退
+            continue;
+        }
+        m_lastVideoPtsUs = deltaUs;
         pkt.pos = -1;
         QByteArray avccPacket;
         if (!annexbToAvcc(payload, payloadLen, avccPacket)) {
@@ -891,6 +686,8 @@ int Mp4Muxer::writeVideoToMp4(VENC_STREAM_S *pstStream)
         pkt.pts = deltaUs;
         pkt.dts = deltaUs;
         pkt.duration = 33333;
+
+        // printf("Video PTS = %ld \r\n", deltaUs);
 
         int ret = av_interleaved_write_frame(m_outFmt, &pkt);
         av_packet_unref(&pkt);

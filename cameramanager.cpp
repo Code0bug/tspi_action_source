@@ -107,7 +107,7 @@ void CameraManager::startCapture()
 
                     emit videoFinishedToUpdate(savePath_mp4, ui_frame); // 更新录像列表
                     emit videoFinishedToIMURecord(fileName);  // 将开始录像的时间戳发送给imu记录文件
-                    emit sigVideoMp4Init(savePath_mp4);  // MP4初始化
+                    emit sigVideoMp4Init(savePath_mp4);       // MP4初始化
                 }
 
                 // 零拷贝 RGA：NV12 → BGR888，直接写入 DMA 双缓冲

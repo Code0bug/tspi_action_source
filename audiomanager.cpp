@@ -92,6 +92,9 @@ void AudioManager::startCapture()
     }
 
     isRunning = 1;
+    const int bytesPerCodecFrame = 1024 * gAudioCaptureConfig.outChannel * 2; // 1024 samples × channels × 2bytes(s16)
+    QByteArray pcmCache;
+    uint64_t lastPts = 0;
     while (isRunning) {
         AUDIO_FRAME_S frame;
         RK_S32 ret = RK_MPI_AI_GetFrame(gAudioCaptureConfig.devId, gAudioCaptureConfig.chnId, &frame, RK_NULL, -1);
@@ -101,16 +104,27 @@ void AudioManager::startCapture()
 
         // printf("Audio PTS = %ld\r\n", frame.u64TimeStamp);
 
+        // 发送给MP4封装音频流
         void *data = RK_MPI_MB_Handle2VirAddr(frame.pMbBlk);
         RK_U64 len = RK_MPI_MB_GetLength(frame.pMbBlk);
         if (data != nullptr && len > 0) {
             int copyLen = (len > static_cast<RK_U64>(INT_MAX)) ? INT_MAX : static_cast<int>(len);
-            QByteArray pcm(reinterpret_cast<const char *>(data), copyLen);
-            emit capFinishedToAudio(pcm, frame.u64TimeStamp);
+            pcmCache.append(reinterpret_cast<const char *>(data), copyLen);
+            lastPts = frame.u64TimeStamp;
+            // printf("audio capture pcm bytes: %d, cache: %d\n", copyLen, pcmCache.size());
+            
+            // AAC 编码帧一次需要1024个采样（1024帧），也就是4096字节
+            // RK AI 接收的一帧frame数据大小固定为1024字节，所以要攒4次达到4096字节再发送进行编码
+            while (pcmCache.size() >= bytesPerCodecFrame) {
+                QByteArray oneFrame = pcmCache.left(bytesPerCodecFrame);
+                pcmCache.remove(0, bytesPerCodecFrame);
+                emit capFinishedToAudio(oneFrame, lastPts);
+            }
         }
 
         RK_MPI_AI_ReleaseFrame(gAudioCaptureConfig.devId, gAudioCaptureConfig.chnId, &frame, RK_NULL);
     }
+
 
     deinitChannel();
 }

@@ -80,31 +80,39 @@ connect(audioManager, &AudioManager::capFinishedToAudio,
 #4  Mp4Muxer::closeMp4Mux (mp4muxer.cpp:391)
 ```
 
-Mp4Muxer 对象状态：`m_videoStreamIndex=1`, `m_audioStreamIndex=1`, `m_headerWritten=1`, `m_audioNextPts=0x0f5a7b`（非零）。
+**根因：视频 PTS 重复为 0，导致 av_write_trailer 段错误**
 
-**根因：`flushAudioEncoder()` bug，导致音频流 0 sample**
+复现条件：音视频同时写 MP4 + 每次开机后第一次运行程序。
 
-`flushAudioEncoder()` 第 664 行：
+打印视频 PTS 发现前两帧都是 0：
 
-```cpp
-processAudioChunk(QByteArray(), m_syncBaseUs);  // ← BUG
+```
+Video PTS = 0
+Video PTS = 0
+Video PTS = 33330
+Video PTS = 66710
+...
 ```
 
-`processAudioChunk` 入口检查 `pcmData.isEmpty()` 直接 return 0，所以：
-1. 缓存中已补零的 PCM 永远不会被送入编码器（尾音丢失）
-2. 如果 `m_audioPcmCache` 本身为空，整个 if 块被跳过
-3. 编码器从未收到数据 → flush 输出 0 packet → 音频流 0 sample
-4. `av_write_trailer` 写 stbl 时访问空 sample table → 崩溃
+开机后第一次录像时，硬件时间戳初始化有延迟，前两帧拿到相同的 PTS 值。PTS 未严格递增，`av_write_trailer` 内部处理 stbl（sample table）时遇到重复 PTS 导致段错误。
 
-**为什么"运行一段时间后"才出现**：录像时间够长时音频 cache 能凑出整帧，`processAudioChunk` 正常写入，音频流有 sample。只有录像短或音频采集延迟时 cache 不足一帧，才会 0 sample 崩溃。
+### 修复
 
-### 修复尝试
+`writeVideoToMp4` 中增加 PTS 递增检查，跳过 PTS 未递增的帧：
 
-`mp4muxer.cpp:664`：将 `processAudioChunk(QByteArray(), ...)` 改为 `processAudioChunk(m_audioPcmCache, ...)` + `m_audioPcmCache.clear()`。
+```cpp
+int64_t deltaUs = static_cast<int64_t>(pack->u64PTS - m_videoPtsBaseUs);
+if (deltaUs < 0) deltaUs = 0;
+if (deltaUs <= m_lastVideoPtsUs) {
+    // PTS 未递增，跳过此帧避免时间戳回退
+    continue;
+}
+m_lastVideoPtsUs = deltaUs;
+```
 
 ### 当前状态
 
-修复后仍可复现，根因可能不止 `flushAudioEncoder` 一处，需进一步分析。
+已解决。
 
 ---
 
