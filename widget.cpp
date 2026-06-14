@@ -224,6 +224,7 @@ Widget::Widget(QWidget *parent)
     connect(cameraManager, &CameraManager::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
     connect(cameraManager, &CameraManager::videoFinishedToIMURecord, imuReader, &IMUReader::record_imu_data);  // 开始录像时IMU开始记录
     connect(cameraManager, &CameraManager::capFinishedToVideo, videoEncoder, &VideoEncoder::do_save_video);  // 保存录像
+    connect(videoEncoder, &VideoEncoder::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection); // 编码完成释放VI帧
     // connect(videoEncoder, &VideoEncoder::sigVideoEncoded, mp4Muxer, &Mp4Muxer::slotWriteVideoEncoded, Qt::QueuedConnection); // 编码流送mp4封装
     connect(cameraManager, &CameraManager::photoFinishedToSave, savePicture, &SavePicture::do_save_picture);  // 保存照片
     connect(savePicture, &SavePicture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 保存照片后更新相册列表

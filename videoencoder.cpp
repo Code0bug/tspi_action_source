@@ -19,7 +19,7 @@ VideoEncoder::VideoEncoder()
     h264_frame.stVFrame.u32Height = encHeight;
     h264_frame.stVFrame.u32VirWidth = encWidth;
     h264_frame.stVFrame.u32VirHeight = encHeight;
-    h264_frame.stVFrame.enPixelFormat = RK_FMT_RGB888;
+    h264_frame.stVFrame.enPixelFormat = RK_FMT_YUV420SP;
     h264_frame.stVFrame.u32FrameFlag = 160;
 
     // rkmpi init
@@ -58,6 +58,9 @@ void VideoEncoder::do_save_video(void* mbBlk, uint64_t pts)
         RK_LOGE("RK_MPI_VENC_SendFrame fail %x", s32Ret);
         return;
     }
+
+    // 编码器已持有帧引用，通知 CameraManager 释放 VI 帧
+    emit sigReleaseViFrame(mbBlk);
 
     /**************************
      * 获取编码码流

@@ -13,6 +13,7 @@
 
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
+#include <QHash>
 
 #include "im2d.h"
 #include "rga.h"
@@ -36,6 +37,7 @@ public slots:
     void startVideo();
     void stopVideo();
     void takePhoto();
+    void releaseViFrame(void* mbBlk);
 
 private:
     cv::Mat stabilizeFrame(const cv::Mat& frame);
@@ -44,10 +46,9 @@ private:
     uint8_t video_flag;
     uint8_t first_video_frame;
 
-    // 零拷贝录像：BGR 输出 DMA 双缓冲
-    MB_BLK bgr_blk_[2];
-    RK_S32 bgr_fd_[2];
-    int write_idx_;
+    // 编码中待释放的 VI 帧：MB_BLK → VIDEO_FRAME_INFO_S
+    QHash<void*, VIDEO_FRAME_INFO_S> pendingViFrames_;
+
 
 signals:
     void capFinishedToUI(cv::Mat imgbuf);

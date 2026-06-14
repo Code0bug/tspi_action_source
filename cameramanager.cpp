@@ -12,39 +12,11 @@ CameraManager::CameraManager()
     isRunning = 0;
     photo_flag = 0;
     video_flag = 0;
-    write_idx_ = 0;
-
-    // 分配 BGR 输出 DMA 双缓冲（用于零拷贝录像）
-    RK_U32 bgr_frame_size = 1920 * 1080 * 3;  // BGR888
-    for (int i = 0; i < 2; i++) {
-        bgr_blk_[i] = MB_INVALID_HANDLE;
-        bgr_fd_[i] = -1;
-        RK_S32 ret = RK_MPI_MMZ_Alloc(&bgr_blk_[i], bgr_frame_size, RK_MMZ_ALLOC_TYPE_IOMMU);
-        if (ret != RK_SUCCESS) {
-            RK_LOGE("BGR DMA buffer %d alloc failed: %x", i, ret);
-            continue;
-        }
-        bgr_fd_[i] = RK_MPI_MMZ_Handle2Fd(bgr_blk_[i]);
-        if (bgr_fd_[i] < 0) {
-            RK_LOGE("BGR DMA buffer %d get fd failed: %x", i, bgr_fd_[i]);
-            RK_MPI_MMZ_Free(bgr_blk_[i]);
-            bgr_blk_[i] = MB_INVALID_HANDLE;
-        }
-    }
 
 }
 
 CameraManager::~CameraManager()
 {
-    // 释放 BGR DMA 双缓冲
-    for (int i = 0; i < 2; i++) {
-        if (bgr_blk_[i] != MB_INVALID_HANDLE) {
-            RK_MPI_MMZ_Free(bgr_blk_[i]);
-            bgr_blk_[i] = MB_INVALID_HANDLE;
-            bgr_fd_[i] = -1;
-        }
-    }
-
     RK_MPI_VI_DisableChn(0, 0);
     RK_MPI_VI_DisableChn(0, 1);
     RK_MPI_VI_DisableDev(0);
@@ -110,21 +82,13 @@ void CameraManager::startCapture()
                     emit sigVideoMp4Init(savePath_mp4);       // MP4初始化
                 }
 
-                // 零拷贝 RGA：NV12 → BGR888，直接写入 DMA 双缓冲
-                int idx = write_idx_;
-                write_idx_ = 1 - write_idx_;
-
-                RK_S32 src_fd = RK_MPI_MB_Handle2Fd(stViFrame.stVFrame.pMbBlk);
-                if (src_fd >= 0 && bgr_blk_[idx] != MB_INVALID_HANDLE) {
-                    rga_buffer_t src_img_video = wrapbuffer_fd(src_fd, width, height, RK_FORMAT_YCrCb_420_SP);
-                    rga_buffer_t dst_img_video = wrapbuffer_fd(bgr_fd_[idx], 1920, 1080, RK_FORMAT_BGR_888);
-                    IM_STATUS rga_ret = imcvtcolor(src_img_video, dst_img_video, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_BGR_888);
-                    if (rga_ret == IM_STATUS_SUCCESS) {
-                        capFinishedToVideo(reinterpret_cast<void*>(bgr_blk_[idx]), stViFrame.stVFrame.u64PTS);
-                    } else {
-                        RK_LOGE("RGA imcvtcolor(recording) failed: %d", rga_ret);
-                    }
-                }
+                // 零拷贝：直接传 NV12 MB_BLK 给编码线程，不做 RGA 转换
+                // 注意：此处不释放 VI 帧，由编码线程完成后通过 sigReleaseViFrame 回调释放
+                void* key = reinterpret_cast<void*>(stViFrame.stVFrame.pMbBlk);
+                pendingViFrames_[key] = stViFrame;
+                emit capFinishedToVideo(key, stViFrame.stVFrame.u64PTS);
+                emit capFinishedToUI(ui_frame); // 录像时也要更新预览画面
+                continue; // 跳过下面的 ReleaseChnFrame，等编码完成后回调释放
             }
 
             emit capFinishedToUI(ui_frame);
@@ -224,6 +188,24 @@ void CameraManager::stopVideo()
 {
     video_flag = 0;
     emit videoFinishedToMP4();
+}
+
+void CameraManager::releaseViFrame(void* mbBlk)
+{
+    auto it = pendingViFrames_.find(mbBlk);
+    if (it == pendingViFrames_.end()) {
+        RK_LOGE("releaseViFrame: unknown mbBlk %p", mbBlk);
+        return;
+    }
+
+    VIDEO_FRAME_INFO_S stViFrame = it.value();
+    pendingViFrames_.erase(it);
+
+    // 释放 VI 通道 1 的帧（与 startCapture 中 GetChnFrame(0,1) 对应）
+    RK_S32 s32Ret = RK_MPI_VI_ReleaseChnFrame(0, 1, &stViFrame);
+    if (s32Ret != RK_SUCCESS) {
+        RK_LOGE("releaseViFrame fail %x", s32Ret);
+    }
 }
 
 
