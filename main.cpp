@@ -4,6 +4,8 @@
 #include <QGraphicsView>
 #include <QGraphicsProxyWidget>
 #include <QFontDatabase>
+#include <QScreen>
+#include <QFrame>
 #include <csignal>
 
 static void shutdownHandler(int)
@@ -52,8 +54,14 @@ int main(int argc, char *argv[])
     Widget *from = new Widget; //项目主窗口
     QGraphicsScene *scene = new QGraphicsScene;
     QGraphicsProxyWidget *w = scene->addWidget(from);
+    w->setTransformOriginPoint(w->rect().center());
     w->setRotation(270);
     QGraphicsView *view = new QGraphicsView(scene);
+    view->setFrameStyle(QFrame::NoFrame);
+    view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    view->setRenderHint(QPainter::SmoothPixmapTransform, true);
+    view->setBackgroundBrush(Qt::black);
 
     // 设置字体
     int my_font = QFontDatabase::addApplicationFont("/usr/lib/fonts/WenQuanZhengHei-1.ttf");
@@ -64,8 +72,14 @@ int main(int argc, char *argv[])
         a.setFont(fontthis);
     }
 
+    // 用旋转后 Item 的实际 Scene 包围盒作为 sceneRect，避免默认值把可见区裁到一角
+    scene->setSceneRect(scene->itemsBoundingRect());
 
-    view->show();
+    // 取屏几何（eglfs/linuxfb 都适用），全屏并自适应内容
+    QRect sg = a.primaryScreen()->geometry();
+    view->setGeometry(sg);
+    view->showFullScreen();
+    view->fitInView(scene->sceneRect(), Qt::KeepAspectRatio);
 
     signal(SIGINT, shutdownHandler);
 

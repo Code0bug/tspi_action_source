@@ -26,4 +26,5 @@ for i in /etc/profile.d/*.sh ; do
 done
 unset i
 
-export QT_QPA_PLATFORM=linuxfb
+export QT_QPA_PLATFORM=eglfs
+export QT_QPA_EGLFS_INTEGRATION=eglfs_kms

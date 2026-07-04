@@ -3,7 +3,9 @@
 case "$1" in
     start)
         echo "Starting ai-cam-ui-widget..."
-        /root/ai-cam-ui-widget --platform linuxfb &
+        export QT_QPA_PLATFORM=eglfs
+        export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
+        /root/ai-cam-ui-widget &
         ;;
     stop)
         echo "Stopping ai-cam-ui-widget..."
