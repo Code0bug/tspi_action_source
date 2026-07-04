@@ -1,5 +1,6 @@
 #include "widget.h"
 #include "ui_widget.h"
+#include "videoglwidget.h"
 #include <cstdint>
 
 // 用于fps显示
@@ -220,11 +221,16 @@ Widget::Widget(QWidget *parent)
     videoDecoder->moveToThread(videoDecoderThread);
 
     // 连接信号
-    connect(cameraManager, &CameraManager::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示
+    connect(cameraManager, &CameraManager::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示（fd 零拷贝路径）
     connect(cameraManager, &CameraManager::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
     connect(cameraManager, &CameraManager::videoFinishedToIMURecord, imuReader, &IMUReader::record_imu_data);  // 开始录像时IMU开始记录
     connect(cameraManager, &CameraManager::capFinishedToVideo, videoEncoder, &VideoEncoder::do_save_video);  // 保存录像
     connect(videoEncoder, &VideoEncoder::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection); // 编码完成释放VI帧
+    // 预览路径 VI 帧释放：VideoGLWidget::paintGL EGLImage 绑定成功后 → frameConsumed → previewFrameDone → releaseViFrame
+    connect(ui->openGLWidget, &VideoGLWidget::frameConsumed, this, [this](void* mbBlk){
+        emit previewFrameDone(mbBlk);
+    }, Qt::DirectConnection);
+    connect(this, &Widget::previewFrameDone, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection);
     // connect(videoEncoder, &VideoEncoder::sigVideoEncoded, mp4Muxer, &Mp4Muxer::slotWriteVideoEncoded, Qt::QueuedConnection); // 编码流送mp4封装
     connect(cameraManager, &CameraManager::photoFinishedToSave, savePicture, &SavePicture::do_save_picture);  // 保存照片
     connect(savePicture, &SavePicture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 保存照片后更新相册列表
@@ -334,76 +340,23 @@ Widget::~Widget()
 //}
 
 
-void Widget::doShow(cv::Mat img)  // 预览和录像
+void Widget::doShow(int fd, int w, int h, void* mbBlk, uint64_t pts)  // 预览（VideoGLWidget 零拷贝路径）
 {
-
+    // FPS 统计（OSD 由 VideoGLWidget::paintGL 用 QPainter 绘制，此处仅算值）
     static int64_t time_last = 0;
-    // 获取当前时间点
     auto now = std::chrono::system_clock::now();
-    // 转换为自1970年1月1日以来的毫秒数
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-    // 获取毫秒级时间戳
     int64_t timestamp = duration.count();
     int64_t fps_time = timestamp - time_last;
-    fps = 1000 / fps_time;
-
+    if (fps_time > 0) fps = 1000 / fps_time;
     time_last = timestamp;
-
     sprintf(fps_text, "FPS:%.0f", fps);
-    cv::putText(img, fps_text,
-                    cv::Point(420, 40),
-                    cv::FONT_HERSHEY_SIMPLEX,1,
-                    cv::Scalar(220,220,220),2);
 
-    if (video_flag) { // 录像时，显示录像时长
-
-        QDateTime now = QDateTime::currentDateTime();
-        qint64 elapsedMS = recordStartTime.msecsTo(now);  // 毫秒
-        int seconds = (elapsedMS / 1000) % 60;
-        int minutes = (elapsedMS / (1000*60)) % 60;
-
-        // 构造分钟和秒的字符串
-        QString elapsedTime = QString("%1:%2")
-                                .arg(minutes, 2, 10, QChar('0'))
-                                .arg(seconds, 2, 10, QChar('0'));
-
-        // 转 std::string
-        std::string text = elapsedTime.toStdString();
-
-        // 获取文字尺寸
-        int fontFace = cv::FONT_HERSHEY_SIMPLEX;
-        double fontScale = 1;
-        int thickness = 2;
-        int baseline = 0;
-        cv::Size textSize = cv::getTextSize(text, fontFace, fontScale, thickness, &baseline);
-
-        // 绘制红色背景矩形
-        cv::Point textOrg(20, 40);
-        cv::rectangle(img,
-                      textOrg + cv::Point(-3, baseline),
-                      textOrg + cv::Point(textSize.width, -textSize.height-5),
-                      cv::Scalar(0, 0, 255),
-                      cv::FILLED);
-
-        // 绘制白色文字
-        cv::putText(img, text, textOrg, fontFace, fontScale, cv::Scalar(220, 220, 220), thickness);
-
-        QImage image(img.data, img.cols, img.rows, QImage::Format_BGR888);
-        ui->video_label_3->setPixmap(QPixmap::fromImage(image));
-
-    } else {  // 非录像下，显示系统时间
-        QString timeStr = QDateTime::currentDateTime().toString("HH'h'mm'm'");
-        cv::putText(img, timeStr.toStdString(),
-                    cv::Point(20, 40),
-                    cv::FONT_HERSHEY_SIMPLEX, 1,
-                    cv::Scalar(220,220,220), 2);
-
-        QImage image(img.data, img.cols, img.rows, QImage::Format_BGR888);
-        ui->video_label->setPixmap(QPixmap::fromImage(image));
+    // 把 fd + mbBlk 一起传给 VideoGLWidget；mbBlk 在 paintGL EGLImage 绑定成功后
+    // 通过 frameConsumed 信号回发，再 emit previewFrameDone 给 CameraManager 释放 VI 帧
+    if (ui->openGLWidget) {
+        ui->openGLWidget->setDmaBuf(fd, w, h, mbBlk);
     }
-
-
-
 }
 
 void Widget::doShowVideo(cv::Mat img)  // 播放录像

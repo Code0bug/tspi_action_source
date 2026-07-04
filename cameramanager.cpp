@@ -43,60 +43,60 @@ void CameraManager::startCapture()
 
         if(s32Ret == RK_SUCCESS) {
 
-            // printf("Camera PTS = %ld\r\n", stViFrame.stVFrame.u64PTS);
-
-            unsigned char* dat = reinterpret_cast<unsigned char*>(RK_MPI_MB_Handle2VirAddr(stViFrame.stVFrame.pMbBlk));
-
-            // 转换为RGB888格式
             int height = stViFrame.stVFrame.u32Height;
-            int width = stViFrame.stVFrame.u32Width;
+            int width  = stViFrame.stVFrame.u32Width;
 
-            cv::Mat ui_frame(368, 552, CV_8UC3);
+            // 录像首帧仍需要 cv::Mat 写 jpg 缩略图，仅这一帧走 RGA 软件转换
+            if (video_flag && first_video_frame) {
+                first_video_frame = 0;
 
-            // 利用rga进行像素格式转换（预览路径，仍用 virtualaddr）
-            rga_buffer_t src_img = wrapbuffer_virtualaddr(dat, width, height, RK_FORMAT_YCrCb_420_SP);
-            rga_buffer_t dst_img = wrapbuffer_virtualaddr(ui_frame.data, 552, 368, RK_FORMAT_RGB_888);
-            imresize(src_img, dst_img);
-            imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_RGB_888);
+                unsigned char* dat = reinterpret_cast<unsigned char*>(
+                    RK_MPI_MB_Handle2VirAddr(stViFrame.stVFrame.pMbBlk));
 
-            if (video_flag) { // 录像
+                cv::Mat ui_frame(368, 552, CV_8UC3);
+                rga_buffer_t src_img = wrapbuffer_virtualaddr(dat, width, height, RK_FORMAT_YCrCb_420_SP);
+                rga_buffer_t dst_img = wrapbuffer_virtualaddr(ui_frame.data, 552, 368, RK_FORMAT_RGB_888);
+                imresize(src_img, dst_img);
+                imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_RGB_888);
 
-                if (first_video_frame) { // 如果是录像的第一帧，取其作为封面
-                    first_video_frame = 0;
+                QDateTime current = QDateTime::currentDateTime();
+                QString fileName = current.toString("yyyyMMdd_hhmmss");
+                QString savePath_mp4 = "/userdata/video/" + fileName + ".mp4";
+                QString first_frame_savePath = "/userdata/firstFrame/" + fileName + ".jpg";
+                cv::imwrite(first_frame_savePath.toStdString(), ui_frame);
+                int fdJpg = open(first_frame_savePath.toStdString().c_str(), O_RDONLY);
+                fsync(fdJpg);
+                close(fdJpg);
 
-                    QDateTime current = QDateTime::currentDateTime();
-                    QString fileName = current.toString("yyyyMMdd_hhmmss");
-                    // 录像保存路径
-                    QString savePath_mp4 = "/userdata/video/" + fileName + ".mp4";
+                emit videoFinishedToUpdate(savePath_mp4, ui_frame);
+                emit videoFinishedToIMURecord(fileName);
+                emit sigVideoMp4Init(savePath_mp4);
+            }
 
-                    // 将封面图像保存
-                    QString first_frame_savePath = "/userdata/firstFrame/" + fileName + ".jpg";
-                    cv::imwrite(first_frame_savePath.toStdString(), ui_frame);
-                    // 强制刷盘，保证数据写入 eMMC
-                    int fd = open(first_frame_savePath.toStdString().c_str(), O_RDONLY);
-                    fsync(fd);
-                    close(fd);
+            // 零拷贝预览：传 VI 帧 NV12 的 fd 给 UI，由 VideoGLWidget EGLImage 导入 GPU
+            int vi_fd = RK_MPI_MB_Handle2Fd(stViFrame.stVFrame.pMbBlk);
+            void* key = reinterpret_cast<void*>(stViFrame.stVFrame.pMbBlk);
+            pendingViFrames_[key] = stViFrame;
 
-                    emit videoFinishedToUpdate(savePath_mp4, ui_frame); // 更新录像列表
-                    emit videoFinishedToIMURecord(fileName);  // 将开始录像的时间戳发送给imu记录文件
-                    emit sigVideoMp4Init(savePath_mp4);       // MP4初始化
-                }
 
-                // 零拷贝：直接传 NV12 MB_BLK 给编码线程，不做 RGA 转换
-                // 注意：此处不释放 VI 帧，由编码线程完成后通过 sigReleaseViFrame 回调释放
-                void* key = reinterpret_cast<void*>(stViFrame.stVFrame.pMbBlk);
-                pendingViFrames_[key] = stViFrame;
+            printf("VI frame: w=%d h=%d virW=%d virH=%d fmt=%d size=%llu len=%llu off=%u\n",
+       stViFrame.stVFrame.u32Width, stViFrame.stVFrame.u32Height,
+       stViFrame.stVFrame.u32VirWidth, stViFrame.stVFrame.u32VirHeight,
+       stViFrame.stVFrame.enPixelFormat,
+       (unsigned long long)RK_MPI_MB_GetSize(stViFrame.stVFrame.pMbBlk),
+       (unsigned long long)RK_MPI_MB_GetLength(stViFrame.stVFrame.pMbBlk),
+       RK_MPI_MB_GetOffset(stViFrame.stVFrame.pMbBlk));
+
+            int virW = stViFrame.stVFrame.u32VirWidth;
+            int virH = stViFrame.stVFrame.u32VirHeight;
+
+            if (video_flag) {
                 emit capFinishedToVideo(key, stViFrame.stVFrame.u64PTS);
-                emit capFinishedToUI(ui_frame); // 录像时也要更新预览画面
-                continue; // 跳过下面的 ReleaseChnFrame，等编码完成后回调释放
             }
-
-            emit capFinishedToUI(ui_frame);
-
-            s32Ret = RK_MPI_VI_ReleaseChnFrame(0, 1, &stViFrame);
-            if (s32Ret != RK_SUCCESS) {
-                RK_LOGE("RK_MPI_VI_ReleaseChnFrame fail %x", s32Ret);
-            }
+            emit capFinishedToUI(vi_fd, 1920, 1080, key, stViFrame.stVFrame.u64PTS);
+            // VI 帧延迟释放：等 UI（VideoGLWidget）回发 frameDisplayed 信号，编码器回发 sigReleaseViFrame
+            // 注意：若同时录像，释放信号必须有所有消费者都发完才能调 releaseViFrame
+            continue;
         }
     }
 

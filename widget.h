@@ -36,7 +36,7 @@ public:
     ~Widget();
 
 public slots:
-    void doShow(cv::Mat img);
+    void doShow(int fd, int w, int h, void* mbBlk, uint64_t pts);
     void switchToPage1();
     void switchToPage2();
     void switchToPage0();
@@ -49,14 +49,13 @@ public slots:
     void showPrevPhoto();
     void PicListItemClicked(QListWidgetItem *item);
     void VideoListItemClicked(QListWidgetItem *item);
-//    void stop_imu_record();
-//    void start_imu_record();
 
 
 signals:
     void WidgetToStartCapture();
     void WidgetToStopCapture();
     void WidgetToStartDecVideo(QString path);
+    void previewFrameDone(void* mbBlk);  // page0 VideoGLWidget 用完帧后回发释放
 
 
 private slots:

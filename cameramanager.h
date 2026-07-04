@@ -51,7 +51,8 @@ private:
 
 
 signals:
-    void capFinishedToUI(cv::Mat imgbuf);
+    // 预览改传 DMA-BUF 的 fd + 几何 + MB_BLK（MB_BLK 用于 UI 回发释放）
+    void capFinishedToUI(int fd, int w, int h, void* mbBlk, uint64_t pts);
     void capFinishedToVideo(void* mbBlk, uint64_t pts);
 //    void photoFinishedToUpdate(QString path);
     void videoFinishedToUpdate(QString path, cv::Mat first_frame);

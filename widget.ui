@@ -23,22 +23,6 @@
     </rect>
    </property>
    <widget class="QWidget" name="page0">
-    <widget class="QLabel" name="video_label">
-     <property name="geometry">
-      <rect>
-       <x>0</x>
-       <y>0</y>
-       <width>552</width>
-       <height>368</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>TextLabel</string>
-     </property>
-     <property name="scaledContents">
-      <bool>false</bool>
-     </property>
-    </widget>
     <widget class="QPushButton" name="switch2photo_button">
      <property name="geometry">
       <rect>
@@ -65,6 +49,22 @@
       <string/>
      </property>
     </widget>
+    <widget class="VideoGLWidget" name="openGLWidget">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>0</y>
+       <width>552</width>
+       <height>368</height>
+      </rect>
+     </property>
+     <property name="autoFillBackground">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <zorder>openGLWidget</zorder>
+    <zorder>switch2photo_button</zorder>
+    <zorder>switch2video_button</zorder>
    </widget>
    <widget class="QWidget" name="page1">
     <widget class="QPushButton" name="photoback_button">
@@ -230,6 +230,13 @@
    </widget>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>VideoGLWidget</class>
+   <extends>QOpenGLWidget</extends>
+   <header>videoglwidget.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

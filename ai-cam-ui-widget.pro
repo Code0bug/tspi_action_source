@@ -1,4 +1,5 @@
 QT       += core gui
+QT       += opengl
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -27,7 +28,8 @@ SOURCES += \
     videoencoder.cpp \
     videodecoder.cpp \
     mp4demuxer.cpp \
-    widget.cpp
+    widget.cpp \
+    videoglwidget.cpp
 
 HEADERS += \
     audiomanager.h \
@@ -41,7 +43,8 @@ HEADERS += \
     videoencoder.h \
     videodecoder.h \
     mp4demuxer.h \
-    widget.h
+    widget.h \
+    videoglwidget.h
 
 # 添加rockit/opencv/rknn头文件和动态库 $$PWD表示.pro文件所在目录
 INCLUDEPATH += \
@@ -75,7 +78,9 @@ LIBS += \
         -lavcodec \
         -lavutil \
         -lswresample \
-        -lswscale
+        -lswscale \
+        -lEGL \
+        -lGLESv2
 #        -lrkaiq
 
 FORMS += \

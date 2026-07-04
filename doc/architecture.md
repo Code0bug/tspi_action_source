@@ -72,15 +72,6 @@ MP4 文件 (.mp4)
 - **MB_BLK 传递**：信号 `capFinishedToVideo(void*, uint64_t)` 直接传 MB_BLK 指针，VideoEncoder 用 `reinterpret_cast<MB_BLK>` 还原后直接送 VENC
 - **无 memcpy**：整个录像路径 0 次 CPU 拷贝，VI → RGA → VENC 全部硬件 DMA 操作
 
-#### 性能数据（RK3566）
-
-| 指标 | 优化前 | 零拷贝 (RGA转BGR) | 零拷贝 (NV12直传) | 提升 |
-|------|--------|-------------------|-------------------|------|
-| 录像 RES | 199 MB | 118 MB | 63.6 MB | -68.0% |
-| 录像 %CPU | 169.9% | 117.6% | 120.3% | -29.2% |
-| 录像 %MEM | 10.1% | 6.0% | 3.2% | -68.3% |
-| 每帧 memcpy | 6 MB | 0 | 0 | 消除 |
-| cv::Mat 分配/帧 | 1 次 | 0 | 0 | 消除 |
 
 #### 视频格式转换：Annex-B vs AVCC
 
