@@ -5,6 +5,8 @@ case "$1" in
         echo "Starting ai-cam-ui-widget..."
         export QT_QPA_PLATFORM=eglfs
         export QT_QPA_EGLFS_INTEGRATION=eglfs_kms
+        export QT_QPA_EGLFS_ROTATION=90
+        export QT_QPA_GENERIC_PLUGINS=evdevtouch:/dev/input/event4:rotate=90
         /root/ai-cam-ui-widget &
         ;;
     stop)

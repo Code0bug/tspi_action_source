@@ -51,15 +51,13 @@ void VideoGLWidget::initializeGL()
     }
 
     // shader：采样 GL_TEXTURE_EXTERNAL_OES（YUV→RGB 由 driver 自动完成）
-    // vertex shader 内做 270° 旋转，替代 QGraphicsView
+    // 旋转由 QT_QPA_EGLFS_ROTATION 硬件层完成，shader 不做旋转
     const char *vsrc =
         "attribute vec2 aPos;\n"
         "attribute vec2 aTexCoord;\n"
         "varying vec2 vTexCoord;\n"
         "void main() {\n"
-        "    // 270° 旋转： -> (y,-x)\n"
-        "    vec2 r = vec2(aPos.y, -aPos.x);\n"
-        "    gl_Position = vec4(r, 0.0, 1.0);\n"
+        "    gl_Position = vec4(aPos, 0.0, 1.0);\n"
         "    vTexCoord = aTexCoord;\n"
         "}\n";
     const char *fsrc =
@@ -110,42 +108,44 @@ bool VideoGLWidget::createEglImage()
     if (!s_eglCreateImageKHR || m_curFd < 0) return false;
 
     // EGL_EXT_image_dma_buf_import 属性列表
-    // fourcc==0 时默认 NV12 (DRM_FORMAT_NV12 = 0x3231564e)
+    // VI 通道输出 NV12 1920x1080，buffer 虽对齐到 1088，但 RK 给出的 plane1 偏移
+    // 实际是 stride*1080（紧贴 Y plane，无 padding）。
+    // 实测：EGL_HEIGHT 与 plane1 offset 都必须用有效高度 1080，用对齐高度 1088 会出现绿边
+    //   - EGL_HEIGHT=1088  → sampler 把 Y plane 末 8 行 padding(UV=0) 当图像采样
+    //   - plane1 offset=1920*1088 → UV 从错位位置读取，颜色错乱/绿边
+    // 所以这里统一用 m_curH，不要 hardcode 1088。
     quint32 fourcc = m_curFourcc ? m_curFourcc : 0x3231564eu; // 'NV12'
     quint32 stride = (quint32)m_curW;        // 1920，buffer 真实 stride
-    quint32 imgH   = (quint32)m_curH;        // 1080，图像有效高度 (spec: EGL_HEIGHT 是 image in pixels)
-    quint32 bufH   = 1088;                   // buffer 真实高度（16 对齐），用于 plane1 offset
-    // TODO: bufH 应从 RK_MPI_MB_GetSize 反推 (size/(1.5*stride))，先 hardcode 验证 spec 理解
 
     // 显式声明线性布局 modifier=0 (DRM_FORMAT_MOD_LINEAR)
     // 某些 Mali 驱动默认期待非 linear，不声明会拒收
     EGLint attr[] = {
         EGL_WIDTH,                       m_curW,                  // image width  = 1920
-        EGL_HEIGHT,                      (EGLint)bufH,            // buffer height = 1088 (试 driver 是否要 buffer 几何而非 image 几何)
+        EGL_HEIGHT,                      (EGLint)m_curH,           // 有效像素高度 1080
         EGL_LINUX_DRM_FOURCC_EXT,        (EGLint)fourcc,
         EGL_DMA_BUF_PLANE0_FD_EXT,       m_curFd,
         EGL_DMA_BUF_PLANE0_OFFSET_EXT,   0,
         EGL_DMA_BUF_PLANE0_PITCH_EXT,    (EGLint)stride,
         EGL_DMA_BUF_PLANE1_FD_EXT,       m_curFd,
-        EGL_DMA_BUF_PLANE1_OFFSET_EXT,   (EGLint)(stride * bufH), // buffer 真实 plane1 偏移 = 1920*1088
+        EGL_DMA_BUF_PLANE1_OFFSET_EXT,   (EGLint)(stride * (quint32)m_curH), // 1920*1080
         EGL_DMA_BUF_PLANE1_PITCH_EXT,    (EGLint)stride,
         EGL_NONE
     };
 
-// 用 Qt 当前 GL context 的 EGLDisplay（已 init），但 ctx 必须是 EGL_NO_CONTEXT
-// EGL_EXT_image_dma_buf_import 规范要求：target=EGL_LINUX_DMA_BUF_EXT 时 ctx 必须为 EGL_NO_CONTEXT
-EGLDisplay dpy = eglGetCurrentDisplay();
-const char *exts = eglQueryString(dpy, EGL_EXTENSIONS);
-printf("EGL_EXTS: %s\n", exts ? exts : "(null)");
-printf("EGL_LINUX_DMA_BUF_EXT=0x%x\n", EGL_LINUX_DMA_BUF_EXT);
-// 试 buffer=NULL，fd 只在 attr list 里传
-m_image = s_eglCreateImageKHR(dpy, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT,
-                              (EGLClientBuffer)0, attr);
-if (!m_image) {
-    qWarning("eglCreateImageKHR failed eglErr=0x%x fd=%d %dx%d fourcc=0x%x",
-             eglGetError(), m_curFd, m_curW, m_curH, fourcc);
-    return false;
-}
+    // 用 Qt 当前 GL context 的 EGLDisplay（已 init），但 ctx 必须是 EGL_NO_CONTEXT
+    // EGL_EXT_image_dma_buf_import 规范要求：target=EGL_LINUX_DMA_BUF_EXT 时 ctx 必须为 EGL_NO_CONTEXT
+    EGLDisplay dpy = eglGetCurrentDisplay();
+    const char *exts = eglQueryString(dpy, EGL_EXTENSIONS);
+    // printf("EGL_EXTS: %s\n", exts ? exts : "(null)");
+    // printf("EGL_LINUX_DMA_BUF_EXT=0x%x\n", EGL_LINUX_DMA_BUF_EXT);
+    // 试 buffer=NULL，fd 只在 attr list 里传
+    m_image = s_eglCreateImageKHR(dpy, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT,
+                                (EGLClientBuffer)0, attr);
+    if (!m_image) {
+        qWarning("eglCreateImageKHR failed eglErr=0x%x fd=%d %dx%d fourcc=0x%x",
+                eglGetError(), m_curFd, m_curW, m_curH, fourcc);
+        return false;
+    }   
 
     if (s_glEGLImageTargetTexture2DOES && m_tex) {
         glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_tex);
@@ -185,10 +185,10 @@ void VideoGLWidget::setDmaBuf(int fd, int w, int h, void* mbBlk, quint32 fourcc)
 
 void VideoGLWidget::paintGL()
 {
-    static int paintCount = 0;
-    if (paintCount++ % 30 == 0) {
-        printf("paintGL count=%d fd=%d tex=%u img=%p\n", paintCount, m_curFd, m_tex, m_image);
-    }
+    // static int paintCount = 0;
+    // if (paintCount++ % 30 == 0) {
+    //     printf("paintGL count=%d fd=%d tex=%u img=%p\n", paintCount, m_curFd, m_tex, m_image);
+    // }
 
     glClear(GL_COLOR_BUFFER_BIT);
 

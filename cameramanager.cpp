@@ -79,13 +79,13 @@ void CameraManager::startCapture()
             pendingViFrames_[key] = stViFrame;
 
 
-            printf("VI frame: w=%d h=%d virW=%d virH=%d fmt=%d size=%llu len=%llu off=%u\n",
-       stViFrame.stVFrame.u32Width, stViFrame.stVFrame.u32Height,
-       stViFrame.stVFrame.u32VirWidth, stViFrame.stVFrame.u32VirHeight,
-       stViFrame.stVFrame.enPixelFormat,
-       (unsigned long long)RK_MPI_MB_GetSize(stViFrame.stVFrame.pMbBlk),
-       (unsigned long long)RK_MPI_MB_GetLength(stViFrame.stVFrame.pMbBlk),
-       RK_MPI_MB_GetOffset(stViFrame.stVFrame.pMbBlk));
+    //         printf("VI frame: w=%d h=%d virW=%d virH=%d fmt=%d size=%llu len=%llu off=%u\n",
+    //    stViFrame.stVFrame.u32Width, stViFrame.stVFrame.u32Height,
+    //    stViFrame.stVFrame.u32VirWidth, stViFrame.stVFrame.u32VirHeight,
+    //    stViFrame.stVFrame.enPixelFormat,
+    //    (unsigned long long)RK_MPI_MB_GetSize(stViFrame.stVFrame.pMbBlk),
+    //    (unsigned long long)RK_MPI_MB_GetLength(stViFrame.stVFrame.pMbBlk),
+    //    RK_MPI_MB_GetOffset(stViFrame.stVFrame.pMbBlk));
 
             int virW = stViFrame.stVFrame.u32VirWidth;
             int virH = stViFrame.stVFrame.u32VirHeight;

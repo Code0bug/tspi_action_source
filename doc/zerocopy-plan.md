@@ -516,6 +516,8 @@ EGLint attr[] = {
 // dpy = eglGetCurrentDisplay()
 ```
 
+> ⚠️ **此 attr list 已被 §9.14 纠正**：`EGL_HEIGHT` 与 plane1 offset 用 `bufH=1088` 会导致画面顶部绿边，正确写法是两者都用有效像素高度 `m_curH=1080`。本节保留原文作为调试历程记录，**不要直接照抄**。
+
 ### 9.10 性能验证（M2 完成）
 
 零拷贝预览链路通了，摄像头画面在屏幕上显示。`top` 实测：
@@ -546,7 +548,7 @@ EGLint attr[] = {
 3. **`eglGetDisplay(EGL_DEFAULT_DISPLAY)` 在 Qt 应用里不能用**：Qt 已 init 过自己的 display，再 init 默认 display 会失败。用 `eglGetCurrentDisplay()` 取 Qt 的 display
 4. **`EGL_LINUX_DMA_BUF_EXT` 的 buffer 参数传 NULL**：Mali driver 期望 fd 只在 attr list 里传，buffer 参数为 NULL
 5. **`QOpenGLWidget` 不能在 `QGraphicsProxyWidget` 下出图**：Qt 已知限制。GL widget 必须直接作为顶层或普通 layout 子widget，不能经 QGraphicsView 旋转
-6. **rockit `u32VirHeight` 不可信**：报 1080，但 dma_buf 实际按 1088 分配（16 对齐）。用 `RK_MPI_MB_GetSize` 反推真实高度
+6. **rockit `u32VirHeight` 不可信**：报 1080，但 dma_buf 实际按 1088 分配（16 对齐）。用 `RK_MPI_MB_GetSize` 反推真实高度。**⚠️ 此条已被 §9.14 修订**：分配高度 1088 ≠ VI 实际写入高度 1080，EGLImage 的 `EGL_HEIGHT` 和 plane1 offset 必须用有效写入高度 1080，用 1088 会出绿边
 7. **dma_buf size 反推几何**：`size = stride × bufH × 1.5`（NV12），用 `/sys/kernel/debug/dma_buf/bufinfo` 确认真实 size
 
 ### 9.13 当前代码状态快照
@@ -561,4 +563,51 @@ EGLint attr[] = {
 
 ---
 
-_最后更新：2026-07-04，M2 预览零拷贝链路打通，CPU -57%，旋转待硬件方案_
+### 9.14 绿边问题：attr list 高度参数修正（2026-07-05）
+
+> **本节纠正 §9.9 的 attr list 与 §9.12 教训第 6 条**——之前关于 `bufH=1088` 的结论是错的。
+
+#### 现象
+
+M2 链路打通后预览能出图，但画面顶部有一条约 8 像素宽的绿色横边，整条 padding 区呈绿色。
+
+#### 误判回顾
+
+§9.7 尝试 1 当时反推 dma_buf size = 1920×1088×1.5 = 3,133,440，认定"buffer 按 1088 分配，rockit `u32VirHeight` 报 1080 是撒谎"。§9.9 据此把 `EGL_HEIGHT` 和 plane1 offset 都写成 1088：
+
+```cpp
+EGL_HEIGHT,                      (EGLint)bufH,             // 1088 ← 错
+EGL_DMA_BUF_PLANE1_OFFSET_EXT,   (EGLint)(stride * bufH),  // 1920*1088 ← 错
+```
+
+§9.12 教训 6 还把"必须用 1088"写成了结论。**这个结论是错的**：dma_buf 的总尺寸确实按 1088 对齐分配（3,133,440 字节），但 **VI 通道实际写入的 Y plane 是 1080 行，UV plane 紧贴在 stride×1080 处**，1080~1087 那 8 行是分配 padding 但 VI 并不写入有效数据。plane1 offset 必须按 VI 实际写入位置算（1080），不能按分配尺寸算（1088）。
+
+#### 两个错误叠加成绿边
+
+- `EGL_HEIGHT=1088`：告诉 GPU 图像是 1088 行，sampler 把 Y plane 末 8 行 padding（Y 任意、UV=0）当有效像素采样；
+- `plane1 offset=1920×1088`：UV 分量从错误位置读取，色度完全错乱，整条 padding 区呈绿色（YUV 中 U=V=0 配任意 Y 偏绿）。
+
+#### 修复
+
+`EGL_HEIGHT` 与 `EGL_DMA_BUF_PLANE1_OFFSET_EXT` 统一用有效像素高度 `m_curH`（VI 帧声明的 1080），不再 hardcode 1088：
+
+```cpp
+EGL_HEIGHT,                       (EGLint)m_curH,                  // 1080 有效像素
+EGL_DMA_BUF_PLANE1_OFFSET_EXT,   (EGLint)(stride * (quint32)m_curH), // 1920*1080，UV 紧贴 Y plane
+```
+
+`videoglwidget.cpp:120-131` 的注释也重写，明确不要再 hardcode 1088。绿边消失。
+
+#### 教训补充（修订 §9.12 #6）
+
+原教训 6 "rockit u32VirHeight 不可信，dma_buf 实际按 1088 分配"应改为：
+
+> **dma_buf 分配尺寸 ≠ VI 实际写入尺寸**。`RK_MPI_MB_GetSize` 反推的 1088 是 buffer 分配对齐高度（用于算总字节），但 VI 通道只写 1080 行，UV plane 紧贴 `stride×1080` 处。EGLImage 的 `EGL_HEIGHT` 和 plane offset 必须按**有效写入高度**（`u32Height`=1080），不是分配高度。两者混淆会引入 8 行 padding 被采样 → 绿边。
+
+#### 当前状态
+
+已解决。`bufH=1088` 这个死变量已从 `createEglImage` 删除。
+
+---
+
+_最后更新：2026-07-05，绿边问题修复（attr list 高度参数改用有效像素 1080），M2 预览零拷贝链路 CPU -57%，旋转已切环境变量方案_
