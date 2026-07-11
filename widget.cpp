@@ -352,16 +352,32 @@ void Widget::doShow(int fd, int w, int h, void* mbBlk, uint64_t pts)  // 预览�
     time_last = timestamp;
     sprintf(fps_text, "FPS:%.0f", fps);
 
-    // 把 fd + mbBlk 一起传给 VideoGLWidget；mbBlk 在 paintGL EGLImage 绑定成功后
+    // OSD：录像时画时长，非录像画系统时间；右上角始终画 FPS
+    QString topRight = QString::fromUtf8(fps_text);
+    QString topLeft;
+    if (video_flag) {
+        QDateTime now = QDateTime::currentDateTime();
+        qint64 elapsedMS = recordStartTime.msecsTo(now);
+        int seconds = (elapsedMS / 1000) % 60;
+        int minutes = (elapsedMS / (1000 * 60)) % 60;
+        topLeft = QString("%1:%2")
+                     .arg(minutes, 2, 10, QChar('0'))
+                     .arg(seconds, 2, 10, QChar('0'));
+    } else {
+        topLeft = QDateTime::currentDateTime().toString("HH'h'mm'm'");
+    }
+
     // 录像中（page5）用 openGLWidget_2 显示，否则用 page0 的 openGLWidget
     int curPage = ui->stackedWidget->currentIndex();
     if (curPage == 5) {
         if (ui->openGLWidget_2) {
             ui->openGLWidget_2->setDmaBuf(fd, w, h, mbBlk);
+            ui->openGLWidget_2->setOsdText(topLeft, topRight, video_flag);
         }
     } else {
         if (ui->openGLWidget) {
             ui->openGLWidget->setDmaBuf(fd, w, h, mbBlk);
+            ui->openGLWidget->setOsdText(topLeft, topRight, video_flag);
         }
     }
 }

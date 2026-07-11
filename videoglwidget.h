@@ -6,6 +6,8 @@
 #include <QOpenGLShader>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLBuffer>
+#include <QPainter>
+#include <QString>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GLES2/gl2.h>
@@ -28,6 +30,10 @@ public:
 
     // 释放当前帧的 GL/EGL 资源（切页/隐藏时调用，避免持有过期 DMA-BUF）
     void releaseFrame();
+
+    // OSD 叠加文字（由 paintGL 用 QPainter 直接在 GL widget 上绘制）
+    // recording=true 时左上角画红底白字（录像时长），否则无底色
+    void setOsdText(const QString& topLeft, const QString& topRight, bool recording = false);
 
 signals:
     // paintGL 完成 EGLImage 绑定后发出，用于通知上游可释放 VI 帧
@@ -59,6 +65,10 @@ int     m_curFd      = -1;
     int     m_curVirHeight = 0;
     quint32 m_curFourcc = 0;
     void*   m_curMbBlk  = nullptr;
+
+    QString m_osdTopLeft;
+    QString m_osdTopRight;
+    bool m_osdRecording = false;
 
     void resolveExt();
     bool createEglImage();

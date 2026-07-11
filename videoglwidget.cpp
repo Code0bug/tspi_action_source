@@ -188,52 +188,79 @@ void VideoGLWidget::setDmaBuf(int fd, int w, int h, void* mbBlk, quint32 fourcc,
     update();   // 触发 paintGL 重建 EGLImage
 }
 
+void VideoGLWidget::setOsdText(const QString &topLeft, const QString &topRight, bool recording)
+{
+    m_osdTopLeft  = topLeft;
+    m_osdTopRight = topRight;
+    m_osdRecording = recording;
+}
+
 void VideoGLWidget::paintGL()
 {
-    // static int paintCount = 0;
-    // if (paintCount++ % 30 == 0) {
-    //     printf("paintGL count=%d fd=%d tex=%u img=%p\n", paintCount, m_curFd, m_tex, m_image);
-    // }
-
     glClear(GL_COLOR_BUFFER_BIT);
 
-    if (m_curFd < 0) return;
+    if (m_curFd >= 0) {
+        destroyEglImage();
+        if (createEglImage()) {
+            m_program.bind();
+            m_vbo.bind();
 
-    // 销毁上一帧 EGLImage，再建本帧
-    destroyEglImage();
-    if (!createEglImage()) {
-        qWarning("VideoGLWidget createEglImage fail, frame dropped");
-        return;
+            int aPos      = m_program.attributeLocation("aPos");
+            int aTexCoord = m_program.attributeLocation("aTexCoord");
+            int sTex      = m_program.uniformLocation("sTex");
+
+            glEnableVertexAttribArray(aPos);
+            glEnableVertexAttribArray(aTexCoord);
+            glVertexAttribPointer(aPos,      2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)0);
+            glVertexAttribPointer(aTexCoord, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_tex);
+            m_program.setUniformValue(sTex, 0);
+
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+            glDisableVertexAttribArray(aPos);
+            glDisableVertexAttribArray(aTexCoord);
+            m_vbo.release();
+            m_program.release();
+
+            if (m_curMbBlk) {
+                emit sigReleaseViFrame(m_curMbBlk);
+                m_curMbBlk = nullptr;
+            }
+        }
     }
 
-    // 画全屏 quad
-    m_program.bind();
-    m_vbo.bind();
-
-    int aPos      = m_program.attributeLocation("aPos");
-    int aTexCoord = m_program.attributeLocation("aTexCoord");
-    int sTex      = m_program.uniformLocation("sTex");
-
-    glEnableVertexAttribArray(aPos);
-    glEnableVertexAttribArray(aTexCoord);
-    glVertexAttribPointer(aPos,      2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)0);
-    glVertexAttribPointer(aTexCoord, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
-
+    // OSD：native GL 绘制完成后，用 QPainter 在 GL widget 上叠加文字（GPU 光栅化）
+    glFinish();
+    glUseProgram(0);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_tex);
-    m_program.setUniformValue(sTex, 0);
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+    glDisable(GL_BLEND);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    QPainter painter(this);
+    if (!m_osdTopLeft.isEmpty() || !m_osdTopRight.isEmpty()) {
+        painter.setPen(QColor(255, 255, 255));
+        QFont font = painter.font();
+        font.setPixelSize(25);
+        font.setBold(true);
+        painter.setFont(font);
 
-    glDisableVertexAttribArray(aPos);
-    glDisableVertexAttribArray(aTexCoord);
-    m_vbo.release();
-    m_program.release();
-
-    // EGLImage 已成功绑定并采样，GPU 已持有 DMA-BUF 引用
-    // 通知上游：可以释放 VI 帧了
-    if (m_curMbBlk) {
-        emit sigReleaseViFrame(m_curMbBlk);
-        m_curMbBlk = nullptr;  // 只发一次，避免重复释放
+        if (!m_osdTopLeft.isEmpty()) {
+            QFontMetrics fm(font);
+            int textW = fm.horizontalAdvance(m_osdTopLeft);
+            int ascent = fm.ascent();
+            if (m_osdRecording) {
+                painter.fillRect(QRect(20 - 4, 30 - ascent - 2, textW + 8, ascent + fm.descent() + 4), QColor(200, 0, 0));
+            }
+            painter.drawText(QPoint(20, 30), m_osdTopLeft);
+        }
+        if (!m_osdTopRight.isEmpty()) {
+            QFontMetrics fm(font);
+            int textW = fm.horizontalAdvance(m_osdTopRight);
+            painter.drawText(QPoint(width() - textW - 20, 30), m_osdTopRight);
+        }
     }
+    painter.end();
 }

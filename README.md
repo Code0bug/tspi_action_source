@@ -142,3 +142,5 @@ rkaiq移植：需要在在 RkAiqCalibDbTypes.h 中添加 #define ISP_HW_V21。�
 **2026/7/5**：实现dma-buf+qtopengl的预览路径的零拷贝传输，使用环境变量来实现屏幕方向旋转。实现qtopengl显示需要将qlabel控件替换为OpenGL Widget控件，然后提升至自定义的类VideoGLWidget。目前只实现了预览，后面还要加录像播放。现在还有一个问题，就是切换到相册或者录像page，再切回来，画面就会变得非常卡。
 
 **2026/7/7**：当前发现一个bug，WidgetToStopCapture信号默认是QueuedConnection，所以会被阻塞，不会执行，切换相册时压根不会停摄像头，还有WidgetToStartCapture信号也没有在切换预览界面时emit。这个可能是导致画面变卡的原因，也是摄像头发热的原因。
+
+**2026/7/11**：修复画面卡顿问题和没stop摄像头的bug，实现视频流的全链路零拷贝，基于零拷贝的整体相机功能基本完成。目前还有个bug，就是切换相册/视频和预览界面时，会Segmentation fault，可能是切换动作时的代码所导致。
