@@ -108,26 +108,28 @@ bool VideoGLWidget::createEglImage()
     if (!s_eglCreateImageKHR || m_curFd < 0) return false;
 
     // EGL_EXT_image_dma_buf_import 属性列表
-    // VI 通道输出 NV12 1920x1080，buffer 虽对齐到 1088，但 RK 给出的 plane1 偏移
-    // 实际是 stride*1080（紧贴 Y plane，无 padding）。
-    // 实测：EGL_HEIGHT 与 plane1 offset 都必须用有效高度 1080，用对齐高度 1088 会出现绿边
-    //   - EGL_HEIGHT=1088  → sampler 把 Y plane 末 8 行 padding(UV=0) 当图像采样
-    //   - plane1 offset=1920*1088 → UV 从错位位置读取，颜色错乱/绿边
-    // 所以这里统一用 m_curH，不要 hardcode 1088。
-    quint32 fourcc = m_curFourcc ? m_curFourcc : 0x3231564eu; // 'NV12'
-    quint32 stride = (quint32)m_curW;        // 1920，buffer 真实 stride
+    // EGL_HEIGHT 始终用有效像素高度 m_curH（如 1080），避免对齐 padding 行被采样为绿边。
+    // plane1 (UV) offset 取决于 buffer 排布方式：
+    //   - VI self-path: buffer 紧密排布，UV 紧贴 Y plane 末尾，offset = stride * height
+    //   - VDEC: buffer 有 16 字节对齐 padding，UV 从 stride * virHeight 开始
+    //           （virHeight = u32VirHeight，如 1088）
+    //   通过 m_curVirHeight 区分：>0 用 virHeight，否则用 m_curH（VI 路径兼容）
+    quint32 fourcc    = m_curFourcc ? m_curFourcc : 0x3231564eu; // 'NV12'
+    quint32 stride    = m_curStride > 0 ? (quint32)m_curStride : (quint32)m_curW;
+    quint32 plane1Off = m_curVirHeight > 0
+                        ? stride * (quint32)m_curVirHeight
+                        : stride * (quint32)m_curH;
 
     // 显式声明线性布局 modifier=0 (DRM_FORMAT_MOD_LINEAR)
-    // 某些 Mali 驱动默认期待非 linear，不声明会拒收
     EGLint attr[] = {
-        EGL_WIDTH,                       m_curW,                  // image width  = 1920
-        EGL_HEIGHT,                      (EGLint)m_curH,           // 有效像素高度 1080
+        EGL_WIDTH,                       m_curW,
+        EGL_HEIGHT,                      (EGLint)m_curH,
         EGL_LINUX_DRM_FOURCC_EXT,        (EGLint)fourcc,
         EGL_DMA_BUF_PLANE0_FD_EXT,       m_curFd,
         EGL_DMA_BUF_PLANE0_OFFSET_EXT,   0,
         EGL_DMA_BUF_PLANE0_PITCH_EXT,    (EGLint)stride,
         EGL_DMA_BUF_PLANE1_FD_EXT,       m_curFd,
-        EGL_DMA_BUF_PLANE1_OFFSET_EXT,   (EGLint)(stride * (quint32)m_curH), // 1920*1080
+        EGL_DMA_BUF_PLANE1_OFFSET_EXT,   (EGLint)plane1Off,
         EGL_DMA_BUF_PLANE1_PITCH_EXT,    (EGLint)stride,
         EGL_NONE
     };
@@ -173,13 +175,16 @@ void VideoGLWidget::releaseFrame()
     doneCurrent();
 }
 
-void VideoGLWidget::setDmaBuf(int fd, int w, int h, void* mbBlk, quint32 fourcc)
+void VideoGLWidget::setDmaBuf(int fd, int w, int h, void* mbBlk, quint32 fourcc,
+                               int stride, int virHeight)
 {
-    m_curFd     = fd;
-    m_curW      = w;
-    m_curH      = h;
-    m_curMbBlk  = mbBlk;
-    m_curFourcc = fourcc;
+    m_curFd       = fd;
+    m_curW        = w;
+    m_curH        = h;
+    m_curStride   = stride;
+    m_curVirHeight = virHeight;
+    m_curMbBlk    = mbBlk;
+    m_curFourcc   = fourcc;
     update();   // 触发 paintGL 重建 EGLImage
 }
 

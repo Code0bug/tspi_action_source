@@ -228,11 +228,14 @@ Widget::Widget(QWidget *parent)
     connect(videoEncoder, &VideoEncoder::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection); // 编码完成释放VI帧
     // VideoGLWidget::paintGL EGLImage 绑定成功后 → frameConsumed → releaseViFrame
     connect(ui->openGLWidget, &VideoGLWidget::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection);
+    // 录像界面 page5 的 openGLWidget_2 由 CameraManager 供帧，释放也回 CameraManager
+    connect(ui->openGLWidget_2, &VideoGLWidget::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection);
     // connect(videoEncoder, &VideoEncoder::sigVideoEncoded, mp4Muxer, &Mp4Muxer::slotWriteVideoEncoded, Qt::QueuedConnection); // 编码流送mp4封装
     connect(cameraManager, &CameraManager::photoFinishedToSave, savePicture, &SavePicture::do_save_picture);  // 保存照片
     connect(savePicture, &SavePicture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 保存照片后更新相册列表
 
-    connect(videoDecoder, &VideoDecoder::VideodecToUI, this, &Widget::doShowVideo);                  // 解码录像并显示
+    connect(ui->openGLWidget_1, &VideoGLWidget::sigReleaseViFrame, videoDecoder, &VideoDecoder::releaseVdecFrame, Qt::DirectConnection);
+    connect(videoDecoder, &VideoDecoder::VideodecToUI, this, &Widget::doShowVideo);                  // 解码录像并显示（零拷贝路径）
 
     connect(keyControl, &KeyControl::keyToTakephoto, cameraManager, &CameraManager::takePhoto, Qt::DirectConnection);  // 开始拍照
     connect(keyControl, &KeyControl::keyToStartvideo, cameraManager, &CameraManager::startVideo, Qt::DirectConnection);// 开始录像
@@ -350,17 +353,24 @@ void Widget::doShow(int fd, int w, int h, void* mbBlk, uint64_t pts)  // 预览�
     sprintf(fps_text, "FPS:%.0f", fps);
 
     // 把 fd + mbBlk 一起传给 VideoGLWidget；mbBlk 在 paintGL EGLImage 绑定成功后
-    if (ui->openGLWidget) {
-        ui->openGLWidget->setDmaBuf(fd, w, h, mbBlk);
+    // 录像中（page5）用 openGLWidget_2 显示，否则用 page0 的 openGLWidget
+    int curPage = ui->stackedWidget->currentIndex();
+    if (curPage == 5) {
+        if (ui->openGLWidget_2) {
+            ui->openGLWidget_2->setDmaBuf(fd, w, h, mbBlk);
+        }
+    } else {
+        if (ui->openGLWidget) {
+            ui->openGLWidget->setDmaBuf(fd, w, h, mbBlk);
+        }
     }
 }
 
-void Widget::doShowVideo(cv::Mat img)  // 播放录像
+void Widget::doShowVideo(int fd, int w, int h, void* mbBlk, int stride, int virHeight)  // 播放录像（VDEC 零拷贝路径）
 {
-
-    QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
-
-    ui->video_label_2->setPixmap(QPixmap::fromImage(image));
+    if (ui->openGLWidget_1) {
+        ui->openGLWidget_1->setDmaBuf(fd, w, h, mbBlk, 0, stride, virHeight);
+    }
 }
 
 
@@ -477,9 +487,8 @@ void Widget::PicListItemClicked(QListWidgetItem *item)
 // 录像列表item被点击时的动作
 void Widget::VideoListItemClicked(QListWidgetItem *item)
 {
-    // 解码器初始化
-    vdec_init(1920, 1080);
-
+    // VDEC 通道的创建/销毁已移至 VideoDecoder worker 线程内（reinitVdec/destroyVdec），
+    // 避免与 do_get_frame 的 DestroyChn 跨线程竞争
     ui->stackedWidget->setCurrentIndex(4);  // 切换到录像显示页
     QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
     emit WidgetToStartDecVideo(path);

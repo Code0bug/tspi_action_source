@@ -43,7 +43,7 @@ public slots:
     void switchToPage5();
     void updatePicture(QString path);
     void updateVideo(QString path, cv::Mat first_frame);
-    void doShowVideo(cv::Mat img);
+    void doShowVideo(int fd, int w, int h, void* mbBlk, int stride, int virHeight);
     void stopVideo();
     void showNextPhoto();
     void showPrevPhoto();

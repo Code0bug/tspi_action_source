@@ -262,33 +262,13 @@ eglfs 单窗口下，应用可设 `QApplication::setAttribute(Qt::AA_ShareOpenGL
 
 | 状态 | VIRT | RES | %CPU | %MEM | 备注 |
 |---|---|---|---|---|---|
-| 仅预览（eglfs） | 1470.8 MB | 98.4 MB | 109.9% | 5.0% | 2026-07-04 实测，单次 top 采样 |
-| 录像（eglfs） | ? | ? | ? | ? | 待采集 |
-| 播放（eglfs） | ? | ? | ? | ? | 待采集 |
+| 仅预览（eglfs） | 1470.8 MB | 98.4 MB | 109.9% | 5.0% | 无预览零拷贝，有录像零拷贝 |
+| 仅预览（eglfs） | 1788.8 MB | 102.9 MB | 51.0% | 5.2% | 全链路零拷贝 |
+| 录像（eglfs） | 2003.7 MB | 149.7 MB | 100.6% | 7.6% | 全链路零拷贝 |
+| 播放（eglfs） | 2151.6 MB | 132.2 MB | 68.8% | 6.7% | 全链路零拷贝 |
 
-**与 linuxfb 基线对比**（数据自 [`refactoring.md`](refactoring.md) §二）：
 
-| 状态 | 平台 | VIRT | RES | %CPU | %MEM |
-|---|---|---|---|---|---|
-| 仅预览 | linuxfb（2026-05-24） | 1360 MB | 100 MB | 74.5% | 5.1% |
-| 仅预览 | **eglfs（2026-07-04）** | 1471 MB | 98.4 MB | **109.9%** | 5.0% |
 
-观察：
-- RES / %MEM 基本持平 → eglfs 仅替换上屏路径，内存侧无显著变化（符合预期）
-- **%CPU 反而升 ~35%** → 推测 eglfs 每帧把 backing store 软件光栅完后整页 texture upload 到 Mali 的开销，超过了原 linuxfb 直接 memcpy 写 fb0 的开销
-- VIRT 略增 ~110MB → Mali/EGL 栈映射进来
-
-这条数据印证 M0→M1 的必要性：eglfs 让 GPU 上了屏，但 `QPainter` 软件光栅 + 整页 texture upload 仍在 CPU 上且更贵。必须把摄像头帧直接做成 GL texture（M1/M2）才能压住这个 ~110%。
-
-测量手段（见聊天 [`tools` given earlier]）：
-```
-top -b -d 1 -n 30 | grep ai-cam
-cat /proc/$(pidof ai-cam-ui-widget)/status | grep VmRSS
-top -H -p $(pidof ai-cam-ui-widget) -b -n1
-cat /sys/kernel/debug/mali/utilisation 2>/dev/null   # GPU 利用率（路径按 BSP 调整）
-cat /sys/kernel/debug/dma_buf/bufinfo 2>/dev/null     # DMA-BUF 引用计数
-perf top -p $(pidof ai-cam-ui-widget)                # memcpy/QImage 热点
-```
 
 ### 4.2 各阶段达标门槛
 
@@ -610,4 +590,161 @@ EGL_DMA_BUF_PLANE1_OFFSET_EXT,   (EGLint)(stride * (quint32)m_curH), // 1920*108
 
 ---
 
-_最后更新：2026-07-05，绿边问题修复（attr list 高度参数改用有效像素 1080），M2 预览零拷贝链路 CPU -57%，旋转已切环境变量方案_
+### 9.15 切换相册时 rkisp_selfpath poll timeout（2026-07-11）
+
+#### 现象
+
+切换到相册界面后，内核持续刷 `rkisp_selfpath poll timeout`，摄像头发热。
+
+#### 根因
+
+两个缺陷叠加：
+
+1. **`stopCapture` 信号永远无法执行**：`WidgetToStopCapture` 默认是 `QueuedConnection`，但 `CameraManager::startCapture` 内部是 `while(isRunning)` 死循环，worker 线程事件循环被永久占用，queued slot 永远排不上。切相册时 `emit WidgetToStopCapture()` 完全是空操作，VI 通道保持 enabled。
+
+2. **buffer 回收路径被切断**：self-path buffer 帧回收依赖 `VideoGLWidget::paintGL → sigReleaseViFrame → CameraManager::releaseViFrame → RK_MPI_VI_ReleaseChnFrame`。切到相册后 page0 被隐藏，`paintGL` 不执行，buffer 不释放。6 个 buffer 耗尽后 ISP 没有空 buffer 可填充，内核 `rkisp_selfpath poll` 反复超时。
+
+#### 修复
+
+- `stopCapture` 改用 `DirectConnection`，只设置原子标志 `isRunning=false`，不再调用 MPI
+- worker 线程循环退出后在**自己线程内**执行 VI 通道禁用 + 归还所有 `pendingViFrames_` 中的帧
+- `switchToPage0()` 从相册/视频列表返回时 `emit WidgetToStartCapture()` 重新初始化 VI pipeline
+- 析构函数加 `cameraManagerThread->quit()`，使采集循环退出后事件循环能正常退出
+
+---
+
+### 9.16 录像播放零拷贝路径实现（2026-07-11）
+
+#### 改动
+
+`VideoDecoder` 去掉 `RK_MPI_MB_Handle2VirAddr` + RGA 软件转 BGR + `cv::Mat` 路径，改为：
+
+- `do_get_frame` 取 `RK_MPI_MB_Handle2Fd` 获得 DMA-BUF fd
+- 信号改为 `VideodecToUI(int fd, int w, int h, void* mbBlk, int stride, int virHeight)`
+- `Widget::doShowVideo` 转发给 `openGLWidget_1`（page4 的 VideoGLWidget）走 EGLImage 零拷贝渲染
+- `openGLWidget_1::sigReleaseViFrame → VideoDecoder::releaseVdecFrame`（DirectConnection），帧存 `pendingVdecFrames_` 延迟释放
+- 循环退出/`do_stop_get_frame` 时归还所有未释放帧再销毁 VDEC 通道
+
+`widget.ui` page4 的 `video_label_2`(QLabel) 替换为 `openGLWidget_1`（VideoGLWidget）。
+
+---
+
+### 9.17 录像界面 page5 预览显示（2026-07-11）
+
+page5 的 `video_label_3`(QLabel) 替换为 `openGLWidget_2`（VideoGLWidget）。
+
+`Widget::doShow` 按当前页路由：录像中（page5）→ `openGLWidget_2`，其他 → `openGLWidget`（page0）。`openGLWidget_2::sigReleaseViFrame → CameraManager::releaseViFrame`（DirectConnection）。
+
+---
+
+### 9.18 录像时 releaseViFrame: unknown mbBlk 报错（2026-07-11）
+
+#### 现象
+
+录像时持续刷 `releaseViFrame: unknown mbBlk 0x...`。
+
+#### 根因
+
+录像时同一 VI 帧有两个消费者（编码器 + GL 显示），各自通过 `DirectConnection` 在不同线程调 `releaseViFrame`。第一个消费者释放后 `pendingViFrames_.erase`，第二个消费者就找不到 key 了。更危险的是：第一个消费者归还 buffer 后 VI 可能复用该 buffer，第二个消费者还在用它（编码或 GPU 采样）。
+
+#### 修复
+
+`pendingViFrames_` 从 `QHash<void*, VIDEO_FRAME_INFO_S>` 改为 `QHash<void*, PendingFrame{frame, refCount}>`：
+
+- 纯预览时 `refCount=1`，录像时 `refCount=2`
+- `releaseViFrame` 先 `--refCount`，>0 就 return，归零才真正 `RK_MPI_VI_ReleaseChnFrame`
+- 加 `std::mutex` 保护，因为编码器线程和 GL 线程通过 `DirectConnection` 并发调用 `releaseViFrame`
+
+---
+
+### 9.19 录像播放时画面绿边（2026-07-11）
+
+#### 现象
+
+录像播放时画面底部出现绿边。
+
+#### 根因
+
+VDEC 输出的 NV12 buffer 有 16 字节对齐 padding：`u32VirHeight`=1088（对齐分配高度），但显示高度 `u32Height`=1080。UV plane 从 `stride × virHeight`（1920×1088）开始，而代码用 `stride × height`（1920×1080）算 plane1 offset，导致 UV 采样从错误位置读取 → 色度错乱 → 绿边。
+
+与 §9.14 预览绿边不同：VI self-path buffer 是紧密排布（UV 紧贴 Y plane 末尾，offset = stride×height），VDEC buffer 有 padding（offset = stride×virHeight）。
+
+#### 修复
+
+`VideoGLWidget::setDmaBuf` 新增 `virHeight` 参数：
+
+- plane1 offset 用 `stride × virHeight`（VDEC 路径，virHeight=1088）
+- `virHeight=0` 时退回 `stride × height`（VI 路径兼容，VI buffer 紧密排布）
+- `EGL_HEIGHT` 始终用有效像素高度 `m_curH`（1080），不用 virHeight
+
+`VideoDecoder` 从 VDEC 帧读 `u32VirWidth`、`u32VirHeight`，随 `VideodecToUI` 信号发出 `stride` 和 `virHeight`。`Widget::doShowVideo` 透传给 `setDmaBuf`。
+
+---
+
+### 9.20 录像播放只能播放一次（2026-07-11）
+
+#### 现象
+
+录像播放第一次正常，点退出按钮后再点播放第二次，报 `send stream failed! 0xA0058009` 然后卡住。
+
+#### 根因
+
+三个并发缺陷叠加：
+
+1. **`poll(-1)` 无限等待**：`VideoDecoder::do_get_frame` 用 `poll(-1, vdec_fd)` 无限阻塞等待 VDEC 事件。退出按钮设置 `stop_get_frame=1` 后，要等 VDEC 产生事件 poll 才返回，循环才能检查到 stop 标志。延迟可达数秒。
+
+2. **VDEC 通道创建/销毁跨线程竞争**：退出按钮（`DirectConnection`）设置 `stop_get_frame` 后立即返回。`do_get_frame` 在 worker 线程异步退出循环后调 `DestroyChn(0)`。用户点第二次播放时，`VideoListItemClicked` 在 **UI 线程同步调** `vdec_init()` 去 `CreateChn(0,...)`。此时 worker 线程的 `do_get_frame` 可能还没跑到 `DestroyChn(0)`，通道 0 还在，`CreateChn` 失败或陷入未定义状态 → `0xA0058009`。
+
+3. **`send_stream_data` 失败时死重试**：`Mp4Demuxer::send_stream_data` 内 `while(!stop_send_frame){…usleep(1000)…}` 无重试上限。通道半残时 `VDEC_SendStream` 持续失败，死循环锁死 demuxer 线程事件循环，第二次 `do_stop_send_frame` 的 queued slot 也排不上。
+
+#### 修复
+
+- `poll(-1)` 改为 `poll(100)` 有限超时，每 100ms 检查 `stop_get_frame`
+- VDEC 通道创建/销毁移到 worker 线程内（`reinitVdec`/`destroyVdec` 方法），`VideoListItemClicked` 删除 UI 线程的 `vdec_init()` 调用
+- `send_stream_data` 失败重试加 50 次上限，超过就 break
+- `stop_get_frame`、`stop_send_frame` 改为 `std::atomic<bool>`
+
+---
+
+### 9.21 录像时帧率下降（2026-07-11）
+
+#### 现象
+
+录像时预览帧率从 ~30fps 明显下降。
+
+#### 根因
+
+VI self-path buffer pool 只有 6 个（`rk_mpi.cpp` `u32BufCount=6`）。录像时每帧有两个消费者（编码器 + GL 显示），buffer 生命周期变长（必须等编码器也处理完才能归还）。编码器是慢消费者（VENC 串行流水线），6 个 buffer 很快被占满 → `GetChnFrame` 开始等待空闲 buffer → 帧率下降。
+
+#### 修复
+
+`u32BufCount` 从 6 增大到 10，给录像双消费者留够 buffer 余量。
+
+---
+
+### 9.22 OSD 叠加文字尝试（失败，已回退）（2026-07-11）
+
+#### 背景
+
+零拷贝前 `doShow` 用 `cv::putText` 在 `cv::Mat` 上画 FPS / 录像时长 / 系统时间。零拷贝后 CPU 不碰像素，需要改用 GPU 合成。
+
+#### 尝试
+
+在 `VideoGLWidget::paintGL` 末尾用 `QPainter(this)` 叠加 OSD 文字：
+
+1. 纯文字（无背景）—— 看不到文字
+2. 加蓝底/黑底矩形 + `AlignCenter` 文字 —— 只看到色块，没有文字
+3. 按 `QFontMetrics` 精确测量文字大小画背景 —— 仍然只有色块没有文字
+4. 用 `beginNativePainting`/`endNativePainting` 分离 native GL 和 QPainter —— 仍然不显示文字
+
+#### 结果
+
+所有方案均失败：要么只显示色块不显示文字，要么什么都不显示。推测原因：eglfs + `QT_QPA_EGLFS_ROTATION=90` 环境下 `QOpenGLWidget` 的 GL paint engine 与 native GL 绘制混用存在兼容性问题。
+
+#### 当前状态
+
+已回退所有 OSD 相关改动，`paintGL` 恢复到无 QPainter 的原始版本。OSD 显示方案待后续探索（可能方向：纯 GL 文字渲染、FBO 离屏合成、或独立 QLabel 覆盖层）。
+
+---
+
+_最后更新：2026-07-11，录像播放零拷贝路径打通、录像界面 page5 预览、引用计数修复、绿边修复、播放二次卡死修复、录像帧率修复，OSD 叠加尝试失败已回退_

@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QWidget>
 #include <QByteArray>
+#include <atomic>
 #include "rk_mpi.h"
 
 class Mp4Demuxer : public QObject
@@ -25,7 +26,7 @@ private:
 //    FILE* fp; // 读取视频文件
     int send_stream_data(const uint8_t *src, RK_U32 len, bool eos, bool endOfFrame, uint64_t ptsUs = 0);
     int do_send_mp4_frame(const QString &path);
-    uint8_t stop_send_frame;
+    std::atomic<bool> stop_send_frame;
 
 };
 

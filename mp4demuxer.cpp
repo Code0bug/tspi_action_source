@@ -83,13 +83,16 @@ int Mp4Demuxer::send_stream_data(const uint8_t *src, RK_U32 len, bool eos, bool 
     stStream.bEndOfFrame = endOfFrame ? RK_TRUE : RK_FALSE;
     stStream.bBypassMbBlk = RK_TRUE;
 
+    int failCount = 0;
     while (!stop_send_frame) {
         s32Ret = RK_MPI_VDEC_SendStream(0, &stStream, 20);
         if (s32Ret >= 0) {
-            printf("send stream success!\n");
             break;
         }
-        printf("send stream failed! 0x%08X\n", s32Ret);
+        if (++failCount > 50) {
+            printf("send stream failed %d times, giving up! 0x%08X\n", failCount, s32Ret);
+            break;
+        }
         usleep(1000llu);
     }
 
@@ -295,7 +298,7 @@ void Mp4Demuxer::do_send_frame(QString path)
 {
     RK_S32 s32ReachEOS = 0;
 
-    stop_send_frame = 0;
+    stop_send_frame = false;
 
     QFileInfo inputInfo(path);
     if (inputInfo.suffix().compare("mp4", Qt::CaseInsensitive) == 0) {
@@ -334,7 +337,7 @@ void Mp4Demuxer::do_send_frame(QString path)
 
 void Mp4Demuxer::do_stop_send_frame()
 {
-    stop_send_frame = 1;
+    stop_send_frame = true;
 }
 
 

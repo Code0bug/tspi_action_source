@@ -19,7 +19,12 @@ public:
     ~VideoGLWidget() override;
 
     // 接收一帧 DMA-BUF fd，宽高，四像素格式（DRM_FORMAT_NV12 等）
-    void setDmaBuf(int fd, int w, int h, void* mbBlk = nullptr, quint32 fourcc = 0);
+    // stride=0 时自动用 w 作为 stride（VI 路径），VDEC 路径需显式传 VirWidth
+    // virHeight 用于 plane1 offset 计算：VDEC buffer 有 16 字节对齐 padding，
+    //   UV plane 从 stride*virHeight 开始而非 stride*height；VI 路径不传（=0）
+    //   时用 m_curH（VI buffer 紧密排布无 padding）
+    void setDmaBuf(int fd, int w, int h, void* mbBlk = nullptr, quint32 fourcc = 0,
+                   int stride = 0, int virHeight = 0);
 
     // 释放当前帧的 GL/EGL 资源（切页/隐藏时调用，避免持有过期 DMA-BUF）
     void releaseFrame();
@@ -47,11 +52,13 @@ private:
     QOpenGLBuffer        m_vbo;
 
     // 当前帧
-    int     m_curFd    = -1;
-    int     m_curW     = 0;
-    int     m_curH     = 0;
+int     m_curFd      = -1;
+    int     m_curW       = 0;
+    int     m_curH       = 0;
+    int     m_curStride  = 0;
+    int     m_curVirHeight = 0;
     quint32 m_curFourcc = 0;
-    void*   m_curMbBlk = nullptr;
+    void*   m_curMbBlk  = nullptr;
 
     void resolveExt();
     bool createEglImage();

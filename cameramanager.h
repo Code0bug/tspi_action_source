@@ -7,6 +7,7 @@
 #include <QString>
 
 #include <atomic>
+#include <mutex>
 #include <iostream>
 #include "rk_mpi.h"
 #include <opencv2/opencv.hpp>
@@ -47,8 +48,13 @@ private:
     uint8_t video_flag;
     uint8_t first_video_frame;
 
-    // 编码中待释放的 VI 帧：MB_BLK → VIDEO_FRAME_INFO_S
-    QHash<void*, VIDEO_FRAME_INFO_S> pendingViFrames_;
+    // 待释放的 VI 帧：MB_BLK → {帧信息, 引用计数}
+    struct PendingFrame {
+        VIDEO_FRAME_INFO_S frame;
+        int refCount;
+    };
+    QHash<void*, PendingFrame> pendingViFrames_;
+    std::mutex pendingMtx_;
 
 
 signals:

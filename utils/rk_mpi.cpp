@@ -94,7 +94,7 @@ int vi_dev_init() {
 
 int vi_chn_init(int channelId, int width, int height) {
 	int ret;
-    int buf_cnt = 6;
+    int buf_cnt = 10;
 	// VI init
 	VI_CHN_ATTR_S vi_chn_attr;
 	memset(&vi_chn_attr, 0, sizeof(vi_chn_attr));

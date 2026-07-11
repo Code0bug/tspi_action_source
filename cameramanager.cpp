@@ -76,7 +76,7 @@ void CameraManager::startCapture()
             // 零拷贝预览：传 VI 帧 NV12 的 fd 给 UI，由 VideoGLWidget EGLImage 导入 GPU
             int vi_fd = RK_MPI_MB_Handle2Fd(stViFrame.stVFrame.pMbBlk);
             void* key = reinterpret_cast<void*>(stViFrame.stVFrame.pMbBlk);
-            pendingViFrames_[key] = stViFrame;
+            pendingViFrames_[key] = {stViFrame, video_flag ? 2 : 1};
 
             if (video_flag) {
                 emit capFinishedToVideo(key, stViFrame.stVFrame.u64PTS);
@@ -92,7 +92,7 @@ void CameraManager::startCapture()
     // 在 worker 线程内完成 VI 通道/设备的反初始化，避免跨线程调用 MPI。
     // 1. 归还所有尚未释放的 self-path 帧给内核，防止 buffer 泄漏导致 poll timeout
     for (auto it = pendingViFrames_.begin(); it != pendingViFrames_.end(); ++it) {
-        RK_MPI_VI_ReleaseChnFrame(0, 1, &it.value());
+        RK_MPI_VI_ReleaseChnFrame(0, 1, &it.value().frame);
     }
     pendingViFrames_.clear();
 
@@ -190,16 +190,20 @@ void CameraManager::stopVideo()
 
 void CameraManager::releaseViFrame(void* mbBlk)
 {
+    std::lock_guard<std::mutex> lock(pendingMtx_);
     auto it = pendingViFrames_.find(mbBlk);
     if (it == pendingViFrames_.end()) {
-        RK_LOGE("releaseViFrame: unknown mbBlk %p", mbBlk);
         return;
     }
 
-    VIDEO_FRAME_INFO_S stViFrame = it.value();
+    if (--it.value().refCount > 0) {
+        return; // 还有其他消费者未释放
+    }
+
+    VIDEO_FRAME_INFO_S stViFrame = it.value().frame;
     pendingViFrames_.erase(it);
 
-    // 释放 VI 通道 1 的帧（与 startCapture 中 GetChnFrame(0,1) 对应）
+    // 引用计数归零，真正释放 VI 通道 1 的帧
     RK_S32 s32Ret = RK_MPI_VI_ReleaseChnFrame(0, 1, &stViFrame);
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("releaseViFrame fail %x", s32Ret);
