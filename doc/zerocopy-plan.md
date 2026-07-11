@@ -748,3 +748,75 @@ VI self-path buffer pool 只有 6 个（`rk_mpi.cpp` `u32BufCount=6`）。录像
 ---
 
 _最后更新：2026-07-11，录像播放零拷贝路径打通、录像界面 page5 预览、引用计数修复、绿边修复、播放二次卡死修复、录像帧率修复，OSD 叠加尝试失败已回退_
+
+---
+
+### 9.21 切换页面回来时 Segfault（DMA-BUF use-after-free）（2026-07-12）
+
+#### 现象
+
+从相册/视频列表切回预览界面（page0）时，程序 `Segmentation fault (core dumped)`。
+
+#### Core Dump 分析
+
+按 [`debugging.md`](debugging.md) 场景一的方法分析 `debug-artifacts/core.ai-cam-ui-widge.2032`：
+
+```bash
+gdb-multiarch build-aarch64/ai-cam-ui-widget debug-artifacts/core.ai-cam-ui-widge.2032 \
+  -ex "set sysroot .../sysroot" -ex "bt" -ex "info threads" -ex quit
+```
+
+- 崩溃线程 LWP 2032 `pc = 0x7f9a827ae0`，落在 `libmali.so.1` 的 `gles_vertexp_bb_neon_transform_and_produce_clip_bits`，GPU 顶点处理函数。
+- 栈被破坏，`bt` 只能看一帧，`Backtrace stopped: previous frame identical to this frame (corrupt stack?)`。
+- 扫描崩溃线程栈内存（`x/2000gx 0x7fdff44340`）找应用层返回地址：
+  - `0x414438` = `Widget::switchToPage0() + 48`
+- 反汇编 `switchToPage0` 确认 `+48` 是 `QStackedWidget::setCurrentIndex(0)` 调用的返回点：
+  ```
+  0x414434: bl setCurrentIndex
+  0x414438: cmp w20, #0x1       ← 崩溃后返回此处
+  ```
+
+#### 崩溃调用链
+
+```
+Widget::switchToPage0()
+  → QStackedWidget::setCurrentIndex(0)       // page0 可见
+    → Qt 触发 openGLWidget::paintGL()
+      → createEglImage()                      // 用过期的 m_curFd 创建 EGLImage
+      → glDrawArrays()                        // GPU 采样已释放的 DMA-BUF
+        → libmali.so: gles_vertexp_bb_neon_transform_and_produce_clip_bits()  // SEGFAULT
+  ← 返回到 0x414438
+```
+
+#### 根因：DMA-BUF use-after-free
+
+`QStackedWidget::setCurrentIndex` 切换页面时会对旧页 widget 调 `hide()`、新页 widget 调 `show()`。
+
+**切到相册时**（`switchToPage1`）：
+1. `stopCapture()` → worker 循环退出 → `releaseAllPendingFrames()` 归还所有帧 → `DisableChn` + `DisableDev`
+2. `openGLWidget` 被 `hide()`，但 `VideoGLWidget` **没有 `hideEvent`**，`m_curFd` 仍指向最后一帧的 DMA-BUF，该 buffer 已被内核回收
+3. `paintGL` 完成时会 emit `sigReleaseViFrame(m_curMbBlk)` 并置 `m_curMbBlk = nullptr`（videoglwidget.cpp:228-230），所以最后那帧的引用计数已归零、buffer 已归还内核，但 `m_curFd` 从未被清
+
+**切回预览时**（`switchToPage0`）：
+1. `setCurrentIndex(0)` → `openGLWidget` 可见 → Qt **同步**触发 `paintGL()`
+2. `paintGL` 检查 `m_curFd >= 0` → **true**（过期 fd）
+3. `createEglImage()` 用过期 fd 创建 EGLImage → 底层 buffer 已被内核回收/复用
+4. `glDrawArrays()` → GPU 采样无效纹理 → **Mali 驱动崩溃**
+
+#### 修复
+
+`VideoGLWidget` 加 `hideEvent()` override（`videoglwidget.h`、`videoglwidget.cpp`）：
+
+```cpp
+void VideoGLWidget::hideEvent(QHideEvent *event)
+{
+    QOpenGLWidget::hideEvent(event);
+    if (m_curMbBlk) {
+        emit sigReleaseViFrame(m_curMbBlk);
+        m_curMbBlk = nullptr;
+    }
+    releaseFrame();   // 销毁 EGLImage，m_curFd = -1
+}
+```
+
+切走时清 `m_curFd`，切回时 `paintGL` 看到 `m_curFd < 0`，跳过渲染只画黑屏，等新帧到达再正常渲染。

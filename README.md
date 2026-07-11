@@ -143,4 +143,4 @@ rkaiq移植：需要在在 RkAiqCalibDbTypes.h 中添加 #define ISP_HW_V21。�
 
 **2026/7/7**：当前发现一个bug，WidgetToStopCapture信号默认是QueuedConnection，所以会被阻塞，不会执行，切换相册时压根不会停摄像头，还有WidgetToStartCapture信号也没有在切换预览界面时emit。这个可能是导致画面变卡的原因，也是摄像头发热的原因。
 
-**2026/7/11**：修复画面卡顿问题和没stop摄像头的bug，实现视频流的全链路零拷贝，基于零拷贝的整体相机功能基本完成。目前还有个bug，就是切换相册/视频和预览界面时，会Segmentation fault，可能是切换动作时的代码所导致。
+**2026/7/11**：修复画面卡顿问题和没stop摄像头的bug，实现视频流的全链路零拷贝，基于零拷贝的整体相机功能基本完成。目前还有个bug，就是切换相册/视频和预览界面时，会Segmentation fault，可能是切换动作时的代码所导致。bug已修复，是切回预览显示时paintGL调用createEglImage()用过期 fd 创建 EGLImage时导致Mali 驱动崩溃，用core dump调试很快就能找到问题。

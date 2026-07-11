@@ -43,6 +43,7 @@ protected:
     void initializeGL() override;
     void resizeGL(int w, int h) override;
     void paintGL() override;
+    void hideEvent(QHideEvent *event) override;
 
 private:
     // EGL 扩展函数指针

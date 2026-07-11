@@ -175,6 +175,16 @@ void VideoGLWidget::releaseFrame()
     doneCurrent();
 }
 
+void VideoGLWidget::hideEvent(QHideEvent *event)
+{
+    QOpenGLWidget::hideEvent(event);
+    if (m_curMbBlk) {
+        emit sigReleaseViFrame(m_curMbBlk);
+        m_curMbBlk = nullptr;
+    }
+    releaseFrame();
+}
+
 void VideoGLWidget::setDmaBuf(int fd, int w, int h, void* mbBlk, quint32 fourcc,
                                int stride, int virHeight)
 {
