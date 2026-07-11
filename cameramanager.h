@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QString>
 
+#include <atomic>
 #include <iostream>
 #include "rk_mpi.h"
 #include <opencv2/opencv.hpp>
@@ -41,7 +42,7 @@ public slots:
 
 private:
     cv::Mat stabilizeFrame(const cv::Mat& frame);
-    uint8_t isRunning;
+    std::atomic<bool> isRunning;
     uint8_t photo_flag;
     uint8_t video_flag;
     uint8_t first_video_frame;

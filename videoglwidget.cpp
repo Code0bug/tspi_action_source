@@ -228,7 +228,7 @@ void VideoGLWidget::paintGL()
     // EGLImage 已成功绑定并采样，GPU 已持有 DMA-BUF 引用
     // 通知上游：可以释放 VI 帧了
     if (m_curMbBlk) {
-        emit frameConsumed(m_curMbBlk);
+        emit sigReleaseViFrame(m_curMbBlk);
         m_curMbBlk = nullptr;  // 只发一次，避免重复释放
     }
 }

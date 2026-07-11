@@ -226,15 +226,11 @@ Widget::Widget(QWidget *parent)
     connect(cameraManager, &CameraManager::videoFinishedToIMURecord, imuReader, &IMUReader::record_imu_data);  // 开始录像时IMU开始记录
     connect(cameraManager, &CameraManager::capFinishedToVideo, videoEncoder, &VideoEncoder::do_save_video);  // 保存录像
     connect(videoEncoder, &VideoEncoder::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection); // 编码完成释放VI帧
-    // 预览路径 VI 帧释放：VideoGLWidget::paintGL EGLImage 绑定成功后 → frameConsumed → previewFrameDone → releaseViFrame
-    connect(ui->openGLWidget, &VideoGLWidget::frameConsumed, this, [this](void* mbBlk){
-        emit previewFrameDone(mbBlk);
-    }, Qt::DirectConnection);
-    connect(this, &Widget::previewFrameDone, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection);
+    // VideoGLWidget::paintGL EGLImage 绑定成功后 → frameConsumed → releaseViFrame
+    connect(ui->openGLWidget, &VideoGLWidget::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection);
     // connect(videoEncoder, &VideoEncoder::sigVideoEncoded, mp4Muxer, &Mp4Muxer::slotWriteVideoEncoded, Qt::QueuedConnection); // 编码流送mp4封装
     connect(cameraManager, &CameraManager::photoFinishedToSave, savePicture, &SavePicture::do_save_picture);  // 保存照片
     connect(savePicture, &SavePicture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 保存照片后更新相册列表
-
 
     connect(videoDecoder, &VideoDecoder::VideodecToUI, this, &Widget::doShowVideo);                  // 解码录像并显示
 
@@ -276,7 +272,7 @@ Widget::Widget(QWidget *parent)
     connect(ui->video_listWidget, &QListWidget::itemClicked, this, &Widget::VideoListItemClicked);
 
     connect(this, &Widget::WidgetToStartCapture, cameraManager, &CameraManager::startCapture);
-    connect(this, &Widget::WidgetToStopCapture, cameraManager, &CameraManager::stopCapture);
+    connect(this, &Widget::WidgetToStopCapture, cameraManager, &CameraManager::stopCapture, Qt::DirectConnection);
     connect(this, &Widget::WidgetToStartDecVideo, mp4Demuxer, &Mp4Demuxer::do_send_frame);
     connect(this, &Widget::WidgetToStartDecVideo, videoDecoder, &VideoDecoder::do_get_frame);
 
@@ -304,6 +300,7 @@ Widget::~Widget()
 {
     // 通知所有线程停止
     cameraManagerThread->requestInterruption();
+    cameraManagerThread->quit();
     keyControlThread->quit();
     savePictureThread->quit();
     videoEncoderThread->quit();
@@ -353,7 +350,6 @@ void Widget::doShow(int fd, int w, int h, void* mbBlk, uint64_t pts)  // 预览�
     sprintf(fps_text, "FPS:%.0f", fps);
 
     // 把 fd + mbBlk 一起传给 VideoGLWidget；mbBlk 在 paintGL EGLImage 绑定成功后
-    // 通过 frameConsumed 信号回发，再 emit previewFrameDone 给 CameraManager 释放 VI 帧
     if (ui->openGLWidget) {
         ui->openGLWidget->setDmaBuf(fd, w, h, mbBlk);
     }
@@ -382,7 +378,12 @@ void Widget::switchToPage2() // 切换到视频列表
 
 void Widget::switchToPage0() // 切换回摄像头显示
 {
+    int prev = ui->stackedWidget->currentIndex();
     ui->stackedWidget->setCurrentIndex(0);
+    // 仅从相册/视频列表返回时重启采集；从录像停止（page5）返回时采集仍在运行，避免重复 start
+    if (prev == 1 || prev == 2) {
+        emit WidgetToStartCapture();
+    }
 }
 
 void Widget::switchToPage5() // 切换至录像界面

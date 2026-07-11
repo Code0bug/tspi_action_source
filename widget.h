@@ -55,7 +55,6 @@ signals:
     void WidgetToStartCapture();
     void WidgetToStopCapture();
     void WidgetToStartDecVideo(QString path);
-    void previewFrameDone(void* mbBlk);  // page0 VideoGLWidget 用完帧后回发释放
 
 
 private slots:

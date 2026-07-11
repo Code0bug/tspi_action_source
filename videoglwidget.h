@@ -26,7 +26,7 @@ public:
 
 signals:
     // paintGL 完成 EGLImage 绑定后发出，用于通知上游可释放 VI 帧
-    void frameConsumed(void* mbBlk);
+    void sigReleaseViFrame(void* mbBlk);
 
 protected:
     void initializeGL() override;

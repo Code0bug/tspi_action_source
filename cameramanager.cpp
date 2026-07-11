@@ -9,7 +9,7 @@ CameraManager::CameraManager()
         // return -1;
     }
 
-    isRunning = 0;
+    isRunning = false;
     photo_flag = 0;
     video_flag = 0;
 
@@ -33,7 +33,7 @@ void CameraManager::startCapture()
     vi_chn_init(1, 1920, 1080);   // channel 1 最大支持1920*1080 
 
 
-    isRunning = 1;
+    isRunning = true;
     while (isRunning && !QThread::currentThread()->isInterruptionRequested()) {
         // 视频图像帧信息结构体，存储采集视频帧
         VIDEO_FRAME_INFO_S stViFrame;
@@ -78,18 +78,6 @@ void CameraManager::startCapture()
             void* key = reinterpret_cast<void*>(stViFrame.stVFrame.pMbBlk);
             pendingViFrames_[key] = stViFrame;
 
-
-    //         printf("VI frame: w=%d h=%d virW=%d virH=%d fmt=%d size=%llu len=%llu off=%u\n",
-    //    stViFrame.stVFrame.u32Width, stViFrame.stVFrame.u32Height,
-    //    stViFrame.stVFrame.u32VirWidth, stViFrame.stVFrame.u32VirHeight,
-    //    stViFrame.stVFrame.enPixelFormat,
-    //    (unsigned long long)RK_MPI_MB_GetSize(stViFrame.stVFrame.pMbBlk),
-    //    (unsigned long long)RK_MPI_MB_GetLength(stViFrame.stVFrame.pMbBlk),
-    //    RK_MPI_MB_GetOffset(stViFrame.stVFrame.pMbBlk));
-
-            int virW = stViFrame.stVFrame.u32VirWidth;
-            int virH = stViFrame.stVFrame.u32VirHeight;
-
             if (video_flag) {
                 emit capFinishedToVideo(key, stViFrame.stVFrame.u64PTS);
             }
@@ -99,6 +87,19 @@ void CameraManager::startCapture()
             continue;
         }
     }
+
+    // 采集循环退出（stopCapture 置 isRunning=false 或线程被中断）：
+    // 在 worker 线程内完成 VI 通道/设备的反初始化，避免跨线程调用 MPI。
+    // 1. 归还所有尚未释放的 self-path 帧给内核，防止 buffer 泄漏导致 poll timeout
+    for (auto it = pendingViFrames_.begin(); it != pendingViFrames_.end(); ++it) {
+        RK_MPI_VI_ReleaseChnFrame(0, 1, &it.value());
+    }
+    pendingViFrames_.clear();
+
+    // 2. 禁用 VI 通道与设备
+    RK_MPI_VI_DisableChn(0, 0);
+    RK_MPI_VI_DisableChn(0, 1);
+    RK_MPI_VI_DisableDev(0);
 
 }
 
@@ -168,12 +169,9 @@ void CameraManager::takePhoto()
 
 void CameraManager::stopCapture()
 {
-    isRunning = 0;
-    RK_MPI_VI_DisableChn(0, 0);
-    RK_MPI_VI_DisableChn(0, 1);
-    RK_MPI_VI_DisableDev(0);
-
-    RK_MPI_SYS_Exit();
+    // 仅置位标志，由 worker 线程内的采集循环退出后执行真正的 VI 反初始化。
+    // 该槽以 DirectConnection 在调用线程执行，故不能在此调用 MPI。
+    isRunning = false;
 }
 
 void CameraManager::startVideo()
