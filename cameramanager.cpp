@@ -9,6 +9,11 @@ CameraManager::CameraManager()
         // return -1;
     }
 
+    // vi init
+    vi_dev_init();
+    vi_chn_init(0, 3264, 2448);   // channel 0 最大支持8M  3264*2448
+    vi_chn_init(1, 1920, 1080);   // channel 1 最大支持1920*1080 
+
     isRunning = false;
     photo_flag = 0;
     video_flag = 0;
@@ -26,12 +31,6 @@ CameraManager::~CameraManager()
 
 void CameraManager::startCapture()
 {
-    // vi init
-    vi_dev_init();
-
-    vi_chn_init(0, 3264, 2448);   // channel 0 最大支持8M  3264*2448
-    vi_chn_init(1, 1920, 1080);   // channel 1 最大支持1920*1080 
-
 
     isRunning = true;
     while (isRunning && !QThread::currentThread()->isInterruptionRequested()) {
@@ -40,6 +39,7 @@ void CameraManager::startCapture()
         // get vi frame
         RK_S32 s32Ret = RK_MPI_VI_GetChnFrame(0, 1, &stViFrame, 1000);
 
+        printf("get frame\r\n");
 
         if(s32Ret == RK_SUCCESS) {
 
@@ -95,11 +95,6 @@ void CameraManager::startCapture()
         RK_MPI_VI_ReleaseChnFrame(0, 1, &it.value().frame);
     }
     pendingViFrames_.clear();
-
-    // 2. 禁用 VI 通道与设备
-    RK_MPI_VI_DisableChn(0, 0);
-    RK_MPI_VI_DisableChn(0, 1);
-    RK_MPI_VI_DisableDev(0);
 
 }
 
@@ -169,8 +164,6 @@ void CameraManager::takePhoto()
 
 void CameraManager::stopCapture()
 {
-    // 仅置位标志，由 worker 线程内的采集循环退出后执行真正的 VI 反初始化。
-    // 该槽以 DirectConnection 在调用线程执行，故不能在此调用 MPI。
     isRunning = false;
 }
 
