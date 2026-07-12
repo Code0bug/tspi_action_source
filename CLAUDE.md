@@ -1,6 +1,6 @@
-# cam-ui-widget
+# tspi_action_source
 
-Qt Widgets Rockchip 摄像头应用，支持实时预览、H.264/AAC MP4 录像、MP4 播放、拍照、IMU 同步录制，全程硬件编解码。
+泰山派运动相机，支持实时预览、H.264/AAC MP4 录像、MP4 播放、拍照、IMU 同步录制，全程硬件编解码。
 
 > 录像/播放数据流、零拷贝实现、音视频同步等架构细节见 [`doc/architecture.md`](doc/architecture.md)。
 
@@ -10,74 +10,184 @@ Qt Widgets Rockchip 摄像头应用，支持实时预览、H.264/AAC MP4 录像�
 |------|------|
 | SoC | Rockchip RK3566 |
 | 摄像头 | OV8858（4-lane MIPI，自动对焦 DW9714） |
-| 屏幕 | 2.3 寸 MIPI LCD（带触摸），应用内旋转 270° |
+| 屏幕 | 2.3 寸 MIPI LCD（带触摸），应用内旋转 90° |
 | IMU | ICM42688P（SPI + SIGIO 异步通知） |
+| 按键 | 拍照/录像控制 |
 
-## 构建
+
+
+## 编译
+
+本项目使用交叉编译，工具链来自 RK Buildroot。先完成 [系统构建](#系统构建) 里的 buildroot 配置与编译。
 
 ### 工具链
 
-交叉编译，工具链来自 RK Buildroot：
-
-- **qmake**：`/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/qmake`（Qt 5.15.2）
-- **C/C++**：`.../host/bin/aarch64-buildroot-linux-gnu-gcc/g++`
-- **sysroot**：`.../host/aarch64-buildroot-linux-gnu/sysroot`
-- 路径已写死在 `build-aarch64/Makefile`，工具链路径详见该文件
-
-### 依赖库
-
-`.pro` + Makefile 链接的库：
-
-- Qt5：Core / Gui / Widgets
-- RK media：`rockit`（VI/VENC/VDEC/AI/AO）、`rga`（2D 加速）
-- OpenCV：core / highgui / imgproc / imgcodecs / video
-- FFmpeg：avformat / avcodec / avutil / swresample / swscale
-- 系统：pthread / atomic / mali(GPU) / drm / wayland / rt / dl
-
-头文件位于 `include/`（mpi/sdk、opencv4、rga、rkaiq）。
-
-### 编译
+先定义 SDK 根路径：
 
 ```bash
-cd build-aarch64
-make -j2
+export SDK_PATH=/path/to/your/linux_sdk
 ```
+
+将 `/path/to/your/linux_sdk` 替换为系统里实际 SDK 路径。工具链组件均位于 `$SDK_PATH/buildroot/output/rockchip_rk3566/` 之下：
+
+| 组件 | 路径 |
+|------|------|
+| qmake（Qt 5.15.2） | `$SDK_PATH/buildroot/output/rockchip_rk3566/host/bin/qmake` |
+| gcc | `$SDK_PATH/buildroot/output/rockchip_rk3566/host/bin/aarch64-buildroot-linux-gnu-gcc` |
+| g++ | `$SDK_PATH/buildroot/output/rockchip_rk3566/host/bin/aarch64-buildroot-linux-gnu-g++` |
+| sysroot | `$SDK_PATH/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot` |
+
+> qmake / gcc / sysroot 路径由 `qmake` 生成 `build-aarch64/Makefile` 时自动写入（见 `Makefile:6` `Command:` 行）。迁 SDK 路径或改了 `.pro` 中的 sysroot 硬编码后**必须重新 qmake**，才能让 `Makefile` 里的 `CC/CXX/--sysroot` 同步刷新；`ai-cam-ui-widget.pro:56,70` 的 `INCLUDEPATH`/`LIBS` 仍是手写硬编码，需手动同步。
+
+### 步骤
 
 - 工程文件：`ai-cam-ui-widget.pro`（qmake，C++11）
 - 输出：`build-aarch64/ai-cam-ui-widget`
 
-### 重新生成 Makefile
+1. 首次构建（生成 Makefile）
 
-修改 `.pro` 后需重新 qmake：
+   ```bash
+   mkdir -p build-aarch64
+   cd build-aarch64
+   $SDK_PATH/buildroot/output/rockchip_rk3566/host/bin/qmake ..
+   ```
+
+2. 增量编译（仅改了 `.cpp/.h`）
+
+   ```bash
+   cd build-aarch64
+   make
+   ```
+
+3. 改了 `.pro` 或换 SDK 路径
+
+   ```bash
+   cd build-aarch64
+   $SDK_PATH/buildroot/output/rockchip_rk3566/host/bin/qmake ..
+   make
+   ```
+
+
+
+## 系统构建
+
+本项目需要更新 kernel 和 buildroot（根文件系统），按下面步骤添加完之后可参考立创泰山派教程把内核和根文件系统单独烧录。所有路径基于 `$SDK_PATH`（见上节）。
+
+### Kernel
+
+打补丁（`resources/0001-tspi_action.patch`）：
 
 ```bash
-cd build-aarch64
-/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/qmake \
-    -o Makefile ../ai-cam-ui-widget.pro \
-    -spec devices/linux-buildroot-g++ CONFIG+=debug CONFIG+=qml_debug
+cd $SDK_PATH/kernel
+git checkout -b develop        # 第一次：创建 develop 分支
+git am 0001-tspi_action.patch
 ```
 
-### Debug 构建
+单独编译：
 
-带调试符号的版本（用于 core dump / gdbserver 调试，详见 `doc/debugging.md`）：
-
-```qmake
-CONFIG += c++11 debug
-QMAKE_CFLAGS_DEBUG += -g
-QMAKE_CXXFLAGS_DEBUG += -g
+```bash
+cd $SDK_PATH
+./build.sh kernel
 ```
 
-验证：`readelf -S build-aarch64/ai-cam-ui-widget | grep debug`
+产物：`rockdev/boot.img`。
 
-### 已知 warning
+### Buildroot
 
-`videodecoder.cpp` 有一个关于 `FRAME_FLAG_SNAP_END` 的 signed/unsigned warning，是既有问题，忽略即可。
+#### 1. 进入 menuconfig
+
+```bash
+cd $SDK_PATH
+source buildroot/build/envsetup.sh    # 选择 65
+make menuconfig
+```
+
+#### 2. Qt5
+
+`Target packages` → `Graphic libraries and applications (graphic/text)` → `QT5`，按 Y 选中后回车进入，再勾选：
+
+- gui module
+- widgets module
+- GIF support
+- JPEG support
+- PNG support
+- fontconfig support
+- qt5multimedia   # QCamera
+
+要加 OpenGL：
+
+- `Graphic libraries and applications` 下勾选 `OpenGL ES`
+- `QT5` 下勾选 `OpenGL support`、`eglfs support`
+
+> Qt5 已编译过需要先清构建再编 rootfs，否则可能装不进去：
+
+```bash
+cd $SDK_PATH/buildroot
+make qt5base-dirclean
+cd ..
+./build.sh rootfs
+```
+
+编译后 Qt5 源在 `$SDK_PATH/buildroot/output/rockchip_rk3566/build/qt5base-5.15.2`。
+
+#### 3. ffmpeg
+
+`Target packages` → `Audio and video applications` → `ffmpeg`，全部选中。
+
+#### 4. OpenCV
+
+> 若要用 `cv::imread` / `cv::imwrite`，必须用 opencv4 并开启 jpeg/png 支持。
+
+`Target packages` → `Libraries` → `Graphics` → `opencv4`，按需勾选：
+
+```
+calib3d, features2d, flann, highgui, imgcodecs, imgproc,
+ml, objdetect, photo, stitching, superres, ts,
+videoio, video, videostab, jpeg support, png support
+```
+
+#### 5. 保存配置
+
+```bash
+cd $SDK_PATH
+make savedefconfig
+```
+
+#### 6. 应用 fs-overlay
+
+把 `tspi_action_source/resources/fs-overlay` 整体替换到 `$SDK_PATH/buildroot/board/rockchip/rk356x/fs-overlay`，包含本项目主程序、自启动配置等定制内容。
+
+#### 7. 编译 rootfs
+
+```bash
+cd $SDK_PATH
+./build.sh rootfs
+```
+
+产物：`rockdev/rootfs.ext4`。
+
+
 
 ## 运行与部署
 
-### 部署到板子
+### 部署
 
-编译产物部署到板子 `/root/ai-cam-ui-widget`（通过 scp / adb / NFS，视环境而定）。板子需已具备 `rockit`、OpenCV、FFmpeg、Qt5 运行时（均由 Buildroot rootfs 提供）。
+将编译产物推到板子 `/root/ai-cam-ui-widget`（scp / adb / NFS 任选）。板子需已具备 `rockit`、OpenCV、FFmpeg、Qt5 运行时（均由 Buildroot rootfs 提供）。
+
+```bash
+adb push build-aarch64/ai-cam-ui-widget /root
+```
+
+### 运行
+
+> Qt 用 `eglfs`（不再用 `linuxfb`）。4 个 Qt 环境变量（`QT_QPA_PLATFORM` / `EGLFS_INTEGRATION` / `EGLFS_ROTATION` / `GENERIC_PLUGINS`）已在板端 `/etc/profile` 预置（见 [fs-overlay](#fs-overlay)），无需每次手动 export。开机自启动由 `S60aicam` 接管。一般调试时需要把自启动关闭，在S60aicam文件中注释即可。
+
+调试时 adb 进 shell 再启动：
+
+```bash
+adb shell
+/root/ai-cam-ui-widget
+```
 
 ### 数据存储
 
@@ -90,21 +200,13 @@ QMAKE_CXXFLAGS_DEBUG += -g
 | `/userdata/firstFrame` | 录像首帧缩略图（JPG） |
 | `/userdata/imu` | 录像同步的 IMU 数据（TXT） |
 
-清理用 `scripts/clean_storage.sh`。
+清理用 `scripts/clean_storage.sh`。从板子导出：
 
-### 屏幕与字体
+```bash
+adb pull /userdata/picture <host_path>
+```
 
-- `main.cpp` 用 `QGraphicsView` + `setRotation(270)` 旋转 UI 适配竖屏
-- 字体：板子 `/usr/lib/fonts/WenQuanZhengHei-1.ttf`，启动时 `QFontDatabase::addApplicationFont` 加载
-- `SIGINT` → `QApplication::quit()`（便于 Ctrl+C 退出）
 
-### 开机自启动
-
-通过 `resources/fs-overlay/`（Buildroot 文件系统覆盖层）配置，详见该目录与 README 开发记录。
-
-### WiFi 联网
-
-板子仅支持 2.4GHz WiFi，用 `scripts/connect_wifi.sh` 一键连接（调试/GDB 远程必需）。
 
 ## 文件结构
 
@@ -120,6 +222,7 @@ QMAKE_CXXFLAGS_DEBUG += -g
 | `mp4muxer.cpp/.h` | MP4 封装：Annex-B↔AVCC 转换、AAC 编码、音视频交织写入 |
 | `mp4demuxer.cpp/.h` | MP4 解封装：视频送 VDEC，音频 packet 发给 AudioManager |
 | `videodecoder.cpp/.h` | 轮询 VDEC 解码帧，RGA 转 BGR，发给 UI 显示 |
+| `videoglwidget.cpp/.h` | 视频预览/播放的 OpenGL 渲染控件（`QOpenGLWidget` + 着色器） |
 | `audiomanager.cpp/.h` | RK AI 采集 + AO 播放 + FFmpeg 音频编解码（AAC↔PCM） |
 | `imureader.cpp/.h` | ICM42688P SPI 采集（SIGIO 异步通知），录像时同步记录 IMU 数据 |
 | `keycontrol.cpp/.h` | 轮询 input 事件按键，发拍照/录像/切界面信号 |
@@ -137,17 +240,32 @@ QMAKE_CXXFLAGS_DEBUG += -g
 
 板子 BSP 与定制资源（非应用代码）：
 
-| 子目录 | 内容 |
-|--------|------|
+| 路径 | 内容 |
+|------|------|
+| `0001-tspi_action.patch` | 内核补丁（见 [系统构建/Kernel](#kernel)） |
 | `drivers/` | 内核驱动源码：触摸（hynitron、cst226se）、背光（gp7101）、IMU（icm42688p）、摄像头（ov8858）、touch |
 | `dts/` | 设备树覆盖（rockchip） |
-| `fonts/` | 字体文件 |
-| `fs-overlay/` | Buildroot 文件系统覆盖层（etc/root/usr），含开机自启动配置 |
-| `logo/` | 开机 logo（立创、西工大） |
+| `fonts/` | 中英文字体（WenQuanZhengHei-1、DejaVu 全套） |
+| `fs-overlay/` | Buildroot 根文件系统覆盖层（etc/root/usr），内容见下 |
+| `logo/` | 开机 logo（立创、西工大、西工大反色） |
 | `qt图标/` | UI 图标资源 |
 | `rockit/` | rockit 媒体库（build/lib/mpi/tgi） |
-| `扩展板补丁/` | 内核补丁 |
-| `海栎创触摸芯片移植手册-v3.5-20220701.pdf` | 触摸芯片移植参考 |
+| `扩展板补丁/` | 内核补丁（boot.img / kernel / kernel.patch） |
+| `屏幕资料/` | ST7701S HD228001C31 屏幕规格书、初始化序列、海栎创触摸芯片移植手册 |
+
+### fs-overlay/
+
+Buildroot 根文件系统覆盖层（应用 [系统构建/6. 应用 fs-overlay](#6-应用-fs-overlay) 替换到板端根文件系统）：
+
+| 路径 | 内容 |
+|------|------|
+| `etc/profile` | 预置 Qt eglfs/旋转/触摸环境变量（开机自动 export，见 [运行与部署](#运行与部署)） |
+| `etc/init.d/S49weston` | weston 守护进程占位 init 脚本（实际 start/stop 函数体被注释） |
+| `etc/init.d/S60aicam` | 启动 `ai-cam-ui-widget` 的 init 脚本（start / stop / restart） |
+| `root/ai-cam-ui-widget` | 主程序二进制（与 `build-aarch64/ai-cam-ui-widget` 同步） |
+| `root/*.png` | UI 图标（back / chevron-left / chevron-right / photo1 / video1） |
+| `usr/lib/librockit.so` | rockit 媒体库动态库 |
+| `usr/lib/fonts/` | 中英文字体（WenQuanZhengHei-1、DejaVu 全套 21 套） |
 
 ### doc/
 
@@ -157,6 +275,7 @@ QMAKE_CXXFLAGS_DEBUG += -g
 | [`debugging.md`](doc/debugging.md) | 嵌入式调试指南：core dump 分析、strace 卡死定位、gdbserver 实时断点调试、WiFi 网络配置 |
 | [`refactoring.md`](doc/refactoring.md) | 开发计划：应用层 Manager 架构重构、性能基线（2026-05-24）、内核层零拷贝优化路线、后续探索方向 |
 | [`troubleshooting.md`](doc/troubleshooting.md) | 问题排查记录：录像停止 PTS 重复段错误（已修复）、录像期间 ISP EBUSY 卡死（待修复） |
+| [`zerocopy-plan.md`](doc/zerocopy-plan.md) | 零拷贝链路开发计划（DMA-BUF → EGLImage → GL external texture → scanout） |
 
 ### scripts/
 
@@ -171,6 +290,8 @@ QMAKE_CXXFLAGS_DEBUG += -g
 
 | 路径 | 说明 |
 |------|------|
+| `ai-cam-ui-widget.pro` | qmake 工程文件（C++11） |
+| `ai-cam-ui-widget.pro.user` | Qt Creator 本地用户配置（未跟踪） |
 | `include/` | 第三方头文件：`mpi/sdk`、`opencv4`、`rga`、`rkaiq` |
 | `lib/` | 本地链接库（rockit 等） |
 | `build-aarch64/` | 构建输出（qmake 生成，`.gitignore` 忽略） |
