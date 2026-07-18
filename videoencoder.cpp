@@ -59,9 +59,6 @@ void VideoEncoder::do_save_video(void* mbBlk, uint64_t pts)
         return;
     }
 
-    // 编码器已持有帧引用，通知 CameraManager 释放 VI 帧
-    emit sigReleaseViFrame(mbBlk);
-
     /**************************
      * 获取编码码流
      * 0为编码通道号
@@ -78,4 +75,8 @@ void VideoEncoder::do_save_video(void* mbBlk, uint64_t pts)
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("RK_MPI_VENC_ReleaseStream fail %x", s32Ret);
     }
+
+    // 编码完成（VENC 已读完 DMA buffer），通知 CameraManager 释放 VI 帧引用
+    // 必须在 GetStream 之后，否则 VENC 内部还未拷贝完，VI buffer 会被内核复用导致花屏
+    emit sigReleaseViFrame(mbBlk);
 }

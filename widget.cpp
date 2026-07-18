@@ -224,7 +224,7 @@ Widget::Widget(QWidget *parent)
     connect(cameraManager, &CameraManager::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示（fd 零拷贝路径）
     connect(cameraManager, &CameraManager::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
     connect(cameraManager, &CameraManager::videoFinishedToIMURecord, imuReader, &IMUReader::record_imu_data);  // 开始录像时IMU开始记录
-    connect(cameraManager, &CameraManager::capFinishedToVideo, videoEncoder, &VideoEncoder::do_save_video);  // 保存录像
+    connect(cameraManager, &CameraManager::capFinishedToVideo, videoEncoder, &VideoEncoder::do_save_video);  // 保存录像（异步，videoEncoderThread 事件队列）
     connect(videoEncoder, &VideoEncoder::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection); // 编码完成释放VI帧
     // VideoGLWidget::paintGL EGLImage 绑定成功后 → frameConsumed → releaseViFrame
     connect(ui->openGLWidget, &VideoGLWidget::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection);

@@ -188,6 +188,14 @@ void VideoGLWidget::hideEvent(QHideEvent *event)
 void VideoGLWidget::setDmaBuf(int fd, int w, int h, void* mbBlk, quint32 fourcc,
                                int stride, int virHeight)
 {
+    // Qt 会自动合并多次 update()，paintGL 只跑一次。若上一帧 setDmaBuf 后 paintGL 还没跑，
+    // 这里直接覆盖 m_curMbBlk 会导致上一帧的 MB_BLK 永远得不到 sigReleaseViFrame，
+    // DMA buffer 泄漏 → pendingViFrames_ 每周期 +1 → VI channel 1 的 6 个 buffer 耗尽卡死。
+    // 修复：覆盖前把还没渲染的旧帧主动释放（pendingViFrames_ 中减引用）。
+    if (m_curMbBlk != nullptr && m_curMbBlk != mbBlk) {
+        emit sigReleaseViFrame(m_curMbBlk);
+    }
+
     m_curFd       = fd;
     m_curW        = w;
     m_curH        = h;

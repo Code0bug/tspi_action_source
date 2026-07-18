@@ -49,6 +49,11 @@ private:
     uint8_t first_video_frame;
 
     // 待释放的 VI 帧：MB_BLK → {帧信息, 引用计数}
+    // 录像时 VI 帧有两个消费者：
+    //   1) VideoEncoder（videoEncoderThread 异步处理）
+    //   2) VideoGLWidget（GUI 线程渲染）
+    // 都把对应的 mbBlk 在 sigReleaseViFrame 里发回 CameraManager::releaseViFrame,
+    // refCount 归零才真正 RK_MPI_VI_ReleaseChnFrame。
     struct PendingFrame {
         VIDEO_FRAME_INFO_S frame;
         int refCount;

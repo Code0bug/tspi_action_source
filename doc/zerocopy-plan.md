@@ -820,3 +820,113 @@ void VideoGLWidget::hideEvent(QHideEvent *event)
 ```
 
 切走时清 `m_curFd`，切回时 `paintGL` 看到 `m_curFd < 0`，跳过渲染只画黑屏，等新帧到达再正常渲染。
+
+---
+
+## 录像长时间运行后变卡：根因分析与优化方案
+
+### 现象
+
+录像开始时预览流畅（≈30fps），持续 1～几分钟后预览 fps 明显下降、UI 响应变慢，时间越长越严重。停止录像后短时间内仍卡。
+
+### 根因分析
+
+录像时单帧有两个消费者：`capFinishedToVideo`（→ `VideoEncoder::do_save_video` 在 `videoEncoderThread`）和 `capFinishedToUI`（→ `Widget::doShow` 在 GUI 线程），通过 `pendingViFrames_` 引用计数延迟释放。任一消费者跟不及时都会让 VI channel 1 的 6 个 MMA buffer 耗尽，进而 `RK_MPI_VI_GetChnFrame` 阻塞、预览 fps 崩塌。下面是几个独立的卡点，长时间录像后会叠加放大。
+
+#### 1. VideoEncoder 串行阻塞，跟不上 30fps（主因）
+
+`videoencoder.cpp:56-77`：
+```
+RK_MPI_VENC_SendFrame(1000ms 超时)   // 同步入队
+emit sigReleaseViFrame(mbBlk)        // 通知 CameraManager 减引用
+RK_MPI_VENC_GetStream(1000ms 超时)  // 同步等编码完成
+emit sigVideo2Mp4Mux(&stFrame)
+RK_MPI_VENC_ReleaseStream(...)       // 释放编码输出
+```
+
+一帧要走两次同步 MPI 调用。RK3566 VENC 1080p@30 单帧编码 5～15ms，加上 Qt 跨线程 QueuedConnection 的派发开销、Mp4Muxer 同步写盘阻塞，单帧处理时间经常 ≥33ms。一旦超过，`videoEncoderThread` 事件队列开始堆积，对应 `pendingViFrames_` 里大量帧 `refCount > 0` 无法释放，VI channel 1 的 6 个 MMA buffer 被吃光，`RK_MPI_VI_GetChnFrame` 在采集线程里阻塞（最长 1000ms），预览自然卡死。
+
+#### 2. MPI 释放时机过早，触发 driver 反压
+
+`videoencoder.cpp:63` 在 `SendFrame` 返回后**立即** emit `sigReleaseViFrame`。但 VENC 是异步队列，`SendFrame` 返回只表示入队成功，并不保证硬件已读完整块 DMA buffer。如果内核在编码完成前就允许 VI 把这块 buffer 复用给下一帧 ISP 输出，会读到半新半旧的像素，造成编码花屏或 VENC 反压。长时间录像时这种竞争概率随帧速率波动上升。
+
+#### 3. Mp4Muxer 落盘 I/O 抖动反压编码线程
+
+`mp4muxer.cpp:692` 的 `av_interleaved_write_frame` 是同步调用。FFmpeg 内部的 interleaved 缓冲在音视频不齐时会排队；eMMC 长时间写入还会触发写放大，单次 flush 可能瞬间 50～200ms。这段时间 `videoEncoderThread` 被堵在 `sigVideo2Mp4Mux` 的槽里 → 进一步恶化问题 1。
+
+#### 4. GUI 每帧重复串行开销
+
+`widget.cpp:344-393` 的 `doShow` 每帧都做：`QDateTime::currentDateTime()` 两次、`QString::arg` 构造录像时长、`sprintf(fps_text)`、`setOsdText` 拷贝到 GL widget。单帧 <1ms，但和 `paintGL` 里的 `glFinish()` + `QPainter` 在同一个 GUI 线程串行，长录像后期 GUI 事件队列一旦稍积压就被放大。
+
+#### 5. `VideoGLWidget::paintGL` 每帧销毁+重建 EGLImage
+
+`videoglwidget.cpp:213` 每帧 `destroyEglImage()` + `eglCreateImageKHR()`。Mali 驱动每次都要做 buffer import + sync，单帧 2～5ms。本身不会随时间恶化，但是固定占用，挤掉了本可用于处理事件队列的预算。
+
+### 优化方案（按性价比排序）
+
+#### A. 采集线程做丢帧保护（最简单，立竿见影）
+
+`cameramanager.cpp` 取帧后，若引用计数表已积压，直接释放这一帧、不发任何信号：
+
+```cpp
+void* key = reinterpret_cast<void*>(stViFrame.stVFrame.pMbBlk);
+
+// 保护：消费者积压时丢帧，防止 VI buffer 耗尽连累预览
+if (video_flag && pendingViFrames_.size() > 8) {
+    RK_LOGW("drop frame: pendingViFrames_=%d", pendingViFrames_.size());
+    RK_MPI_VI_ReleaseChnFrame(0, 1, &stViFrame);
+    continue;
+}
+
+pendingViFrames_[key] = {stViFrame, video_flag ? 2 : 1};
+```
+
+阈值取 8 是因为 VI channel 1 只有 6 个 MMA buffer，留 2 个余量给预览。这个改动不能解决卡顿根因，但能保证预览不掉到 ISP 反压之下，是诊断阶段同时也是一种长期保险。
+
+#### B. VideoEncoder 双线程化 / 改用 VENC 回调
+
+当前 `do_save_video` 把入队和取流串在同一函数里。两条优化路线：
+
+1. **VENC 回调路线（推荐）**：`RK_MPI_VENC_RegisterCallback` 注册 `VENC_CB_INFO_S`，在内核完成编码后回调里 emit `sigReleaseViFrame` 和 `sigVideo2Mp4Mux`，`do_save_video` 只调 `SendFrame` 立即返回。掉掉两个 1000ms 超时同步点。同时解决了问题 2：在编码完成回调里释放 VI buffer，时机不再过早。
+2. **双线程路线**：`do_save_video` 只做 `SendFrame`；单独的 `vencGetStreamLoop` 在 `videoEncoderThread` 内 `while` 循环 `GetStream` + 写 muxer。改动更小，但释放时机仍要小心——`SendFrame` 返回后不能立刻释放，需在 `GetStream` 拿到码流后再 emit `sigReleaseViFrame`。
+
+#### C. Mp4Muxer 写盘异步化
+
+`writeVideoToMp4` 现在直接 `av_interleaved_write_frame`。改成只 enqueue 到 Mp4Muxer 内部 `SafeQueue<VENC_PACK_S>`（深拷贝 pack 数据，因为 VENC pack buffer 要立刻 release），立即返回；Mp4Muxer 自己再开一个线程从 queue 取出做 annexb→avcc 转换 + 写盘。这样 `videoEncoderThread` 不再被 ffmpeg I/O 阻塞，问题 3 直接消除。
+
+需要配合 B 路线一起：B 让 `videoEncoderThread` 不再阻塞在 `GetStream`，C 让它不再阻塞在 muxer 写盘，两者解决编码侧的两个串行瓶颈。
+
+#### D. 增大 FFmpeg avio 缓冲
+
+`mp4muxer.cpp:216` `avio_open` 默认 buffer 偏小，长录像刷盘频繁。改用 `avio_alloc_context` 配 1MB 缓冲可减少 syscall 次数。这步等 C 做完之后是顺手优化。
+
+#### E. EGLImage 复用，避免每帧重建
+
+`VideoGLWidget` 改为只在 `m_curFd` 变化时 `destroyEglImage` + `eglCreateImageKHR`，其它帧 reuse 当前 EGLImage 直接 `glEGLImageTargetTexture2DOES` 重新绑定即可（DMA-BUF fd 不变时纹理内容已更新，因为 VI 在原地填充 buffer）。或改用 `EGL_KHR_stream` 一路 stream。改动相对大，建议作为后期优化。
+
+#### F. OSD 计算降频
+
+`widget.cpp:doShow` 里录像时长 / 系统时间没必要每帧重算，用 `QTimer` 500ms 一次更新即可；FPS 文字 1s 算一次。能挤出 GUI 线程预算给事件队列。
+
+### 验证手段
+
+在动手改之前先量化根因：
+
+```bash
+# 1. 跑 10 分钟录像，在 pendingViFrames_.size() 上加打印（cameramanager.cpp releaseViFrame 入口），
+#    若 size 持续 > 6 且上涨，说明消费者跟不上、VI buffer 被吃光
+# 2. 看进程内存/线程增长（排除泄漏）：
+watch -n 5 'cat /proc/$(pidof ai-cam-ui-widget)/status | grep -E "VmRSS|Threads"'
+# 3. 事件队列积压 / syscall 抖动：
+strace -p $(pidof ai-cam-ui-widget) -T -e trace=ioctl,write,fsync 2>&1 | \
+    awk '{print $2}' | sort | uniq -c
+# 4. kernel 侧 ISP/VENC 反压日志：
+dmesg -w | grep -E "rkisp|venc|timeout|buf"
+```
+
+最直接的诊断步骤：先做方案 A 的丢帧保护并打日志。如果 `pendingViFrames_.size()` 在卡顿出现前就已经 > 6 且持续涨，问题确认为编码侧跟不上，再上 B + C；如果 `size` 一直 ≤ 2 但仍卡，问题在 GUI / GL 渲染，转向方案 E + F。
+
+### 已知遗留
+
+- 长时间录像后 VENC 是否有内部资源泄漏未验证（dmesg 无报错但 RSS 缓慢上涨的现象待确认是否为 FFmpeg interleaved 缓冲）
+- 停止录像后短时间内仍卡，怀疑是 `videoEncoderThread` 队列里还积着几十帧没消化完，停止流程需要追加 `processEvents` 或显式 drain
