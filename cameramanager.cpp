@@ -89,16 +89,7 @@ void CameraManager::startCapture()
         // 异步显示：post 到 GUI 线程事件队列，立即返回
         int vi_fd = RK_MPI_MB_Handle2Fd(stViFrame.stVFrame.pMbBlk);
         emit capFinishedToUI(vi_fd, 1920, 1080, key, stViFrame.stVFrame.u64PTS);
-
     }
-
-    // 采集循环退出（stopCapture 置 isRunning=false 或线程被中断）：
-    // 在 worker 线程内完成 VI 通道/设备的反初始化，避免跨线程调用 MPI。
-    // 1. 归还所有尚未释放的 self-path 帧给内核，防止 buffer 泄漏导致 poll timeout
-    for (auto it = pendingViFrames_.begin(); it != pendingViFrames_.end(); ++it) {
-        RK_MPI_VI_ReleaseChnFrame(0, 1, &it.value().frame);
-    }
-    pendingViFrames_.clear();
 
 }
 

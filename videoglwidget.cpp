@@ -188,10 +188,10 @@ void VideoGLWidget::hideEvent(QHideEvent *event)
 void VideoGLWidget::setDmaBuf(int fd, int w, int h, void* mbBlk, quint32 fourcc,
                                int stride, int virHeight)
 {
-    // Qt 会自动合并多次 update()，paintGL 只跑一次。若上一帧 setDmaBuf 后 paintGL 还没跑，
-    // 这里直接覆盖 m_curMbBlk 会导致上一帧的 MB_BLK 永远得不到 sigReleaseViFrame，
-    // DMA buffer 泄漏 → pendingViFrames_ 每周期 +1 → VI channel 1 的 6 个 buffer 耗尽卡死。
-    // 修复：覆盖前把还没渲染的旧帧主动释放（pendingViFrames_ 中减引用）。
+
+    // 由相册切回预览时会连续调用三次 capFinishedToUI -> setDmaBuf
+    // 但是 QT 会合并多次为一次 paintGL，最后只执行一次 paintGL
+    // 这就导致前两次的 mbBlk 没有得到释放，这里是将未 paintGL 的帧进行释放
     if (m_curMbBlk != nullptr && m_curMbBlk != mbBlk) {
         emit sigReleaseViFrame(m_curMbBlk);
     }
@@ -250,7 +250,9 @@ void VideoGLWidget::paintGL()
         }
     }
 
-    // OSD：native GL 绘制完成后，用 QPainter 在 GL widget 上叠加文字（GPU 光栅化）
+    // 使用 QPainter 绘图会导致切换预览界面时出现 Segmentation fault (core dumped) 
+    // 目前改用 qlabel
+#if 0
     glFinish();
     glUseProgram(0);
     glActiveTexture(GL_TEXTURE0);
@@ -281,4 +283,5 @@ void VideoGLWidget::paintGL()
         }
     }
     painter.end();
+#endif
 }

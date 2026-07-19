@@ -2,6 +2,8 @@
 #include "ui_widget.h"
 #include "videoglwidget.h"
 #include <cstdint>
+#include <QLabel>
+#include <QFont>
 
 // 用于fps显示
 static char fps_text[16];
@@ -48,6 +50,37 @@ static void setupButton(QPushButton *btn, const QString &iconPath)
     );
 }
 
+static void setupOsdLabel(QLabel *lbl, bool recording,
+                          int x, int y, int w, int h,
+                          Qt::Alignment align)
+{
+    if (!lbl) return;
+    QFont font = lbl->font();
+    font.setPixelSize(25);
+    font.setBold(true);
+    lbl->setFont(font);
+    lbl->setAlignment(align);
+    lbl->setGeometry(x, y, w, h);
+    lbl->setFixedSize(w, h);
+    if (recording) {
+        lbl->setStyleSheet(
+            "QLabel {"
+            "  color: white;"
+            "  background-color: rgb(200, 0, 0);"
+            "  padding: 2px 4px;"
+            "}"
+        );
+    } else {
+        lbl->setStyleSheet(
+            "QLabel {"
+            "  color: white;"
+            "  background: transparent;"
+            "  padding: 2px 4px;"
+            "}"
+        );
+    }
+}
+
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::Widget)
@@ -67,6 +100,11 @@ Widget::Widget(QWidget *parent)
     setupButton(ui->videoback_button,    "/root/back.png");
     setupButton(ui->prev_button,         "/root/chevron-left.png");
     setupButton(ui->next_button,         "/root/chevron-right.png");
+
+    setupOsdLabel(ui->label_time_0, false, 20, 20, 130, 30, Qt::AlignLeft  | Qt::AlignVCenter);
+    setupOsdLabel(ui->label_fps_0,  false, 380, 20, 160, 30, Qt::AlignRight | Qt::AlignVCenter);
+    setupOsdLabel(ui->label_time_5, true,  20, 20, 90, 30, Qt::AlignLeft  | Qt::AlignVCenter);
+    setupOsdLabel(ui->label_fps_5,  false, 380, 20, 160, 30, Qt::AlignRight | Qt::AlignVCenter);
 
     // 垂直滚动条样式
     ui->picture_listWidget->verticalScrollBar()->setStyleSheet(
@@ -329,20 +367,9 @@ Widget::~Widget()
     delete ui;
 }
 
-//void Widget::start_imu_record()
-//{
-//    IMUTimer.start(20); // 20ms->50hz
-//}
-
-//void Widget::stop_imu_record()
-//{
-//    IMUTimer.stop();
-//}
-
-
 void Widget::doShow(int fd, int w, int h, void* mbBlk, uint64_t pts)  // 预览（VideoGLWidget 零拷贝路径）
 {
-    // FPS 统计（OSD 由 VideoGLWidget::paintGL 用 QPainter 绘制，此处仅算值）
+    // FPS 统计
     static int64_t time_last = 0;
     auto now = std::chrono::system_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
@@ -351,35 +378,33 @@ void Widget::doShow(int fd, int w, int h, void* mbBlk, uint64_t pts)  // 预览�
     if (fps_time > 0) fps = 1000 / fps_time;
     time_last = timestamp;
     sprintf(fps_text, "FPS:%.0f", fps);
+    QString fpsStr = QString::fromUtf8(fps_text);
 
-    // OSD：录像时画时长，非录像画系统时间；右上角始终画 FPS
-    QString topRight = QString::fromUtf8(fps_text);
-    QString topLeft;
+    // 左上 OSD：录像时画时长，非录像画系统时间
+    QString timeStr;
     if (video_flag) {
-        QDateTime now = QDateTime::currentDateTime();
-        qint64 elapsedMS = recordStartTime.msecsTo(now);
+        QDateTime nowT = QDateTime::currentDateTime();
+        qint64 elapsedMS = recordStartTime.msecsTo(nowT);
         int seconds = (elapsedMS / 1000) % 60;
         int minutes = (elapsedMS / (1000 * 60)) % 60;
-        topLeft = QString("%1:%2")
+        timeStr = QString("%1:%2")
                      .arg(minutes, 2, 10, QChar('0'))
                      .arg(seconds, 2, 10, QChar('0'));
     } else {
-        topLeft = QDateTime::currentDateTime().toString("HH'h'mm'm'");
+        timeStr = QDateTime::currentDateTime().toString("HH'h'mm'm'");
     }
 
-    // 录像中（page5）用 openGLWidget_2 显示，否则用 page0 的 openGLWidget
     int curPage = ui->stackedWidget->currentIndex();
     if (curPage == 5) {
-        if (ui->openGLWidget_2) {
-            ui->openGLWidget_2->setDmaBuf(fd, w, h, mbBlk);
-            ui->openGLWidget_2->setOsdText(topLeft, topRight, video_flag);
-        }
+        ui->openGLWidget_2->setDmaBuf(fd, w, h, mbBlk);
+        ui->label_time_5->setText(timeStr);
+        ui->label_fps_5->setText(fpsStr);
     } else {
-        if (ui->openGLWidget) {
-            ui->openGLWidget->setDmaBuf(fd, w, h, mbBlk);
-            ui->openGLWidget->setOsdText(topLeft, topRight, video_flag);
-        }
+        ui->openGLWidget->setDmaBuf(fd, w, h, mbBlk);
+        ui->label_time_0->setText(timeStr);
+        ui->label_fps_0->setText(fpsStr);
     }
+
 }
 
 void Widget::doShowVideo(int fd, int w, int h, void* mbBlk, int stride, int virHeight)  // 播放录像（VDEC 零拷贝路径）
@@ -446,8 +471,6 @@ void Widget::updateVideo(QString path, cv::Mat first_frame)   // 录像时更新
 
     video_flag = 1; // 开始录像
     recordStartTime = QDateTime::currentDateTime(); // 记录下录制的时间
-
-
 }
 
 void Widget::stopVideo()

@@ -62,9 +62,37 @@
       <bool>false</bool>
      </property>
     </widget>
+    <widget class="QLabel" name="label_fps_0">
+     <property name="geometry">
+      <rect>
+       <x>420</x>
+       <y>20</y>
+       <width>81</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>TextLabel</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_time_0">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>30</y>
+       <width>55</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>TextLabel</string>
+     </property>
+    </widget>
     <zorder>openGLWidget</zorder>
     <zorder>switch2photo_button</zorder>
     <zorder>switch2video_button</zorder>
+    <zorder>label_fps_0</zorder>
+    <zorder>label_time_0</zorder>
    </widget>
    <widget class="QWidget" name="page1">
     <widget class="QPushButton" name="photoback_button">
@@ -213,6 +241,32 @@
        <width>552</width>
        <height>368</height>
       </rect>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_time_5">
+     <property name="geometry">
+      <rect>
+       <x>60</x>
+       <y>30</y>
+       <width>55</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>TextLabel</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_fps_5">
+     <property name="geometry">
+      <rect>
+       <x>440</x>
+       <y>30</y>
+       <width>55</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>TextLabel</string>
      </property>
     </widget>
    </widget>
