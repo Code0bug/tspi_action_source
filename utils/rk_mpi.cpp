@@ -94,7 +94,7 @@ int vi_dev_init() {
 
 int vi_chn_init(int channelId, int width, int height) {
 	int ret;
-    int buf_cnt = 6;
+    int buf_cnt = 10;
 	// VI init
 	VI_CHN_ATTR_S vi_chn_attr;
 	memset(&vi_chn_attr, 0, sizeof(vi_chn_attr));
@@ -135,7 +135,7 @@ int venc_init(int chnId, int width, int height, RK_CODEC_ID_E enType) {
 	}
 
 	stAttr.stVencAttr.enType = enType;
-	stAttr.stVencAttr.enPixelFormat = RK_FMT_RGB888;
+	stAttr.stVencAttr.enPixelFormat = RK_FMT_YUV420SP;
 	if (enType == RK_VIDEO_ID_AVC)
 		stAttr.stVencAttr.u32Profile = H264E_PROFILE_HIGH;
 	stAttr.stVencAttr.u32PicWidth = width;

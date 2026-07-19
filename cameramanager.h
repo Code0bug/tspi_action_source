@@ -6,6 +6,8 @@
 #include <QDateTime>
 #include <QString>
 
+#include <atomic>
+#include <mutex>
 #include <iostream>
 #include "rk_mpi.h"
 #include <opencv2/opencv.hpp>
@@ -13,6 +15,7 @@
 
 #include <linux/videodev2.h>
 #include <sys/ioctl.h>
+#include <QHash>
 
 #include "im2d.h"
 #include "rga.h"
@@ -36,21 +39,32 @@ public slots:
     void startVideo();
     void stopVideo();
     void takePhoto();
+    void releaseViFrame(void* mbBlk);
 
 private:
     cv::Mat stabilizeFrame(const cv::Mat& frame);
-    uint8_t isRunning;
+    std::atomic<bool> isRunning;
     uint8_t photo_flag;
     uint8_t video_flag;
     uint8_t first_video_frame;
 
-    // 零拷贝录像：BGR 输出 DMA 双缓冲
-    MB_BLK bgr_blk_[2];
-    RK_S32 bgr_fd_[2];
-    int write_idx_;
+    // 待释放的 VI 帧：MB_BLK → {帧信息, 引用计数}
+    // 录像时 VI 帧有两个消费者：
+    //   1) VideoEncoder（videoEncoderThread 异步处理）
+    //   2) VideoGLWidget（GUI 线程渲染）
+    // 都把对应的 mbBlk 在 sigReleaseViFrame 里发回 CameraManager::releaseViFrame,
+    // refCount 归零才真正 RK_MPI_VI_ReleaseChnFrame。
+    struct PendingFrame {
+        VIDEO_FRAME_INFO_S frame;
+        int refCount;
+    };
+    QHash<void*, PendingFrame> pendingViFrames_;
+    std::mutex pendingMtx_;
+
 
 signals:
-    void capFinishedToUI(cv::Mat imgbuf);
+    // 预览改传 DMA-BUF 的 fd + 几何 + MB_BLK（MB_BLK 用于 UI 回发释放）
+    void capFinishedToUI(int fd, int w, int h, void* mbBlk, uint64_t pts);
     void capFinishedToVideo(void* mbBlk, uint64_t pts);
 //    void photoFinishedToUpdate(QString path);
     void videoFinishedToUpdate(QString path, cv::Mat first_frame);

@@ -36,21 +36,19 @@ public:
     ~Widget();
 
 public slots:
-    void doShow(cv::Mat img);
+    void doShow(int fd, int w, int h, void* mbBlk, uint64_t pts);
     void switchToPage1();
     void switchToPage2();
     void switchToPage0();
     void switchToPage5();
     void updatePicture(QString path);
     void updateVideo(QString path, cv::Mat first_frame);
-    void doShowVideo(cv::Mat img);
+    void doShowVideo(int fd, int w, int h, void* mbBlk, int stride, int virHeight);
     void stopVideo();
     void showNextPhoto();
     void showPrevPhoto();
     void PicListItemClicked(QListWidgetItem *item);
     void VideoListItemClicked(QListWidgetItem *item);
-//    void stop_imu_record();
-//    void start_imu_record();
 
 
 signals:

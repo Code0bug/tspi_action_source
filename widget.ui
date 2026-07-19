@@ -23,22 +23,6 @@
     </rect>
    </property>
    <widget class="QWidget" name="page0">
-    <widget class="QLabel" name="video_label">
-     <property name="geometry">
-      <rect>
-       <x>0</x>
-       <y>0</y>
-       <width>552</width>
-       <height>368</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>TextLabel</string>
-     </property>
-     <property name="scaledContents">
-      <bool>false</bool>
-     </property>
-    </widget>
     <widget class="QPushButton" name="switch2photo_button">
      <property name="geometry">
       <rect>
@@ -65,6 +49,50 @@
       <string/>
      </property>
     </widget>
+    <widget class="VideoGLWidget" name="openGLWidget">
+     <property name="geometry">
+      <rect>
+       <x>0</x>
+       <y>0</y>
+       <width>552</width>
+       <height>368</height>
+      </rect>
+     </property>
+     <property name="autoFillBackground">
+      <bool>false</bool>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_fps_0">
+     <property name="geometry">
+      <rect>
+       <x>420</x>
+       <y>20</y>
+       <width>81</width>
+       <height>21</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>TextLabel</string>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_time_0">
+     <property name="geometry">
+      <rect>
+       <x>40</x>
+       <y>30</y>
+       <width>55</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>TextLabel</string>
+     </property>
+    </widget>
+    <zorder>openGLWidget</zorder>
+    <zorder>switch2photo_button</zorder>
+    <zorder>switch2video_button</zorder>
+    <zorder>label_fps_0</zorder>
+    <zorder>label_time_0</zorder>
    </widget>
    <widget class="QWidget" name="page1">
     <widget class="QPushButton" name="photoback_button">
@@ -191,7 +219,7 @@
       <string/>
      </property>
     </widget>
-    <widget class="QLabel" name="video_label_2">
+    <widget class="VideoGLWidget" name="openGLWidget_1">
      <property name="geometry">
       <rect>
        <x>0</x>
@@ -200,36 +228,57 @@
        <height>368</height>
       </rect>
      </property>
-     <property name="text">
-      <string>TextLabel</string>
-     </property>
-     <property name="scaledContents">
-      <bool>false</bool>
-     </property>
     </widget>
-    <zorder>video_label_2</zorder>
+    <zorder>openGLWidget_1</zorder>
     <zorder>video1back_button</zorder>
    </widget>
    <widget class="QWidget" name="page5">
-    <widget class="QLabel" name="video_label_3">
+    <widget class="VideoGLWidget" name="openGLWidget_2">
      <property name="geometry">
       <rect>
        <x>0</x>
-       <y>-10</y>
+       <y>0</y>
        <width>552</width>
        <height>368</height>
+      </rect>
+     </property>
+    </widget>
+    <widget class="QLabel" name="label_time_5">
+     <property name="geometry">
+      <rect>
+       <x>60</x>
+       <y>30</y>
+       <width>55</width>
+       <height>17</height>
       </rect>
      </property>
      <property name="text">
       <string>TextLabel</string>
      </property>
-     <property name="scaledContents">
-      <bool>false</bool>
+    </widget>
+    <widget class="QLabel" name="label_fps_5">
+     <property name="geometry">
+      <rect>
+       <x>440</x>
+       <y>30</y>
+       <width>55</width>
+       <height>17</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>TextLabel</string>
      </property>
     </widget>
    </widget>
   </widget>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>VideoGLWidget</class>
+   <extends>QOpenGLWidget</extends>
+   <header>videoglwidget.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

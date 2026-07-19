@@ -1,9 +1,8 @@
 #include "widget.h"
 
 #include <QApplication>
-#include <QGraphicsView>
-#include <QGraphicsProxyWidget>
 #include <QFontDatabase>
+#include <QScreen>
 #include <csignal>
 
 static void shutdownHandler(int)
@@ -48,12 +47,8 @@ int main(int argc, char *argv[])
 
     checkAndCreateUserDataDirs();
 
-    // 旋转屏幕
+    // 旋转由 VideoGLWidget shader 内部完成，不再用 QGraphicsView
     Widget *from = new Widget; //项目主窗口
-    QGraphicsScene *scene = new QGraphicsScene;
-    QGraphicsProxyWidget *w = scene->addWidget(from);
-    w->setRotation(270);
-    QGraphicsView *view = new QGraphicsView(scene);
 
     // 设置字体
     int my_font = QFontDatabase::addApplicationFont("/usr/lib/fonts/WenQuanZhengHei-1.ttf");
@@ -64,8 +59,10 @@ int main(int argc, char *argv[])
         a.setFont(fontthis);
     }
 
-
-    view->show();
+    // 取屏几何，全屏显示
+    QRect sg = a.primaryScreen()->geometry();
+    from->setGeometry(sg);
+    from->showFullScreen();
 
     signal(SIGINT, shutdownHandler);
 

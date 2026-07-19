@@ -3,29 +3,32 @@
 
 #include <QObject>
 #include <QWidget>
+#include <atomic>
 #include "rk_mpi.h"
 #include <opencv2/opencv.hpp>
-#include "im2d.h"
-#include "rga.h"
-#include "RgaUtils.h"
-#include "mp4demuxer.h"
+#include <QHash>
 
 class VideoDecoder : public QObject
 {
     Q_OBJECT
 public:
     explicit VideoDecoder(QObject *parent = nullptr);
+    ~VideoDecoder() override;
 
 signals:
-    void VideodecToUI(cv::Mat img);
+    void VideodecToUI(int fd, int w, int h, void* mbBlk, int stride, int virHeight);
 
 public slots:
     void do_get_frame();
     void do_stop_get_frame();
+    void releaseVdecFrame(void* mbBlk);
 
 private:
-    uint8_t stop_get_frame;
-
+    std::atomic<bool> stop_get_frame;
+    std::atomic<bool> vdecReady;
+    QHash<void*, VIDEO_FRAME_INFO_S> pendingVdecFrames_;
+    void destroyVdec();
+    void reinitVdec();
 };
 
 #endif // VIDEODECODER_H

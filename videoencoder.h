@@ -24,6 +24,7 @@ public slots:
 
 signals:
     void sigVideo2Mp4Mux(VENC_STREAM_S *pstStream);
+    void sigReleaseViFrame(void* mbBlk);
 
 private:
     VENC_STREAM_S stFrame;	 	    // 编码码流结构体，用于存储读取到的编码流

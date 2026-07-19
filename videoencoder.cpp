@@ -19,7 +19,7 @@ VideoEncoder::VideoEncoder()
     h264_frame.stVFrame.u32Height = encHeight;
     h264_frame.stVFrame.u32VirWidth = encWidth;
     h264_frame.stVFrame.u32VirHeight = encHeight;
-    h264_frame.stVFrame.enPixelFormat = RK_FMT_RGB888;
+    h264_frame.stVFrame.enPixelFormat = RK_FMT_YUV420SP;
     h264_frame.stVFrame.u32FrameFlag = 160;
 
     // rkmpi init
@@ -75,4 +75,8 @@ void VideoEncoder::do_save_video(void* mbBlk, uint64_t pts)
     if (s32Ret != RK_SUCCESS) {
         RK_LOGE("RK_MPI_VENC_ReleaseStream fail %x", s32Ret);
     }
+
+    // 编码完成（VENC 已读完 DMA buffer），通知 CameraManager 释放 VI 帧引用
+    // 必须在 GetStream 之后，否则 VENC 内部还未拷贝完，VI buffer 会被内核复用导致花屏
+    emit sigReleaseViFrame(mbBlk);
 }

@@ -1,6 +1,9 @@
 #include "widget.h"
 #include "ui_widget.h"
+#include "videoglwidget.h"
 #include <cstdint>
+#include <QLabel>
+#include <QFont>
 
 // 用于fps显示
 static char fps_text[16];
@@ -47,6 +50,37 @@ static void setupButton(QPushButton *btn, const QString &iconPath)
     );
 }
 
+static void setupOsdLabel(QLabel *lbl, bool recording,
+                          int x, int y, int w, int h,
+                          Qt::Alignment align)
+{
+    if (!lbl) return;
+    QFont font = lbl->font();
+    font.setPixelSize(25);
+    font.setBold(true);
+    lbl->setFont(font);
+    lbl->setAlignment(align);
+    lbl->setGeometry(x, y, w, h);
+    lbl->setFixedSize(w, h);
+    if (recording) {
+        lbl->setStyleSheet(
+            "QLabel {"
+            "  color: white;"
+            "  background-color: rgb(200, 0, 0);"
+            "  padding: 2px 4px;"
+            "}"
+        );
+    } else {
+        lbl->setStyleSheet(
+            "QLabel {"
+            "  color: white;"
+            "  background: transparent;"
+            "  padding: 2px 4px;"
+            "}"
+        );
+    }
+}
+
 Widget::Widget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::Widget)
@@ -66,6 +100,11 @@ Widget::Widget(QWidget *parent)
     setupButton(ui->videoback_button,    "/root/back.png");
     setupButton(ui->prev_button,         "/root/chevron-left.png");
     setupButton(ui->next_button,         "/root/chevron-right.png");
+
+    setupOsdLabel(ui->label_time_0, false, 20, 20, 130, 30, Qt::AlignLeft  | Qt::AlignVCenter);
+    setupOsdLabel(ui->label_fps_0,  false, 380, 20, 160, 30, Qt::AlignRight | Qt::AlignVCenter);
+    setupOsdLabel(ui->label_time_5, true,  20, 20, 90, 30, Qt::AlignLeft  | Qt::AlignVCenter);
+    setupOsdLabel(ui->label_fps_5,  false, 380, 20, 160, 30, Qt::AlignRight | Qt::AlignVCenter);
 
     // 垂直滚动条样式
     ui->picture_listWidget->verticalScrollBar()->setStyleSheet(
@@ -220,16 +259,21 @@ Widget::Widget(QWidget *parent)
     videoDecoder->moveToThread(videoDecoderThread);
 
     // 连接信号
-    connect(cameraManager, &CameraManager::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示
+    connect(cameraManager, &CameraManager::capFinishedToUI, this, &Widget::doShow);                    // 捕获视频到预览显示（fd 零拷贝路径）
     connect(cameraManager, &CameraManager::videoFinishedToUpdate, this, &Widget::updateVideo);         // 录像后更新录像列表
     connect(cameraManager, &CameraManager::videoFinishedToIMURecord, imuReader, &IMUReader::record_imu_data);  // 开始录像时IMU开始记录
-    connect(cameraManager, &CameraManager::capFinishedToVideo, videoEncoder, &VideoEncoder::do_save_video);  // 保存录像
+    connect(cameraManager, &CameraManager::capFinishedToVideo, videoEncoder, &VideoEncoder::do_save_video);  // 保存录像（异步，videoEncoderThread 事件队列）
+    connect(videoEncoder, &VideoEncoder::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection); // 编码完成释放VI帧
+    // VideoGLWidget::paintGL EGLImage 绑定成功后 → frameConsumed → releaseViFrame
+    connect(ui->openGLWidget, &VideoGLWidget::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection);
+    // 录像界面 page5 的 openGLWidget_2 由 CameraManager 供帧，释放也回 CameraManager
+    connect(ui->openGLWidget_2, &VideoGLWidget::sigReleaseViFrame, cameraManager, &CameraManager::releaseViFrame, Qt::DirectConnection);
     // connect(videoEncoder, &VideoEncoder::sigVideoEncoded, mp4Muxer, &Mp4Muxer::slotWriteVideoEncoded, Qt::QueuedConnection); // 编码流送mp4封装
     connect(cameraManager, &CameraManager::photoFinishedToSave, savePicture, &SavePicture::do_save_picture);  // 保存照片
     connect(savePicture, &SavePicture::photoFinishedToUpdate, this, &Widget::updatePicture);       // 保存照片后更新相册列表
 
-
-    connect(videoDecoder, &VideoDecoder::VideodecToUI, this, &Widget::doShowVideo);                  // 解码录像并显示
+    connect(ui->openGLWidget_1, &VideoGLWidget::sigReleaseViFrame, videoDecoder, &VideoDecoder::releaseVdecFrame, Qt::DirectConnection);
+    connect(videoDecoder, &VideoDecoder::VideodecToUI, this, &Widget::doShowVideo);                  // 解码录像并显示（零拷贝路径）
 
     connect(keyControl, &KeyControl::keyToTakephoto, cameraManager, &CameraManager::takePhoto, Qt::DirectConnection);  // 开始拍照
     connect(keyControl, &KeyControl::keyToStartvideo, cameraManager, &CameraManager::startVideo, Qt::DirectConnection);// 开始录像
@@ -269,7 +313,7 @@ Widget::Widget(QWidget *parent)
     connect(ui->video_listWidget, &QListWidget::itemClicked, this, &Widget::VideoListItemClicked);
 
     connect(this, &Widget::WidgetToStartCapture, cameraManager, &CameraManager::startCapture);
-    connect(this, &Widget::WidgetToStopCapture, cameraManager, &CameraManager::stopCapture);
+    connect(this, &Widget::WidgetToStopCapture, cameraManager, &CameraManager::stopCapture, Qt::DirectConnection);
     connect(this, &Widget::WidgetToStartDecVideo, mp4Demuxer, &Mp4Demuxer::do_send_frame);
     connect(this, &Widget::WidgetToStartDecVideo, videoDecoder, &VideoDecoder::do_get_frame);
 
@@ -297,6 +341,7 @@ Widget::~Widget()
 {
     // 通知所有线程停止
     cameraManagerThread->requestInterruption();
+    cameraManagerThread->quit();
     keyControlThread->quit();
     savePictureThread->quit();
     videoEncoderThread->quit();
@@ -322,95 +367,51 @@ Widget::~Widget()
     delete ui;
 }
 
-//void Widget::start_imu_record()
-//{
-//    IMUTimer.start(20); // 20ms->50hz
-//}
-
-//void Widget::stop_imu_record()
-//{
-//    IMUTimer.stop();
-//}
-
-
-void Widget::doShow(cv::Mat img)  // 预览和录像
+void Widget::doShow(int fd, int w, int h, void* mbBlk, uint64_t pts)  // 预览（VideoGLWidget 零拷贝路径）
 {
-
+    // FPS 统计
     static int64_t time_last = 0;
-    // 获取当前时间点
     auto now = std::chrono::system_clock::now();
-    // 转换为自1970年1月1日以来的毫秒数
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-    // 获取毫秒级时间戳
     int64_t timestamp = duration.count();
     int64_t fps_time = timestamp - time_last;
-    fps = 1000 / fps_time;
-
+    if (fps_time > 0) fps = 1000 / fps_time;
     time_last = timestamp;
-
     sprintf(fps_text, "FPS:%.0f", fps);
-    cv::putText(img, fps_text,
-                    cv::Point(420, 40),
-                    cv::FONT_HERSHEY_SIMPLEX,1,
-                    cv::Scalar(220,220,220),2);
+    QString fpsStr = QString::fromUtf8(fps_text);
 
-    if (video_flag) { // 录像时，显示录像时长
-
-        QDateTime now = QDateTime::currentDateTime();
-        qint64 elapsedMS = recordStartTime.msecsTo(now);  // 毫秒
+    // 左上 OSD：录像时画时长，非录像画系统时间
+    QString timeStr;
+    if (video_flag) {
+        QDateTime nowT = QDateTime::currentDateTime();
+        qint64 elapsedMS = recordStartTime.msecsTo(nowT);
         int seconds = (elapsedMS / 1000) % 60;
-        int minutes = (elapsedMS / (1000*60)) % 60;
-
-        // 构造分钟和秒的字符串
-        QString elapsedTime = QString("%1:%2")
-                                .arg(minutes, 2, 10, QChar('0'))
-                                .arg(seconds, 2, 10, QChar('0'));
-
-        // 转 std::string
-        std::string text = elapsedTime.toStdString();
-
-        // 获取文字尺寸
-        int fontFace = cv::FONT_HERSHEY_SIMPLEX;
-        double fontScale = 1;
-        int thickness = 2;
-        int baseline = 0;
-        cv::Size textSize = cv::getTextSize(text, fontFace, fontScale, thickness, &baseline);
-
-        // 绘制红色背景矩形
-        cv::Point textOrg(20, 40);
-        cv::rectangle(img,
-                      textOrg + cv::Point(-3, baseline),
-                      textOrg + cv::Point(textSize.width, -textSize.height-5),
-                      cv::Scalar(0, 0, 255),
-                      cv::FILLED);
-
-        // 绘制白色文字
-        cv::putText(img, text, textOrg, fontFace, fontScale, cv::Scalar(220, 220, 220), thickness);
-
-        QImage image(img.data, img.cols, img.rows, QImage::Format_BGR888);
-        ui->video_label_3->setPixmap(QPixmap::fromImage(image));
-
-    } else {  // 非录像下，显示系统时间
-        QString timeStr = QDateTime::currentDateTime().toString("HH'h'mm'm'");
-        cv::putText(img, timeStr.toStdString(),
-                    cv::Point(20, 40),
-                    cv::FONT_HERSHEY_SIMPLEX, 1,
-                    cv::Scalar(220,220,220), 2);
-
-        QImage image(img.data, img.cols, img.rows, QImage::Format_BGR888);
-        ui->video_label->setPixmap(QPixmap::fromImage(image));
+        int minutes = (elapsedMS / (1000 * 60)) % 60;
+        timeStr = QString("%1:%2")
+                     .arg(minutes, 2, 10, QChar('0'))
+                     .arg(seconds, 2, 10, QChar('0'));
+    } else {
+        timeStr = QDateTime::currentDateTime().toString("HH'h'mm'm'");
     }
 
-
+    int curPage = ui->stackedWidget->currentIndex();
+    if (curPage == 5) {
+        ui->openGLWidget_2->setDmaBuf(fd, w, h, mbBlk);
+        ui->label_time_5->setText(timeStr);
+        ui->label_fps_5->setText(fpsStr);
+    } else {
+        ui->openGLWidget->setDmaBuf(fd, w, h, mbBlk);
+        ui->label_time_0->setText(timeStr);
+        ui->label_fps_0->setText(fpsStr);
+    }
 
 }
 
-void Widget::doShowVideo(cv::Mat img)  // 播放录像
+void Widget::doShowVideo(int fd, int w, int h, void* mbBlk, int stride, int virHeight)  // 播放录像（VDEC 零拷贝路径）
 {
-
-    QImage image(img.data, img.cols, img.rows, QImage::Format_RGB888);
-
-    ui->video_label_2->setPixmap(QPixmap::fromImage(image));
+    if (ui->openGLWidget_1) {
+        ui->openGLWidget_1->setDmaBuf(fd, w, h, mbBlk, 0, stride, virHeight);
+    }
 }
 
 
@@ -428,7 +429,12 @@ void Widget::switchToPage2() // 切换到视频列表
 
 void Widget::switchToPage0() // 切换回摄像头显示
 {
+    int prev = ui->stackedWidget->currentIndex();
     ui->stackedWidget->setCurrentIndex(0);
+    // 仅从相册/视频列表返回时重启采集；从录像停止（page5）返回时采集仍在运行，避免重复 start
+    if (prev == 1 || prev == 2) {
+        emit WidgetToStartCapture();
+    }
 }
 
 void Widget::switchToPage5() // 切换至录像界面
@@ -465,8 +471,6 @@ void Widget::updateVideo(QString path, cv::Mat first_frame)   // 录像时更新
 
     video_flag = 1; // 开始录像
     recordStartTime = QDateTime::currentDateTime(); // 记录下录制的时间
-
-
 }
 
 void Widget::stopVideo()
@@ -522,9 +526,8 @@ void Widget::PicListItemClicked(QListWidgetItem *item)
 // 录像列表item被点击时的动作
 void Widget::VideoListItemClicked(QListWidgetItem *item)
 {
-    // 解码器初始化
-    vdec_init(1920, 1080);
-
+    // VDEC 通道的创建/销毁已移至 VideoDecoder worker 线程内（reinitVdec/destroyVdec），
+    // 避免与 do_get_frame 的 DestroyChn 跨线程竞争
     ui->stackedWidget->setCurrentIndex(4);  // 切换到录像显示页
     QString path = item->data(Qt::UserRole).toString();  // 取出存储的完整路径
     emit WidgetToStartDecVideo(path);
