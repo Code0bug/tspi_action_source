@@ -34,24 +34,27 @@ void VideoGLWidget::resolveExt()
 
 void VideoGLWidget::initializeGL()
 {
-    initializeOpenGLFunctions();
-    resolveExt();
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glDisable(GL_DEPTH_TEST);
-    glViewport(0, 0, width(), height());
+    initializeOpenGLFunctions(); // 加载OpenGL ES的函数指针
+    resolveExt();                // 解析 eglCreateImageKHR 等扩展
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);  // 清屏黑色
+    glDisable(GL_DEPTH_TEST);              // 2D 显示不需要深度测试
+    glViewport(0, 0, width(), height());   // 设置视口长宽 = 控件大小，告诉OpenGL ES画布有多大
 
     if (s_glEGLImageTargetTexture2DOES) {
-        glGenTextures(1, &m_tex);
-        glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_tex);
+        // 创建纹理对象，生成一个新的纹理ID，存到m_tex中
+        glGenTextures(1, &m_tex);  
+        // 将后续对该纹理目标的操作绑定到 m_tex
+        glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_tex); 
+        // 对纹理目标进行参数配置
         glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+        // 解绑当前 GL_TEXTURE_EXTERNAL_OES 目标，避免后续操作误改该纹理
+        glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);    
     }
 
-    // shader：采样 GL_TEXTURE_EXTERNAL_OES（YUV→RGB 由 driver 自动完成）
-    // 旋转由 QT_QPA_EGLFS_ROTATION 硬件层完成，shader 不做旋转
+    // 顶点着色器
     const char *vsrc =
         "attribute vec2 aPos;\n"
         "attribute vec2 aTexCoord;\n"
@@ -60,6 +63,7 @@ void VideoGLWidget::initializeGL()
         "    gl_Position = vec4(aPos, 0.0, 1.0);\n"
         "    vTexCoord = aTexCoord;\n"
         "}\n";
+    // 片元着色器
     const char *fsrc =
         "#extension GL_OES_EGL_image_external : require\n"
         "precision mediump float;\n"
@@ -69,9 +73,11 @@ void VideoGLWidget::initializeGL()
         "    gl_FragColor = texture2D(sTex, vTexCoord);\n"
         "}\n";
 
+    // 编译顶点着色器源码 vsrc，挂到 m_program 上
     if (!m_program.addShaderFromSourceCode(QOpenGLShader::Vertex, vsrc)) {
         qWarning() << "Vertex shader compile failed:" << m_program.log();
     }
+    // 编译片元着色器源码 fsrc，挂到 m_program 上
     if (!m_program.addShaderFromSourceCode(QOpenGLShader::Fragment, fsrc)) {
         qWarning() << "Fragment shader compile failed:" << m_program.log();
     }
@@ -83,8 +89,21 @@ void VideoGLWidget::initializeGL()
                  << "uniform sTex=" << m_program.uniformLocation("sTex");
     }
 
-    // 全屏 quad：两个三角形，4 个顶点，position + texcoord
-    // texcoord Y 翻转：GL 纹理坐标 (0,0) 在底部，DMA-BUF 图像 (0,0) 在顶部
+    //       屏幕位置坐标     纹理坐标
+    //          x  y         u   v
+    // 顶点0: (-1,-1) 左下   (0, 0) = 纹理左下角
+    // 顶点1: ( 1,-1) 右下   (1, 0) = 纹理右下角
+    // 顶点2: (-1, 1) 左上   (0, 1) = 纹理左上角  ──▶ 三角形1: 0→1→2（下半）
+    // 顶点3: ( 1, 1) 右上   (1, 1) = 纹理右上角  ──▶ 三角形2: 1→2→3（上半）
+    //     2●────●3         2●───●3
+    //     │ ╲  ╱│           │    │
+    //     │  ╲╱ │    =      │    │     用4个顶点拼出完整矩形
+    //     │  ╱╲ │           │    │
+    //     │ ╱  ╲│           │    │
+    //     0●────●1          0●───●1
+    //     三角形条带          两个三角形
+    // 1就表示全屏，0.5表示1/2屏
+    // 这里就是设置顶点坐标参数，后面会被读取到aPos
     GLfloat verts[] = {
         // x      y     u     v
         -1.0f, -1.0f,  0.0f, 0.0f,
@@ -92,10 +111,10 @@ void VideoGLWidget::initializeGL()
         -1.0f,  1.0f,  0.0f, 1.0f,
          1.0f,  1.0f,  1.0f, 1.0f,
     };
-    m_vbo.create();
-    m_vbo.bind();
-    m_vbo.allocate(verts, sizeof(verts));
-    m_vbo.release();
+    m_vbo.create();  // 在GPU上申请一块内存
+    m_vbo.bind();    // 把这块内存设为当前的 VBO (Vertex Buffer Object，顶点缓冲对象)
+    m_vbo.allocate(verts, sizeof(verts)); // 把 verts 数组从 CPU 内存拷贝到 GPU 内存里
+    m_vbo.release(); // 解绑
 }
 
 void VideoGLWidget::resizeGL(int w, int h)
@@ -122,25 +141,25 @@ bool VideoGLWidget::createEglImage()
 
     // 显式声明线性布局 modifier=0 (DRM_FORMAT_MOD_LINEAR)
     EGLint attr[] = {
-        EGL_WIDTH,                       m_curW,
-        EGL_HEIGHT,                      (EGLint)m_curH,
-        EGL_LINUX_DRM_FOURCC_EXT,        (EGLint)fourcc,
-        EGL_DMA_BUF_PLANE0_FD_EXT,       m_curFd,
-        EGL_DMA_BUF_PLANE0_OFFSET_EXT,   0,
-        EGL_DMA_BUF_PLANE0_PITCH_EXT,    (EGLint)stride,
-        EGL_DMA_BUF_PLANE1_FD_EXT,       m_curFd,
-        EGL_DMA_BUF_PLANE1_OFFSET_EXT,   (EGLint)plane1Off,
-        EGL_DMA_BUF_PLANE1_PITCH_EXT,    (EGLint)stride,
-        EGL_NONE
+        EGL_WIDTH,                       m_curW,               // 图像宽度（像素）
+        EGL_HEIGHT,                      (EGLint)m_curH,       // 图像高度（像素）
+        EGL_LINUX_DRM_FOURCC_EXT,        (EGLint)fourcc,       // 像素格式四字符码（如 0x3231564e = 'NV12'）
+        EGL_DMA_BUF_PLANE0_FD_EXT,       m_curFd,              // Plane0（Y 分量）的 DMA-BUF fd
+        EGL_DMA_BUF_PLANE0_OFFSET_EXT,   0,                    // Plane0 在缓冲区中的偏移（数据从 fd 开头放置，偏移为 0）
+        EGL_DMA_BUF_PLANE0_PITCH_EXT,    (EGLint)stride,       // Plane0 每行字节数（行跨度）
+        EGL_DMA_BUF_PLANE1_FD_EXT,       m_curFd,              // Plane1（UV 分量）的 DMA-BUF fd（NV12 下 Y 和 UV 共用同一 buffer）
+        EGL_DMA_BUF_PLANE1_OFFSET_EXT,   (EGLint)plane1Off,    // Plane1（UV）在缓冲区中的起始偏移（= stride * height）
+        EGL_DMA_BUF_PLANE1_PITCH_EXT,    (EGLint)stride,       // Plane1 每行字节数（NV12 中 UV 交错排列，stride 同 Plane0）
+        EGL_NONE                                               // 属性列表结束标记
     };
 
-    // 用 Qt 当前 GL context 的 EGLDisplay（已 init），但 ctx 必须是 EGL_NO_CONTEXT
-    // EGL_EXT_image_dma_buf_import 规范要求：target=EGL_LINUX_DMA_BUF_EXT 时 ctx 必须为 EGL_NO_CONTEXT
+    // 获取当前显示句柄
     EGLDisplay dpy = eglGetCurrentDisplay();
-    const char *exts = eglQueryString(dpy, EGL_EXTENSIONS);
+    // const char *exts = eglQueryString(dpy, EGL_EXTENSIONS);
     // printf("EGL_EXTS: %s\n", exts ? exts : "(null)");
     // printf("EGL_LINUX_DMA_BUF_EXT=0x%x\n", EGL_LINUX_DMA_BUF_EXT);
-    // 试 buffer=NULL，fd 只在 attr list 里传
+    
+    // 把dma-buf导入生成EGLImage
     m_image = s_eglCreateImageKHR(dpy, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT,
                                 (EGLClientBuffer)0, attr);
     if (!m_image) {
@@ -150,7 +169,9 @@ bool VideoGLWidget::createEglImage()
     }   
 
     if (s_glEGLImageTargetTexture2DOES && m_tex) {
+        // 把 m_tex 设为当前操作的纹理对象
         glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_tex);
+        // 把 m_image（EGLImage，包裹着 DMA-BUF 数据）导入到当前绑定的纹理 m_tex 中
         s_glEGLImageTargetTexture2DOES(GL_TEXTURE_EXTERNAL_OES, m_image);
     }
     return true;
@@ -221,7 +242,7 @@ void VideoGLWidget::paintGL()
         destroyEglImage();
         if (createEglImage()) {
             m_program.bind();
-            m_vbo.bind();
+            m_vbo.bind();  // 重新绑定当前GPU内存为 VBO
 
             int aPos      = m_program.attributeLocation("aPos");
             int aTexCoord = m_program.attributeLocation("aTexCoord");
@@ -229,13 +250,18 @@ void VideoGLWidget::paintGL()
 
             glEnableVertexAttribArray(aPos);
             glEnableVertexAttribArray(aTexCoord);
+            // 告诉 GPU 如何从 VBO 中解析顶点坐标（aPos）和纹理坐标（aTexCoord）：
+            // VBO 每行 4 个 float（16 字节），前 2 个是屏幕位置，后 2 个是纹理位置
             glVertexAttribPointer(aPos,      2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)0);
             glVertexAttribPointer(aTexCoord, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
 
+            // 激活纹理单元 0（GPU 有多个纹理槽位，最少 8 个，这里选 0 号）
             glActiveTexture(GL_TEXTURE0);
+            // 把 m_tex 绑定为当前操作的纹理对象
             glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_tex);
             m_program.setUniformValue(sTex, 0);
 
+            // 绘制纹理
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
             glDisableVertexAttribArray(aPos);

@@ -1,2 +1,3 @@
 build-aarch64/
 debug-artifacts/
+.vscode/
