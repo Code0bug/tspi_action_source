@@ -70,7 +70,7 @@ void VideoGLWidget::initializeGL()
         "varying vec2 vTexCoord;\n"
         "uniform samplerExternalOES sTex;\n"
         "void main() {\n"
-        "    gl_FragColor = texture2D(sTex, vTexCoord);\n"
+        "    gl_FragColor = texture2D(sTex, vec2(1.0 - vTexCoord.x, vTexCoord.y));\n"
         "}\n";
 
     // 编译顶点着色器源码 vsrc，挂到 m_program 上

@@ -42,7 +42,7 @@ void CameraManager::startCapture()
             continue;
         }
 
-        printf("pendingViFrames_ = %d\r\n", pendingViFrames_.size());
+        // printf("pendingViFrames_ = %d\r\n", pendingViFrames_.size());
 
         int height = stViFrame.stVFrame.u32Height;
         int width  = stViFrame.stVFrame.u32Width;
@@ -59,6 +59,7 @@ void CameraManager::startCapture()
             rga_buffer_t dst_img = wrapbuffer_virtualaddr(ui_frame.data, 552, 368, RK_FORMAT_RGB_888);
             imresize(src_img, dst_img);
             imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_RGB_888);
+            cv::rotate(ui_frame, ui_frame, cv::ROTATE_180);
 
             QDateTime current = QDateTime::currentDateTime();
             QString fileName = current.toString("yyyyMMdd_hhmmss");
@@ -127,6 +128,7 @@ void CameraManager::takePhoto()
         imcvtcolor(src_img, dst_img, RK_FORMAT_YCrCb_420_SP, RK_FORMAT_RGB_888);
 
         if (!frame.empty()) {
+            cv::rotate(frame, frame, cv::ROTATE_180);
             // 保存图片
             QDateTime current = QDateTime::currentDateTime();
             QString fileName = current.toString("yyyyMMdd_hhmmss") + ".bmp";
