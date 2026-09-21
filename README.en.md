@@ -1,36 +1,18 @@
-# rk3566-ai-camera-display
+# tspi-action
 
-#### Description
-{**When you're done, you can delete the content in this README and update the file with details for others getting started with your repository**}
+This branch contains a build skeleton, not a working camera application.
 
-#### Software Architecture
-Software architecture description
+- camera-ui: minimal Qt Widgets entry point.
+- media-service: minimal C++ executable linked to the C HAL.
+- hal: versioned shared library with an ABI marker only.
+- monitor: minimal entry point; supervision is not implemented.
+- ipc: D-Bus build dependency; communication is not implemented.
+- platform: preserved board resources, patches and device trees.
 
-#### Installation
+Set BUILDROOT_HOST_DIR to the RK3566 Buildroot host directory, then run
+`./tools/build.sh`. Outputs are in out/rk3566; staging is in out/staging.
+Qt5 Widgets, D-Bus, FFmpeg, ALSA, MPP, RGA, EGL and GLES are required in the
+target sysroot. Rockit is no longer linked.
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
-
-#### Instructions
-
-1.  xxxx
-2.  xxxx
-3.  xxxx
-
-#### Contribution
-
-1.  Fork the repository
-2.  Create Feat_xxx branch
-3.  Commit your code
-4.  Create Pull Request
-
-
-#### Gitee Feature
-
-1.  You can use Readme\_XXX.md to support different languages, such as Readme\_en.md, Readme\_zh.md
-2.  Gitee blog [blog.gitee.com](https://blog.gitee.com)
-3.  Explore open source project [https://gitee.com/explore](https://gitee.com/explore)
-4.  The most valuable open source project [GVP](https://gitee.com/gvp)
-5.  The manual of Gitee [https://gitee.com/help](https://gitee.com/help)
-6.  The most popular members  [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+See [README.md](README.md) for instructions and limitations, and
+[doc/refactoring.md](doc/refactoring.md) for the target architecture.

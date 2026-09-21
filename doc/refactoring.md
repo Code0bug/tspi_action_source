@@ -1,175 +1,435 @@
-# cam-ui-widget 开发计划
+# 相机系统重构方案
 
-## 一、应用层重构
+> 状态：目录与交叉编译骨架已建立，业务功能及 IPC/monitor 尚未实现。更新日期：2026-09-21。
+> 本文替代原有 Manager 拆分计划及旧性能估算。现有代码和其他历史文档不代表本方案已经落地。
 
-### 1.1 目标
+当前已建立三个最小程序、HAL ABI 版本接口、IPC 构建依赖和 SDK 依赖检查程序。旧应用源码已移除，板级资源保留。构建方法见 [README](../README.md)。以下详细模块划分仍为后续目标。
 
-当前 `widget.cpp` 承担了太多职责：线程创建、信号槽连接、UI 逻辑、相册管理。重构为 Manager 架构，每个 Manager 封装自己的线程和内部连接，Widget 只做 UI 和组装。
+## 1. 重构目标
 
-### 1.2 架构划分
+将现有 Qt 单进程应用重构为三层架构，通过三个自有进程运行：
 
-```
-Widget (UI)
-  │
-  ├── CameraManager        摄像头采集 + 预览 + 拍照
-  ├── KeyManager           按键输入轮询
-  ├── ImuManager           IMU 数据采集与录制
-  ├── AudioManager         音频采集(AI) + 播放(AO) + FFmpeg音频编解码
-  └── VideoManager         视频编码(VENC) + 解码(VDEC) + MP4封装/解封装
-```
+- UI 层：Qt Widgets，负责交互和显示，运行于 `camera-ui`。
+- 多媒体应用层：C++，负责业务状态、媒体管线和存储，运行于 `media-service`。
+- HAL 层：C 实现、C ABI，通过 `.so` 链接到媒体服务，不单独创建进程。
+- `camera-monitor`：启动、监测并回收上述两个子进程，执行故障恢复。
 
-### 1.3 Manager 职责详情
+最终后端移除 Rockit：V4L2 负责摄像头采集，ALSA 负责音频采集与播放，MPP 负责 Rockchip 硬件视频编解码。ISP/3A、图像变换和 IMU 等平台能力封装在 HAL 内。
 
-**CameraManager**
-- 持有：`CameraManager` + `SavePicture`
-- 内部连接：`cameracap::photoFinishedToSave` → `savepicture::do_save_picture`
-- 对外信号：`previewFrame(cv::Mat)`、`photoSaved(QString)`、`videoFrameReady(cv::Mat, FILE*, uint64_t)`
-- 对外槽：`startCapture()`、`stopCapture()`、`takePhoto()`、`startVideo()`、`stopVideo()`
+平台解耦指上层不依赖厂商接口，更换 SoC 时替换 HAL 后端。MPP、RKAIQ、RGA 仍是 Rockchip 依赖；使用 C 或动态库本身并不自动实现平台无关。
 
-**VideoManager**
-- 持有：`VideoEncoder` + `Mp4Muxer` + `Mp4Demuxer` + `VideoDecoder`
-- 内部连接：
-  - `sigVideo2Mp4Mux` → `writeVideoToMp4`（录像视频写MP4）
-  - `capFinishedToAudio` → `writeAudioToMp4`（录像音频写MP4，通过 AudioManager 提供接口）
-  - 播放音频三件套（`audioStreamStarted/PacketReady/Finished`）→ AudioManager
-- 对外信号：`videoFrameDecoded(cv::Mat)`、`recordStarted()`、`recordStopped()`
-- 对外槽：`startRecord(QString path)`、`stopRecord()`、`play(QString path)`、`stopPlay()`
+设计优先级：录像可靠性、资源生命周期正确、可恢复性、可测试性，然后是性能优化。允许为预览隔离增加一次硬件缩放或拷贝，不要求所有路径绝对零拷贝。
 
-**AudioManager**
-- 保持现有结构，增加对 VideoManager 的接口
-- 提供：`writeAudioToMp4(QByteArray, uint64_t)` 给 VideoManager 调用（录像音频流）
-- 提供：`startPlayback(codecId, sampleRate, channels, extradata)` 给 VideoManager 调用（播放音频流）
+三个进程指三个自有应用进程。D-Bus daemon、现有 ISP/3A 服务等系统依赖另计，初期不以消除这些服务为目标。
 
-**KeyManager**
-- 持有：`KeyControl`
-- 对外信号：`photoPressed()`、`recordStartPressed()`、`recordStopPressed()`
-- Widget 和各 Manager 只连 KeyManager 的信号，不直接连 KeyControl
+## 2. 总体架构
 
-**ImuManager**
-- 持有：`IMUReader`
-- 内部连接：`keycontrol::keyToStopvideo` → `imureader::stop_imu_record_txt`
-- 对外槽：`startRecord(QString)`、`stopRecord()`
-
-### 1.4 Widget 瘦身
-
-重构后 Widget 只保留：
-- UI 初始化和样式设置
-- 相册/视频列表管理（增删改查）
-- 页面切换逻辑
-- Manager 信号 → UI 更新的连接（如 `previewFrame` → `doShow`）
-
-### 1.5 实施顺序
-
-1. 先拆 `CameraManager`（最独立，改动最小）
-2. 再拆 `VideoManager`（涉及最多类，需要仔细设计接口）
-3. 然后拆 `KeyManager`、`ImuManager`（简单）
-4. 最后 `AudioManager` 接口调整
-
----
-
-## 二、性能基线（2026-05-24）
-
-RK3566 平台，`ai-cam-ui-widget` 资源占用：
-
-| 状态 | VIRT | RES | %CPU | %MEM |
-|------|------|-----|------|------|
-| 仅预览 | 1360 MB | 100 MB | 74.5% | 5.1% |
-| 录像（优化前） | 1629 MB | 199 MB | 169.9% | 10.1% |
-| 录像（零拷贝后） | 1559 MB | 118 MB | 117.6% | 6.0% |
-| 播放录像 | 1900 MB | 141 MB | 101.3% | 7.2% |
-
-录像优化效果：RES -40.7%，CPU -30.8%，%MEM -40.6%。主要收益来自去掉每帧 cv::Mat 分配和 memcpy，RGA 改用 DMA-BUF fd 直写。
-
----
-
-## 三、内核层优化：视频零拷贝链路
-
-### 3.1 现状问题
-
-当前录像链路存在多次不必要的内存拷贝：
-
-```
-摄像头 → [VI DMA buffer] → memcpy → [RGA 转换] → memcpy → [cv::Mat BGR]
-         → memcpy → [VENC DMA buffer] → 硬件编码 → memcpy → [码流buffer]
-         → MP4 封装
+```text
+camera-monitor
+  ├─ fork + exec → camera-ui
+  │                 Qt Widgets / 触摸交互 / EGL、OpenGL 显示
+  │                    ↕ D-Bus：命令、状态、事件
+  │                    ↕ Unix socket：帧描述、DMA-BUF FD、归还通知
+  └─ fork + exec → media-service
+                    C++ 状态机 / 媒体调度 / 时间同步 / 存储
+                            ↓ 进程内 C ABI 调用
+                    libcamera_hal.so
+                    V4L2 / ALSA / MPP / ISP / 图像变换 / IMU
 ```
 
-每一帧至少 3-4 次 `memcpy`，1080p BGR 帧一次就是 6MB，CPU 占用高且延迟大。
+HAL 对象和内部线程均属于媒体进程。动态库不提供故障隔离，HAL 崩溃会导致媒体进程退出。
 
-### 3.2 目标链路
+### 2.1 UI 层
 
+负责页面、触摸交互、相册列表、播放控件、状态和错误提示；将用户操作转为异步业务请求；导入预览或回放 DMA-BUF，完成 GPU 显示与 OSD，并在实际使用完成后归还帧。
+
+UI 不直接控制摄像头、声卡、编解码器或 IMU，不执行 MP4 封装。显示设备和 EGL 上下文由 UI 管理，媒体进程不与 UI 争用显示输出。
+
+页面切换只改变显示订阅及业务请求，不能直接决定摄像头是否关闭。UI 重连后查询完整状态并重建显示连接，不根据原页面猜测是否正在录像。
+
+### 2.2 多媒体应用层
+
+- 统一管理预览、拍照、录像、播放及其互斥关系。
+- 编排 HAL、编解码、图像处理和有界媒体队列。
+- 使用 FFmpeg 实现 MP4 封装/解封装、AAC 软件编解码及必要的音频转换。
+- 管理统一媒体时间轴、播放调度、录像排空和收尾。
+- 管理媒体文件、缩略图、IMU 文件、媒体索引和存储状态。
+- 处理物理拍照/录像按键，使这些操作不依赖 UI 存活。
+- 提供 D-Bus 控制接口、状态快照和帧传输服务。
+
+业务核心不依赖 Qt Widgets，也不使用 Qt 对象作为公共数据类型。D-Bus 接入实现与业务核心分离，具体库在协议验证阶段选择。
+
+### 2.3 HAL 层
+
+| 模块 | 职责 | 首个目标后端 |
+|------|------|--------------|
+| Camera | 能力查询、配置、启停、获取与归还帧 | V4L2，按 BSP 需要适配 media-controller/subdev |
+| VideoCodec | 硬件编码/解码、输入完成、输出获取与释放、排空 | Rockchip MPP |
+| Audio | PCM 采集/播放、设备位置与时间戳、XRUN 恢复 | ALSA |
+| Image | 缩放、旋转、格式转换 | RGA，必要时软件回退 |
+| ISP | 曝光、白平衡、对焦和 IQ 配置适配 | RKAIQ 或现有 3A 服务适配 |
+| IMU / Key | 传感器样本、采样时间、按键事件 | 当前字符设备/evdev，后续可适配 IIO |
+
+HAL 不处理文件命名、录像业务状态、页面状态和 MP4 容器。公共接口不得泄漏 `MppFrame`、`MppBuffer`、`MB_BLK`、V4L2 结构体、Qt 或 FFmpeg 对象。
+
+## 3. HAL C ABI 与动态库
+
+使用不透明对象句柄、固定宽度整数、显式结构体大小和接口版本。按功能拆分接口，不设计包办全部业务的全局对象。
+
+接口必须规定：
+
+- 能力查询与协商：尺寸、格式、布局、内存类型、编解码和同步能力。
+- 创建、配置、启动、停止、排空、取消、销毁的调用顺序。
+- 帧/码流所有权，以及 acquire/release 是否转移引用。
+- 提交成功、硬件使用输入完成、输出可用三种事件的区别。
+- 线程约束、超时语义、错误码和失败后的对象状态。
+- 回调所属线程、重入限制及停止后残留资源的归还规则。
+
+帧描述包含有效尺寸、像素格式、各 plane 的 stride/offset/size、时间戳与时钟域、缓冲区标识及同步信息。支持多 plane、多 FD 布局，不固定假定 NV12 的 UV 偏移总是 `width × height`。
+
+HAL 默认以 C 编写。若平台库仅提供 C++ 接口，可在后端内部局部适配，向上仍保持 C ABI。应用层通过 C++ RAII 封装资源。
+
+初期使用普通动态链接，按平台构建和部署 `libcamera_hal.so`，通过 SONAME/ABI 版本管理兼容性。运行时 `dlopen` 插件系统不属于首版必需项。
+
+## 4. 进程间通信
+
+### 4.1 控制通道：D-Bus
+
+以下为接口语义草案，具体名称在协议阶段固定：
+
+| 请求 | 返回或事件 |
+|------|------------|
+| 查询能力、查询状态 | 支持的模式、当前状态、服务实例标识 |
+| 订阅/取消预览 | 显示会话与帧通道信息 |
+| 拍照 | 已接受、保存成功或失败 |
+| 开始/停止录像 | Starting、Recording、Stopping、文件完成或失败 |
+| 播放/停止播放 | 状态、位置、结束或错误 |
+| 设置参数、音量、静音 | 实际生效值或失败原因 |
+| 查询媒体、操作文件 | 文件元数据及操作结果 |
+
+区分“请求已接受”和“操作已完成”。使用 request ID 关联结果，规定重复请求、冲突请求和错误处理。UI 不阻塞等待硬件操作。
+
+服务是状态的唯一权威来源。重连后重新获取状态快照。媒体删除等操作由服务检查文件是否仍被使用。
+
+### 4.2 视频通道：Unix domain socket
+
+采用 `AF_UNIX + SOCK_SEQPACKET`，通过 `sendmsg/recvmsg + SCM_RIGHTS` 传递 DMA-BUF FD。不能传指针，也不能仅发送 fd 整数作为跨进程句柄。
+
+协议区分握手、缓冲区注册、帧就绪、帧归还、缓冲池撤销和错误消息。每条消息有版本、类型和长度，接收端校验长度、FD 数量、plane 边界和格式。
+
+帧消息至少包含：
+
+```text
+service_instance_id / session_id / pool_generation
+buffer_id / frame_sequence / pts / timebase
+width / height / pixel_format / modifier / colorimetry
+plane_count / 每个 plane 的 stride、offset、size、FD 映射
+可选 acquire fence / release fence
 ```
-摄像头 → [VI DMA-BUF] ─────────────────────────────┐
-         │                                          │
-         ├── RGA(imresize) → [预览 DMA-BUF] → UI 显示 │
-         │                                          │
-         └── RGA(imcvtcolor BGR) → [编码 DMA-BUF] → VENC ──→ 码流 → MP4
-                                                                  ↑
-                                                          零拷贝（DMA-BUF 共享）
+
+FD 通过辅助数据传递，消息体仅描述映射关系。使用明确的序列化规则，不直接发送带指针或依赖编译器 padding 的内存结构。
+
+第一版可逐帧传 FD，正确性验证后再优化为缓冲池注册一次 FD、逐帧只传标识。必须明确 FD 关闭责任和 buffer 使用权的归还时机。
+
+D-Bus 与 socket 不保证跨通道顺序。停止预览、重新播放和重启时，使用实例、会话和 generation 拒绝过期消息，并完成旧资源清理。归还消息还需标识 frame sequence，避免迟到归还误释放同一 buffer 的新一轮使用。
+
+socket 发送不得阻塞采集或录像线程。限制客户端持帧数、待发送消息数及 FD 数量，校验本地连接身份和会话归属。
+
+### 4.3 音频
+
+首版不跨进程传输 PCM。音频采集、AAC 编解码及 ALSA 播放均位于媒体进程，UI 仅通过 D-Bus 获取音量、电平和播放位置等低频数据。
+
+若后续确有跨进程 PCM 消费者：
+
+- 少量数据使用独立 Unix socket，附带格式、序号和 PTS。
+- 持续、多通道数据可用 `memfd + mmap` 环形缓冲区，配合 `eventfd` 通知。
+- 必须定义索引同步、容量、溢出/欠载、断线清理和时间轴。
+
+该扩展不属于首版范围。当前 16 kHz、双声道、16 bit PCM 约为 64 KB/s，无需仅为减少这一部分拷贝引入共享内存协议。
+
+## 5. 媒体数据流
+
+### 5.1 预览与录像
+
+```text
+Sensor → ISP → V4L2 capture → 帧调度
+                              ├─→ 预览输出/独立缓冲池
+                              │     → DMA-BUF socket → UI EGL/OpenGL
+                              └─→ MPP encoder → H.264 → MP4 mux → 文件
+
+ALSA capture → PCM → AAC encoder ────────────────────────↗
+IMU capture → 带时间戳样本 → 与录像关联的 IMU 文件
 ```
 
-关键点：VI、RGA、VENC 全部在内核态通过 DMA-BUF 共享 buffer，数据不经过用户态拷贝。
+优先验证 V4L2 DMA-BUF 能否直接作为 MPP 输入，以及 EGL 是否支持对应布局。格式不兼容或预览需要隔离时，经 HAL 图像模块处理。
 
-### 3.3 实现路径
+UI 卡顿不能耗尽录像所需缓冲。优先评估 ISP 独立预览输出或独立预览缓冲池，必要时用 RGA 缩放/拷贝。共享采集池的方案必须先证明同步与客户端持帧上限正确。
 
-**阶段一：理解现有 MPI 的 buffer 管理**
+拍照由服务根据 HAL 能力选择高分辨率通道或其他受支持方案。照片保存、首帧缩略图和刷盘放入有界工作队列，不在实时采集循环中阻塞。录像期间能否拍照由能力查询和实测决定。
 
-- 追踪 `RK_MPI_VI_GetChnFrame` 返回的 `pMbBlk`，确认底层是 DMA-BUF
-- 追踪 `RK_MPI_VENC_SendFrame` 的 input buffer，确认是否可以接受外部 DMA-BUF
-- 阅读 `rockit` 库源码（`librockit`），理解 `MB_BLK` 到 `dma_buf` 的映射关系
-- 工具：`/sys/kernel/debug/dma_buf/bufinfo` 查看当前所有 DMA-BUF 的引用计数和大小
+### 5.2 回放
 
-**阶段二：RGA 零拷贝转换**
-
-- 当前 RGA 用 `wrapbuffer_virtualaddr`（用户态虚拟地址），改为 `wrapbuffer_fd`（DMA-BUF fd）
-- VI 输出的 DMA-BUF fd 直接传给 RGA，RGA 输出也用 DMA-BUF fd
-- 这样 RGA 转换完全在内核态完成，不需要用户态参与数据搬运
-
-```cpp
-// 当前：用户态地址 → RGA（需要数据已在用户态可访问）
-wrapbuffer_virtualaddr(vi_frame_ptr, w, h, RK_FORMAT_YCrCb_420_SP);
-
-// 优化：DMA-BUF fd → RGA（内核态直接操作，零拷贝）
-int vi_dmabuf_fd = RK_MPI_MB_Handle2Fd(vi_frame.pMbBlk);
-wrapbuffer_fd(dst_fd, w, h, RK_FORMAT_BGR_888);
+```text
+文件 → MP4 demux
+         ├─→ H.264 → MPP decoder → 帧调度 → DMA-BUF socket → UI
+         └─→ AAC decoder → PCM → ALSA playback
 ```
 
-**阶段三：VENC 零拷贝编码**
+预览和回放复用显示协议，但使用独立会话。解码输出尺寸或布局改变时创建新的 pool generation，旧池待消费者使用完成后再销毁。
 
-- RGA 输出的 DMA-BUF fd 直接传给 `RK_MPI_VENC_SendFrame`
-- 避免 RGA → 用户态 memcpy → VENC 的路径
-- 需要确认 `RK_MPI_VENC_SendFrame` 是否支持外部 DMA-BUF（通过 `MB_EXT_CONFIG_S` 或 fd 方式）
+媒体服务按统一播放时钟安排视频呈现和音频输出，不能仅以解封装发包时间代替最终播放同步。
 
-**阶段四：码流零拷贝传递**
+## 6. 缓冲区生命周期与同步
 
-- VENC 输出的码流 buffer 也通过 DMA-BUF fd 传递给 Mp4Muxer
-- `av_read_frame` / `av_interleaved_write_frame` 的 buffer 可以用 `av_buffer_create` 包装 DMA-BUF fd
-- 避免码流数据从硬件 buffer memcpy 到用户态再拷给 FFmpeg
+### 6.1 所有权
 
-### 3.4 性能指标
+媒体进程统一管理 HAL 帧和消费者引用：
 
-| 指标 | 当前（估算） | 目标 |
-|------|-------------|------|
-| 每帧 memcpy 次数 | 3-4 次 | 0 次（纯内核态流转） |
-| 1080p BGR 单帧拷贝量 | ~18 MB | 0 MB |
-| 录像 CPU 占用 | 高（大量 memcpy） | 降低 50%+ |
-| 端到端延迟（按键→首帧写入） | 待测 | 降低 30%+ |
+```text
+采集完成 → 服务持有 → 分发给编码/预览消费者
+                         → 各消费者完成使用并归还
+                         → 所有引用及硬件访问结束
+                         → 重新提交采集或回收到池
+```
 
-### 3.5 验证方法
+FD 有效、内存存在、内容不被覆盖是不同条件。关闭 FD 不等于业务归还；持有 FD 也不能阻止生产者错误地覆盖内容。
 
-- `perf top` 对比优化前后 `memcpy` 热点占比
-- `/sys/kernel/debug/dma_buf/bufinfo` 确认 buffer 引用计数正确（无泄漏）
-- `ftrace` 追踪 `dma_buf_map_attachment` / `dma_buf_unmap_attachment` 调用链
-- 实际录像对比 CPU 占用和帧率
+GPU 提交绘制或 MPP 接收输入不等于硬件读完。必须根据驱动完成语义，通过受支持的隐式同步或显式 fence 保证复用安全。`DMA_BUF_IOCTL_SYNC` 的 CPU 缓存访问同步不能代替 GPU 完成确认。
 
----
+同步方案需在目标 BSP 验证。若早期采用阻塞等待确认完成，应测量其对延迟和吞吐的影响。
 
-## 四、后续可探索方向
+### 6.2 有界队列与背压
 
-| 方向 | 内容 | 优先级 |
-|------|------|--------|
-| V4L2 直采 | 绕过 MPI，直接用 V4L2 API 从 `/dev/video0` 拍帧 | 中 |
-| DRM/MIPI OSD | 用 libdrm 做硬件图层叠加，运动参数直接渲染到视频上 | 中 |
-| IIO IMU 驱动 | 把 IMU 从字符设备改为标准 IIO 子系统接口 | 低 |
-| PREEMPT_RT | 打 RT 补丁，测量并优化实时调度延迟 | 低 |
-| 功耗优化 | CPU DVFS + IP 时钟动态开关 | 低 |
+| 队列 | 策略 |
+|------|------|
+| 预览 | 小容量、优先最新帧；丢弃尚未提交 GPU 的旧帧并归还 |
+| 录像输入/码流 | 有界；监测拥塞，明确降载或停止报错策略，不无限积压 |
+| 音频 | 有界；欠载/溢出必须记录并恢复，不静默破坏时间轴 |
+| 照片/缩略图 | 限制并发与容量，过载时拒绝新任务或反馈忙 |
+| IMU | 有界；记录丢样数量和时间缺口，不能伪装连续采样 |
+
+UI 切页取消显示订阅。已收到但不显示的帧仍要归还，已提交 GPU 的帧等待完成后释放。
+
+### 6.3 断线与重启
+
+UI 断线后停止发送、清理未发送帧，并隔离仍可能被 GPU 使用的缓冲区。超时触发恢复，不代表 GPU 已停止访问；必要时退役旧预览池。清理策略必须有资源上限，不能在反复重连时无限创建新池。
+
+媒体服务重启后生成新实例标识。UI 释放旧 EGLImage、FD 和消息，重新握手；旧 buffer ID、命令和归还事件不得应用于新实例。
+
+## 7. 状态、线程和时间轴
+
+### 7.1 状态管理
+
+服务通过串行控制执行器处理命令和状态迁移。采集、编解码、音频、封装、存储工作线程通过有界队列和完成事件协作，不能由任意线程直接修改业务状态。
+
+分别管理服务就绪状态、预览订阅、录像和回放状态。录像状态建议为：
+
+```text
+Idle → Starting → Recording → Stopping → Idle
+                  任一步失败 → Error → 清理/恢复
+```
+
+预览与录像独立，取消预览不等于停止录像。首版录像与回放互斥；重复开始、停止中再次开始和初始化失败均有明确结果。
+
+### 7.2 停止录像
+
+停止由服务执行完整事务：停止接受该会话的新输入，确认采集任务结束，排空编码器，收齐音视频输出及 IMU 尾部数据，完成封装和存储收尾，最后发布完成事件。
+
+收尾过程中 muxer 保持可用。只有生产者均结束且所属队列排空后才能写 trailer。使用完成通知和阶段超时，不能依赖跨线程消息偶然的先后顺序。
+
+所有阻塞 I/O 都需要可取消或有限超时机制。正常退出不依赖强制终止线程。
+
+### 7.3 统一时间轴
+
+音频、视频和 IMU 使用同一会话时间基准，明确单位、时钟来源和映射。优先使用单调时钟，保留原始采集时间戳及设备时钟映射。
+
+- 视频以采集时间生成 PTS，保留真实间隔并检查异常时间戳。
+- 音频结合设备位置、时间戳及累计采样数，处理长期时钟漂移。
+- IMU 保存样本时间戳和序号，不能仅以计数充当时间戳。
+- 播放结合 ALSA 已播放位置/延迟与单调时钟安排视频，明确迟到帧策略。
+
+不能分别把音频、视频第一帧归零，否则会丢失起始偏移。UI 录像时长来自服务状态，不以界面收到事件的时刻计时。
+
+## 8. monitor 与恢复
+
+monitor 负责 `fork + exec`、就绪握手、健康监测、子进程退出回收、有限重启和整体退出；自身由系统 init 管理，不参与媒体转发或设备操作。
+
+建议顺序：系统依赖可用 → 服务就绪 → 启动 UI。使用有界握手，不用固定 sleep 代替就绪判断。监测通道可采用独立 socketpair，进程退出通过子进程回收机制确认。
+
+| 事件 | 行为 |
+|------|------|
+| UI 退出/失去响应 | 服务继续录像；清理显示连接，重启 UI 并恢复状态 |
+| 媒体服务退出 | UI 显示不可用；重启服务，建立新实例与会话 |
+| 管线停滞 | 结合当前模式和阶段超时判断，尝试受控停止，失败后再重启 |
+| 连续启动失败 | 退避、限制重启频率、保留原因，进入可观测故障状态 |
+| 正常关机 | 请求服务完成录制与存储收尾，再结束 UI 和服务 |
+
+健康信息包含采集/编码/写盘进度及当前阶段。心跳线程仍运行不能证明管线健康；空闲时无帧也不能误判故障。
+
+monitor 无法为已崩溃的服务补写 MP4 trailer，重启也不能保证恢复底层驱动故障。应保留诊断并上报超出进程恢复能力的失败。
+
+## 9. 存储与平台适配
+
+继续使用 `/userdata` 保存照片、视频、缩略图和 IMU 文件，由媒体服务管理。路径和设备选择可配置，业务代码不硬编码视频节点或声卡序号。
+
+文件使用会话唯一标识，避免秒级时间戳重名。定义临时文件、完成标记、失败文件保留与启动扫描策略。“保存成功”需满足约定的文件收尾和持久化条件；新建/重命名还要考虑目录项持久化。
+
+普通 MP4 异常终止可能缺少有效尾部。分段录制或 fragmented MP4 为待验证方案，需比较丢失窗口、播放兼容性、恢复能力与刷盘开销。进程重启不等于文件可恢复，也不保证突然断电不丢数据。
+
+移除 Rockit 前必须核查：
+
+- OV8858、RKISP、media graph 配置和节点发现方式。
+- 拍照/预览双通道能力、格式和 buffer 布局。
+- V4L2 DMA-BUF 导出、MPP 导入、EGL 导入及同步支持。
+- 3A 服务、IQ 文件、曝光/对焦控制及生命周期归属。
+- ALSA 格式、时间戳、延迟查询和 XRUN 恢复。
+- IMU 驱动的读取、通知、采样时间戳能力及所需驱动改动。
+
+以本项目 SDK、内核与板端验证为准，不能根据最新上游文档推定旧 BSP 已支持相应能力。
+
+## 10. 代码目录组织
+
+采用 `camera-ui/`、`media-service/`、`hal/` 三个主要目录，分别承载 UI、多媒体应用和硬件抽象层。`monitor/` 承载第三个自有进程；HAL 动态库运行在媒体服务进程内，不单独创建进程。
+
+以下目录为目标结构，顶层骨架已建立。内部业务子目录按实际实现需要逐步建立。
+
+```text
+tspi_action_source/
+├── camera-ui/                 # UI 进程，Qt Widgets
+│   ├── main.cpp
+│   ├── pages/                 # 预览、相册、录像、播放页面
+│   ├── widgets/               # VideoGLWidget 等显示控件
+│   ├── client/                # 控制请求、状态接收、视频帧接收
+│   └── assets/                # 图标、应用字体、qrc
+│
+├── media-service/             # 多媒体进程，C++
+│   ├── main.cpp
+│   ├── service/               # IPC 接入、初始化、配置加载、组件组装
+│   ├── control/               # 业务状态机、命令调度
+│   ├── pipeline/              # 预览、拍照、录像、回放、IMU 记录编排
+│   ├── codec/                 # AAC 等软件音频编解码
+│   ├── container/             # MP4 封装、解封装
+│   ├── buffer/                # 帧所有权、有界队列、缓冲池
+│   ├── clock/                 # 音视频、IMU 时间同步
+│   └── storage/               # 文件、缩略图、媒体索引
+│
+├── hal/                       # 硬件抽象动态库，C 实现、C ABI
+│   ├── include/               # 对外公共接口，不暴露厂商类型
+│   └── src/
+│       ├── linux/             # V4L2、ALSA、evdev 等通用实现
+│       ├── rockchip/          # MPP、RGA、ISP 平台适配
+│       └── mock/              # 测试后端
+│
+├── monitor/                   # 监控进程
+│   ├── main.cpp
+│   └── supervisor/            # 启动、监测、退出回收、重启策略
+│
+├── ipc/                       # 共享协议定义与传输代码
+│   ├── interfaces/            # D-Bus XML、帧消息定义
+│   └── transport/             # Unix socket、FD 传递、序列化
+│
+├── platform/
+│   └── tspi-rk3566/           # 本板配置、驱动、设备树、补丁、overlay
+├── third_party/               # 必须随仓库维护的外部依赖
+├── tests/                     # 单元、进程集成与板端测试
+├── tools/                     # 调试、部署、清理、诊断脚本
+├── doc/                       # 架构、重构计划、调试和硬件资料
+├── cmake/                     # 交叉编译配置
+├── CMakeLists.txt             # 建议的统一构建入口，迁移时落地
+├── README.md
+├── LICENSE
+└── out/                       # 构建、部署暂存与打包产物，不入 Git
+```
+
+### 10.1 依赖边界
+
+```text
+camera-ui ─────→ ipc ←───── media-service ─────→ hal
+monitor：启动并监测 camera-ui 和 media-service
+```
+
+- `camera-ui` 不链接 HAL。它通过 D-Bus 发送业务请求，通过 Unix socket 接收 DMA-BUF FD，自身负责 EGL/OpenGL 显示和帧归还。
+- `media-service` 内包含多媒体业务代码，不再单独设顶层 `media/`。业务模块与服务入口分开构建，测试可以直接链接业务模块，无需启动完整服务。
+- `hal` 生成动态库，提供 C ABI；厂商头文件和实现仅在后端内部使用。Linux 通用实现、Rockchip 平台能力与具体板级配置分开维护。
+- `ipc` 仅包含共享协议和传输实现，不包含录像状态机，不依赖厂商 HAL 类型。Qt 客户端适配位于 `camera-ui/client/`，服务端业务适配位于 `media-service/service/`。
+- `monitor` 不参与媒体数据转发，也不直接操作媒体设备。
+- 私有头文件与对应实现放在一起；需要跨模块公开的接口再放所属模块的 `include/`，不建立汇总所有头文件的根目录 `include/`。
+
+### 10.2 现有文件迁移归属
+
+| 当前内容 | 目标归属与处理方式 |
+|----------|--------------------|
+| `main.cpp`、`widget.*`、`widget.ui` | `camera-ui/`；移出媒体线程组装和业务控制 |
+| `videoglwidget.*` | `camera-ui/widgets/`；使用 IPC 帧描述与归还协议 |
+| `cameramanager.*` | 业务编排放 `media-service/pipeline/`，采集实现放 `hal/src/linux/` |
+| `videoencoder.*`、`videodecoder.*` | 调度放媒体层，Rockit 调用替换为 HAL 中的 MPP 实现 |
+| `mp4muxer.*`、`mp4demuxer.*` | `media-service/container/`；移出硬件调用与业务调度 |
+| `audiomanager.*` | 拆成 HAL ALSA、媒体层 codec 和音频管线 |
+| `imureader.*`、`keycontrol.*` | 设备读取放 HAL，记录和按键业务放媒体层 |
+| `savepicture.*` | `media-service/storage/`，由拍照管线调用 |
+| `utils/rk_mpi.*` | 随旧 Rockit 后端退出，不进入新公共接口 |
+| `utils/safeQueue.h` | `media-service/buffer/`；补齐容量、关闭与取消语义 |
+| `platform/fs-overlay`、`platform/drivers`、`platform/dts`、`platform/patches` | 后续按需归入 `platform/tspi-rk3566/`；当前已完成 `resources/` → `platform/` 改名，保留现有子目录布局 |
+| 图标、字体、logo | 应用资源放 `camera-ui/assets/`，系统资源放板级目录 |
+| 屏幕等硬件资料 | `doc/hardware/` |
+| `scripts/` | `tools/` |
+| 根目录 `include/`、`lib/` | 优先改为使用 SDK sysroot；必要的随仓库依赖归入 `third_party/` 并记录版本与来源 |
+
+本开发分支已按空骨架方式重新开始，旧应用源码和 qmake 工程已移除。上表供重写时参考职责归属，不代表旧类已迁入新目录；旧实现可通过 Git 历史查阅。
+
+overlay 作为静态系统配置来源。应用程序和自建动态库由构建安装或 Buildroot 打包步骤部署，避免手动维护 overlay 中的二进制副本。驱动 `.o`、构建目录和镜像等产物与维护源码分离，不在此次文档调整中直接删除。
+
+
+## 11. 实施顺序
+
+| 阶段 | 工作 | 完成标准 |
+|------|------|----------|
+| 0：基线与接口 | 重测现有功能、确定状态/所有权/协议、核查 BSP | 可复现基线、接口草案、能力清单 |
+| 1：硬件验证 | V4L2→MPP 编码；V4L2→跨进程 EGL；ALSA 采集播放 | 替代链路、布局和释放同步可行 |
+| 2：三层骨架 | HAL C ABI、C++ 核心、UI 客户端、mock、IPC | mock 跑通控制、显示、断线重连 |
+| 3：功能迁移 | 逐项迁移预览、拍照、录像、回放、音频、IMU、存储 | 服务独立完成业务，最终后端无 Rockit 依赖 |
+| 4：进程监测 | monitor、就绪握手、重启退避、正常退出 | UI 崩溃不终止录像，服务重启后 UI 可恢复 |
+| 5：稳定与优化 | 故障注入、持续运行、缓冲池注册优化、性能测量 | 通过验收，资源无持续增长 |
+
+迁移期间可选择增加临时 Rockit HAL 后端用于行为对照，是否实现取决于成本。它不属于最终架构，也不能替代阶段 1 的 V4L2/MPP 可行性验证。
+
+## 12. 验收与观测
+
+不沿用旧性能数字或未经测量的零拷贝收益。基线与目标必须记录分辨率、帧率、码率、音频配置、温度条件及测试版本。
+
+| 类别 | 必测场景 |
+|------|----------|
+| 功能 | 预览、拍照、音视频录像/回放、IMU 关联、按键、相册更新 |
+| 状态 | 连续启停、重复请求、初始化失败、停止中再次开始、模式冲突 |
+| 生命周期 | 切页、UI 不消费帧、池重建、过期/重复归还、退出排空 |
+| 故障 | UI 崩溃/卡死、服务崩溃、IPC 断连、存储满、设备 I/O 失败 |
+| 同步 | 起始音视频偏移、长期漂移、视频与 IMU 对应、回放迟到帧 |
+| 存储 | 正常文件可读、异常文件可识别、恢复方案和断电测试 |
+| 资源 | 各进程 FD、线程、RSS/PSS、DMA-BUF、队列深度、丢帧/超时 |
+| 性能 | 预览延迟、录像吞吐、启停耗时、CPU、温度、UI 重启期间录制连续性 |
+
+初始测试建议至少覆盖 100 次录像启停、100 次显示订阅切换、10 次录像期间 UI 重启和 1 小时连续音视频录制；最终门槛在阶段 0 根据设备目标确定。
+
+日志统一携带实例、会话、请求和帧序号。指标至少包括队列深度、未归还帧数、采集/编码/写盘进度、XRUN、IMU 丢样、重启次数和最近错误。
+
+## 13. 待验证与待定项
+
+- 目标 MPP/BSP 版本、DMA-BUF 布局及 GPU/编码器同步机制。
+- 独立 ISP 预览输出或独立图像处理缓冲池的选择。
+- ISP/3A 保留系统服务还是集成 HAL，以及控制方式。
+- D-Bus 库、总线部署、运行权限、接口版本策略。
+- 录像期间拍照支持范围、性能预算和过载策略。
+- 分段或 fragmented MP4 的选择、兼容性、持久化要求。
+- IMU 真实采样时间戳需要的用户态/驱动改动。
+
+上述事项不改变三层、三个自有进程的总体方案，但必须在相应阶段验证后固定实现。
+
+## 14. 接口参考
+
+- [Rockchip MPP 开发文档](https://github.com/rockchip-linux/mpp/blob/develop/doc/Rockchip_Developer_Guide_MPP_CN.md)
+- [V4L2 DMA-BUF 导出：VIDIOC_EXPBUF](https://www.kernel.org/doc/html/v4.12/media/uapi/v4l/vidioc-expbuf.html)
+- [Linux DMA-BUF 共享与同步](https://kernel.org/doc/html/next/driver-api/dma-buf.html)
+- [D-Bus 协议规范](https://dbus.freedesktop.org/doc/dbus-specification.html)
+- [ALSA PCM 接口](https://www.alsa-project.org/alsa-doc/alsa-lib/group___p_c_m.html)
+
+参考资料用于理解接口语义，实际实现须对应板端 SDK 和内核版本。

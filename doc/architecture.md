@@ -1,5 +1,7 @@
 # 系统架构与数据流
 
+> 历史文档：旧应用源码已在重构分支移除。以下链路和路径仅供追溯，新架构见 [refactoring.md](refactoring.md)，当前构建状态见 [README](../README.md)。
+
 > 本文记录 cam-ui-widget 的录像/播放链路、零拷贝实现、音视频同步机制。
 > 文件职责与构建运行见根目录 [`../CLAUDE.md`](../CLAUDE.md)；调试方法见 [`debugging.md`](debugging.md)；问题排查见 [`troubleshooting.md`](troubleshooting.md)。
 
