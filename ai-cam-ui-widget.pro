@@ -53,21 +53,10 @@ INCLUDEPATH += \
     $$PWD/include/mpi/sdk \
     $$PWD/include/opencv4 \
     $$PWD/include/rga \
-    /home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/include
-#    $$PWD/include/rkaiq/uAPI \
-#    $$PWD/include/rkaiq/uAPI2 \
-#    $$PWD/include/rkaiq/xcore \
-#    $$PWD/include/rkaiq/common \
-#    $$PWD/include/rkaiq/algos \
-#    $$PWD/include/rkaiq/iq_parser \
-#    $$PWD/include/rkaiq/iq_parser_v2
 
 
 LIBS += \
         -lpthread \
-        -L$$PWD/lib \
-        -lrockit \
-        -L/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot/usr/lib \
         -lopencv_core \
         -lopencv_highgui \
         -lopencv_imgproc \
@@ -80,8 +69,9 @@ LIBS += \
         -lswresample \
         -lswscale \
         -lEGL \
-        -lGLESv2
-#        -lrkaiq
+        -lGLESv2 \
+        -L$$PWD/lib \
+        -lrockit \
 
 FORMS += \
     widget.ui
