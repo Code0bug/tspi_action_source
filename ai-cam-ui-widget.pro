@@ -70,7 +70,6 @@ LIBS += \
         -lswscale \
         -lEGL \
         -lGLESv2 \
-        -L$$PWD/lib \
         -lrockit \
 
 FORMS += \
