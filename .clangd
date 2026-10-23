@@ -1,0 +1,4 @@
+CompileFlags:
+  CompilationDatabase: out/rk3566
+  Add:
+    - --target=aarch64-linux-gnu

@@ -1,0 +1,9 @@
+{
+  "clangd.path": "/home/lzp/.local/bin/clangd",
+  "clangd.arguments": [
+    "--query-driver=/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/bin/aarch64-buildroot-linux-gnu-*",
+    "--compile-commands-dir=${workspaceFolder}/out/rk3566",
+    "--background-index"
+  ],
+  "C_Cpp.intelliSenseEngine": "Disabled"
+}

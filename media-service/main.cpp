@@ -1,7 +1,9 @@
-#include <camera/hal.h>
+#include <v4l2_camera.h>
 
 int main()
 {
-    // Resolve a C symbol from the shared HAL to verify the C++ -> C ABI link.
-    return camera_hal_abi_version() == CAMERA_HAL_ABI_VERSION ? 0 : 1;
+    auto volatile init = &v4l2_camera_init;
+    auto volatile get_frame = &v4l2_camera_get_frame;
+    auto volatile release_frame = &v4l2_camera_release_frame;
+    return init && get_frame && release_frame ? 0 : 1;
 }
