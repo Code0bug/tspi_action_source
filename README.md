@@ -10,7 +10,7 @@ RK3566 相机重构工程。目前是**目录与构建骨架**，旧应用实现
 | media-service/ | C++ 最小入口，仅调用 HAL ABI 版本接口 |
 | hal/ | C 动态库 libcamera_hal.so.0.1.0，仅实现 ABI 版本函数 |
 | monitor/ | camera-monitor 最小入口，尚无 fork/监控逻辑 |
-| ipc/ | camera_ipc INTERFACE target，提供 D-Bus 构建依赖，尚无协议 |
+| ipc/ | service_ipc INTERFACE target，提供共享 D-Bus 协议、构建依赖和总线权限配置 |
 | tests/ | dependency-smoke，SDK 头文件与链接符号检查 |
 | platform/ | 保留的板级驱动、精简设备树、补丁、rootfs overlay |
 | cmake/ | 可配置的交叉编译工具链 |

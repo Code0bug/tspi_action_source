@@ -1,5 +1,5 @@
 #include "camera_manager.h"
-#include "camera_service.h"
+#include "service.h"
 
 #include <csignal>
 #include <cstdio>
@@ -16,21 +16,17 @@ int main()
     pthread_sigmask(SIG_BLOCK, &set, nullptr);
 
     CameraManager camera;
-    if (!camera.isOpen())
-        return 1;
+    camera.start();
+    std::thread captureThread(&CameraManager::startCapture, &camera);
 
-    // 采集线程：程序启动后默认开启，UI 之后可通过 D-Bus 暂停/恢复。
-    std::thread captureThread(&CameraManager::run, &camera);
-    camera.startCapture();
-
-    CameraService service(camera);
+    Service service;
     if (!service.start())
         std::fprintf(stderr, "media-service: D-Bus control unavailable\n");
 
     sigwait(&set, &sig);
 
     service.stop();
-    camera.quit();
+    camera.stopCapture();
     captureThread.join();
     return 0;
 }

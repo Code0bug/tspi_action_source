@@ -12,7 +12,7 @@ static const uint32_t kSelfWidth = 1920;
 static const uint32_t kSelfHeight = 1080;
 static const uint32_t kBufCount = 4;
 
-CameraManager::CameraManager()
+void CameraManager::start()
 {
     // 低分辨率 用于预览
     camera_display = camera_init(kSelfCameraDevice, kBufCount,
@@ -33,50 +33,23 @@ CameraManager::~CameraManager()
     camera_deinit(camera_photo);
 }
 
-void CameraManager::run()
+void CameraManager::startCapture()
 {
     if (camera_display == nullptr)
         return;
 
-    while (!quit_) {
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-            cond_.wait(lock, [this] { return quit_ || capturing_; });
-        }
-        if (quit_)
-            break;
-
+    capturing_ = true;
+    while (capturing_) {
         camera_frame_t frame;
         if (camera_get_frame(camera_display, &frame) != 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
             continue;
         }
-        if (handler_)
-            handler_(frame);
         camera_release_frame(camera_display, &frame);
     }
 }
 
-void CameraManager::quit()
-{
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        quit_ = true;
-    }
-    cond_.notify_all();
-}
-
-void CameraManager::startCapture()
-{
-    {
-        std::lock_guard<std::mutex> lock(mutex_);
-        capturing_ = true;
-    }
-    cond_.notify_all();
-}
-
 void CameraManager::stopCapture()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
     capturing_ = false;
 }
