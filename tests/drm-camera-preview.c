@@ -25,7 +25,7 @@
 #include <rga/im2d.h>
 #include <rga/rga.h>
 
-#include "v4l2_camera.h"
+#include "camera_hal.h"
 
 #define CAM_WIDTH 1920
 #define CAM_HEIGHT 1080
@@ -453,7 +453,7 @@ int main(int argc, char **argv)
     int i;
     struct timespec fps_t0;
     const char *device;
-    v4l2_camera_t *cam = NULL;
+    camera_t *cam = NULL;
 
     if (argc > 2 || (argc == 2 && strcmp(argv[1], "1") != 0 &&
                      strcmp(argv[1], "2") != 0)) {
@@ -573,9 +573,9 @@ int main(int argc, char **argv)
     drmModeAtomicFree(req);
     req = NULL;
 
-    cam = v4l2_camera_init(device, 4, CAM_WIDTH, CAM_HEIGHT);
+    cam = camera_init(device, 4, CAM_WIDTH, CAM_HEIGHT);
     if (cam == NULL) {
-        fprintf(stderr, "v4l2_camera_init %s failed\n", device);
+        fprintf(stderr, "camera_init %s failed\n", device);
         goto out;
     }
     printf("V4L2 %s %ux%u stride %u，RGA 转 90° 铺满 %ux%u，Ctrl+C 退出\n",
@@ -583,19 +583,19 @@ int main(int argc, char **argv)
     clock_gettime(CLOCK_MONOTONIC, &fps_t0);
 
     while (!g_stop) {
-        v4l2_camera_frame_t frame;
+        camera_frame_t frame;
 
-        if (v4l2_camera_get_frame(cam, &frame) != 0)
+        if (camera_get_frame(cam, &frame) != 0)
             continue;
 
-        if (frame.export_fd < 0 ||
-            rga_rotate_scale(frame.export_fd, (int)cam->width, (int)cam->height,
+        if (frame.dmabuf_fd < 0 ||
+            rga_rotate_scale(frame.dmabuf_fd, (int)cam->width, (int)cam->height,
                              (int)cam->bytesperline, (int)cam->height,
                              &g_scan[slot]) != 0) {
-            v4l2_camera_release_frame(cam, &frame);
+            camera_release_frame(cam, &frame);
             break;
         }
-        v4l2_camera_release_frame(cam, &frame);
+        camera_release_frame(cam, &frame);
 
         req = drmModeAtomicAlloc();
         if (!req)
@@ -639,7 +639,7 @@ int main(int argc, char **argv)
         ret = 0;
 
 out:
-    v4l2_camera_deinit(cam);
+    camera_deinit(cam);
     if (req)
         drmModeAtomicFree(req);
     if (props)

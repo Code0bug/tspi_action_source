@@ -1,4 +1,4 @@
-add_library(camera_hal SHARED src/v4l2_camera.c)
+add_library(camera_hal SHARED src/camera_hal.c)
 target_include_directories(camera_hal PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)

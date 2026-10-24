@@ -12,9 +12,9 @@
 #include <time.h>
 #include <linux/videodev2.h>
 
-#include "v4l2_camera.h"
+#include "camera_hal.h"
 
-void v4l2_camera_deinit(v4l2_camera_t *ctx)
+void camera_deinit(camera_t *ctx)
 {
     unsigned int i;
 
@@ -26,22 +26,22 @@ void v4l2_camera_deinit(v4l2_camera_t *ctx)
         for (i = 0; i < ctx->bufcnt; i++) {
             if (ctx->fbuf[i].start != NULL && ctx->fbuf[i].start != MAP_FAILED)
                 munmap(ctx->fbuf[i].start, ctx->fbuf[i].length);
-            if (ctx->fbuf[i].export_fd >= 0)
-                close(ctx->fbuf[i].export_fd);
+            if (ctx->fbuf[i].dmabuf_fd >= 0)
+                close(ctx->fbuf[i].dmabuf_fd);
         }
         close(ctx->fd);
     }
     free(ctx);
 }
 
-v4l2_camera_t* v4l2_camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint32_t height)
+camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint32_t height)
 {
     struct v4l2_capability     cap;
     struct v4l2_format         vfmt;
     struct v4l2_requestbuffers req;
     struct v4l2_buffer         buf;
     struct v4l2_exportbuffer   expbuf;
-    v4l2_camera_t *ctx = NULL;
+    camera_t *ctx = NULL;
     unsigned int i;
 
     if (device == NULL || bufcnt == 0 || bufcnt > V4L2_CAMERA_BUF_COUNT)
@@ -54,7 +54,7 @@ v4l2_camera_t* v4l2_camera_init(const char *device, uint32_t bufcnt, uint32_t wi
     ctx->fd = -1;
     ctx->bufcnt = bufcnt;
     for (i = 0; i < V4L2_CAMERA_BUF_COUNT; i++)
-        ctx->fbuf[i].export_fd = -1;
+        ctx->fbuf[i].dmabuf_fd = -1;
     ctx->fd = open(device, O_RDWR | O_CLOEXEC);
     if (ctx->fd < 0) {
         fprintf(stderr, "Cannot open device\n");
@@ -158,7 +158,7 @@ v4l2_camera_t* v4l2_camera_init(const char *device, uint32_t bufcnt, uint32_t wi
             fprintf(stderr, "VIDIOC_EXPBUF\n");
             goto FAIL;
         }
-        ctx->fbuf[i].export_fd = expbuf.fd;
+        ctx->fbuf[i].dmabuf_fd = expbuf.fd;
     }
 
     // queue buffer
@@ -190,11 +190,11 @@ v4l2_camera_t* v4l2_camera_init(const char *device, uint32_t bufcnt, uint32_t wi
     return ctx;
 
 FAIL:
-    v4l2_camera_deinit(ctx);
+    camera_deinit(ctx);
     return NULL;
 }
 
-int v4l2_camera_get_frame(v4l2_camera_t *ctx, v4l2_camera_frame_t *frame)
+int camera_get_frame(camera_t *ctx, camera_frame_t *frame)
 {
     struct v4l2_buffer buf;
     struct v4l2_plane planes[FMT_NUM_PLANES];
@@ -227,7 +227,7 @@ int v4l2_camera_get_frame(v4l2_camera_t *ctx, v4l2_camera_frame_t *frame)
     return 0;
 }
 
-int v4l2_camera_release_frame(v4l2_camera_t *ctx, v4l2_camera_frame_t *frame)
+int camera_release_frame(camera_t *ctx, camera_frame_t *frame)
 {
     struct v4l2_buffer buf;
     struct v4l2_plane planes[FMT_NUM_PLANES];

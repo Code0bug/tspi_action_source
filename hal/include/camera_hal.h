@@ -1,5 +1,5 @@
-#ifndef __V4L2_CAMERA_H__
-#define __V4L2_CAMERA_H__
+#ifndef __CAMERA_HAL_H__
+#define __CAMERA_HAL_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,10 +16,10 @@ extern "C" {
 typedef struct {
     void *start;
     size_t length;
-    int export_fd;
+    int dmabuf_fd;
     int index;
     int64_t timestamp_us;
-} v4l2_camera_frame_t;
+} camera_frame_t;
 
 typedef struct {
     int fd;
@@ -29,16 +29,16 @@ typedef struct {
     unsigned int width;
     unsigned int height;
     unsigned int bytesperline;
-    v4l2_camera_frame_t fbuf[V4L2_CAMERA_BUF_COUNT];
-} v4l2_camera_t;
+    camera_frame_t fbuf[V4L2_CAMERA_BUF_COUNT];
+} camera_t;
 
-v4l2_camera_t* v4l2_camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint32_t height);
+camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint32_t height);
 
-int v4l2_camera_get_frame(v4l2_camera_t *ctx, v4l2_camera_frame_t *frame);
+int camera_get_frame(camera_t *ctx, camera_frame_t *frame);
 
-int v4l2_camera_release_frame(v4l2_camera_t *ctx, v4l2_camera_frame_t *frame);
+int camera_release_frame(camera_t *ctx, camera_frame_t *frame);
 
-void v4l2_camera_deinit(v4l2_camera_t *ctx);
+void camera_deinit(camera_t *ctx);
 
 #ifdef __cplusplus
 }
