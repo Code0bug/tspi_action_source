@@ -11,7 +11,7 @@ This branch contains a build skeleton, not a working camera application.
 
 Set BUILDROOT_HOST_DIR to the RK3566 Buildroot host directory, then run
 `./tools/build.sh`. Outputs are in out/rk3566; staging is in out/staging.
-Qt5 Widgets, D-Bus, FFmpeg, ALSA, MPP, RGA, EGL and GLES are required in the
+Qt5 Widgets, D-Bus, FFmpeg, ALSA, MPP and RGA are required in the
 target sysroot. Rockit is no longer linked.
 
 See [README.md](README.md) for instructions and limitations, and

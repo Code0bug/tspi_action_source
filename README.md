@@ -24,7 +24,7 @@ RK3566 相机重构工程。目前是**目录与构建骨架**，旧应用实现
 
 主机需要 CMake ≥ 3.16、Make、pkg-config 和已构建完成的 RK3566 Buildroot SDK。所有目标依赖从 SDK sysroot 获取，不使用原根目录 include/、lib/ 副本。
 
-- UI：Qt5 Core/Gui/Widgets、EGL、GLESv2、D-Bus。
+- UI：Qt5 Core/Gui/Widgets、D-Bus。
 - 媒体服务：HAL、D-Bus、FFmpeg（avformat/avcodec/avutil/swresample）、Threads。
 - HAL：ALSA、MPP、RGA、Threads；V4L2 直接使用 Linux UAPI，无需 libv4l2 包装库。
 - monitor：Threads，不依赖 Qt、HAL 或 FFmpeg。
@@ -72,7 +72,7 @@ out/staging/usr/
 
 ## 验证范围
 
-默认构建 dependency-smoke，真实引用 Qt Widgets、D-Bus、ALSA、MPP、RGA、FFmpeg、EGL/GLES 符号。该程序不创建窗口或打开设备，只验证头文件、链接和 ABI，不验证媒体功能。
+默认构建 dependency-smoke，真实引用 Qt Widgets、D-Bus、ALSA、MPP、RGA、FFmpeg 符号。该程序不创建窗口或打开设备，只验证头文件、链接和 ABI，不验证媒体功能。
 
 交叉编译且没有模拟器时不注册主机 CTest 运行测试。板端可手动运行 media-service 验证 HAL 加载；dependency-smoke 不安装到 staging，需按需部署。
 
