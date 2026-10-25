@@ -34,6 +34,8 @@ typedef struct {
 
 camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint32_t height);
 
+/* Nonblocking dequeue. Poll ctx->fd for POLLIN; EAGAIN means no frame yet.
+ * A dequeued frame belongs to the caller until camera_release_frame(). */
 int camera_get_frame(camera_t *ctx, camera_frame_t *frame);
 
 int camera_release_frame(camera_t *ctx, camera_frame_t *frame);

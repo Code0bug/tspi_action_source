@@ -6,4 +6,7 @@
 
 `dbus-policy/` 存放 system bus 权限配置，构建安装时放入 `etc/dbus-1/system.d/`。
 
-后续 `interfaces/` 可放 D-Bus XML 和帧协议，`transport/` 实现 Unix socket、SCM_RIGHTS 和序列化；帧传输当前尚未实现。
+`preview_ipc` 是独立的静态库，实现非阻塞 SOCK_SEQPACKET / SCM_RIGHTS 帧通道。
+`include/preview_protocol.h` 定义 HELLO / INIT / FRAME / RELEASE，只有 INIT 发送三个 fd。
+`include/preview_queue.h` 管理 UI 等待、已提交、扫描中的槽，旧扫描槽只在翻页完成后归还。
+协议生命周期及运行方法见 [../doc/preview-display.md](../doc/preview-display.md)。

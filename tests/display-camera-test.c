@@ -7,6 +7,7 @@
  */
 #define _GNU_SOURCE
 #include <errno.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -135,6 +136,10 @@ int main(int argc, char **argv)
     /* 5. 预览循环 */
     while (!g_stop) {
         camera_frame_t frame;
+        struct pollfd capture = {cam->fd, POLLIN, 0};
+
+        if (poll(&capture, 1, 100) <= 0 || !(capture.revents & POLLIN))
+            continue;
 
         if (camera_get_frame(cam, &frame) != 0)
             continue;

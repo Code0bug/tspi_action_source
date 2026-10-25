@@ -1,13 +1,13 @@
 # 项目开发说明
 
-当前是三层、三个进程的构建骨架，不具备旧版相机功能。
+当前有三个进程，已实现采集到 UI DRM plane 的预览链路，拍照与录像尚未实现。
 
 - 当前目录、依赖、编译和安装：根目录 README.md。
-- 完整规划：doc/refactoring.md；历史资料：doc/history/。
+- 预览架构与验证：doc/preview-display.md。
 - UI：camera-ui/；媒体业务：media-service/；C ABI：hal/include/。
-- HAL 只由媒体服务链接，UI 通过未来 IPC 与服务交互。
-- monitor/ 尚无进程管理逻辑，ipc/ 尚无通信实现。
+- HAL 由媒体服务链接；UI 平台插件自己管理 DRM，视频通过 socket 传 dma-buf。
+- monitor/ 独立监管两个进程；ipc/ 包含预览通道及 D-Bus 接口定义。
 - 外部依赖从匹配 SDK sysroot 获取，不使用旧 SDK 副本或 Rockit。
 - 设置 BUILDROOT_HOST_DIR 后执行 ./tools/build.sh。
-- out/ 为忽略的产物目录，platform/ 为保留的板级资源。
-- 本轮验证交叉编译与链接，尚无板端功能验证。
+- out/ 为忽略的产物目录；camera-ui/platform/ 是 Qt tspi 平台插件。
+- 主机测试见 tests/preview/；交叉编译通过不等于板端功能已验证。

@@ -6,11 +6,11 @@ RK3566 相机重构工程。
 
 | 目录 | 目标与职责 |
 |------|------------|
-| camera-ui/ | ui 应用目录 |
-| media-service/ | media 应用服务 |
-| hal/ | C 动态库 libcamera_hal.so.0.1.0，仅实现 ABI 版本函数 |
-| monitor/ | camera-monitor 最小入口 |
-| ipc/ | service_ipc INTERFACE target，提供共享 D-Bus 协议、构建依赖和总线权限配置 |
+| camera-ui/ | Qt 预览界面与 tspi atomic DRM 平台插件，UI 持有 DRM master |
+| media-service/ | 摄像头采集、RGA 旋转缩放与三缓冲预览生产端 |
+| hal/ | C 动态库 libcamera_hal.so.0.1.0，摄像头及硬件接口 |
+| monitor/ | 独立监管 UI 与媒体服务，退出自动重启 |
+| ipc/ | D-Bus 协议及 SOCK_SEQPACKET / SCM_RIGHTS 预览通道 |
 | tests/ | 测试案例程序 |
 | cmake/ | 可配置的交叉编译工具链 |
 | tools/ | 构建、调试及辅助脚本 |
@@ -49,9 +49,13 @@ out/staging/usr/
 ├── lib/libcamera_hal.so -> libcamera_hal.so.0
 ├── lib/libcamera_hal.so.0 -> libcamera_hal.so.0.1.0
 ├── lib/libcamera_hal.so.0.1.0
+├── lib/qt/plugins/platforms/libqtspi.so
 └── include/camera/hal.h
 ```
 
 第三方运行库由目标 rootfs 提供，不重复打包。media-service 安装后的 RPATH 为 `$ORIGIN/../lib`，不包含宿主机 SDK 路径。
 
 增量构建使用 `cmake --build out/rk3566 --parallel 4`。更换 SDK 或目标架构时使用新构建目录，不复用旧缓存。不要在主机直接运行 ARM64 程序。
+
+预览架构、协议、运行参数与板端验收见 [doc/preview-display.md](doc/preview-display.md)。
+当前已接通预览，拍照、录像及 D-Bus 控制业务尚未完成。

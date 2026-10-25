@@ -56,7 +56,7 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
     ctx->bufcnt = bufcnt;
     for (i = 0; i < V4L2_CAMERA_BUF_COUNT; i++)
         ctx->fbuf[i].dmabuf_fd = -1;
-    ctx->fd = open(device, O_RDWR | O_CLOEXEC);
+    ctx->fd = open(device, O_RDWR | O_CLOEXEC | O_NONBLOCK);
     if (ctx->fd < 0) {
         fprintf(stderr, "open %s: %s\n", device, strerror(errno));
         goto FAIL;
@@ -82,9 +82,15 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
     vfmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     if (cap.capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
         vfmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-    vfmt.fmt.pix.width = width;
-    vfmt.fmt.pix.height = height;
-    vfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_NV12;
+    if (vfmt.type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
+        vfmt.fmt.pix_mp.width = width;
+        vfmt.fmt.pix_mp.height = height;
+        vfmt.fmt.pix_mp.pixelformat = V4L2_PIX_FMT_NV12;
+    } else {
+        vfmt.fmt.pix.width = width;
+        vfmt.fmt.pix.height = height;
+        vfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_NV12;
+    }
     
     if (ioctl(ctx->fd, VIDIOC_S_FMT, &vfmt) != 0) {
         fprintf(stderr, "VIDIOC_S_FMT %ux%u: %s\n", width, height, strerror(errno));
@@ -101,6 +107,11 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
         ctx->height = vfmt.fmt.pix_mp.height;
         ctx->fmt = vfmt.fmt.pix_mp.pixelformat;
         ctx->bytesperline = vfmt.fmt.pix_mp.plane_fmt[0].bytesperline;
+        if (vfmt.fmt.pix_mp.num_planes != FMT_NUM_PLANES) {
+            fprintf(stderr, "%s: expected single-fd NV12, got %u planes\n",
+                    device, vfmt.fmt.pix_mp.num_planes);
+            goto FAIL;
+        }
     } else {
         ctx->width = vfmt.fmt.pix.width;
         ctx->height = vfmt.fmt.pix.height;
@@ -109,6 +120,10 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
     }
     if (ctx->bytesperline == 0)
         ctx->bytesperline = ctx->width;
+    if (ctx->fmt != V4L2_PIX_FMT_NV12) {
+        fprintf(stderr, "%s: driver did not accept NV12\n", device);
+        goto FAIL;
+    }
 
     printf("get width %u height %u\n", ctx->width, ctx->height);
 
@@ -121,12 +136,19 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
         goto FAIL;
     }
 
+    if (req.count == 0 || req.count > V4L2_CAMERA_BUF_COUNT) {
+        fprintf(stderr, "VIDIOC_REQBUFS: invalid returned count %u\n", req.count);
+        goto FAIL;
+    }
+    ctx->bufcnt = req.count;
+
     // query buffer
-    buf.type = ctx->type;
-    buf.memory = V4L2_MEMORY_MMAP;
     for (int i = 0; i < ctx->bufcnt; i++) {
+        memset(&buf, 0, sizeof(buf));
+        buf.type = ctx->type;
+        buf.memory = V4L2_MEMORY_MMAP;
         buf.index = i;
-        struct v4l2_plane planes[FMT_NUM_PLANES];
+        struct v4l2_plane planes[FMT_NUM_PLANES] = {0};
         if (ctx->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
             buf.m.planes = planes;
             buf.length = FMT_NUM_PLANES;
@@ -151,6 +173,10 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
                                       ctx->fd, buf.m.offset);
         }
 
+        if (ctx->fbuf[i].start == MAP_FAILED) {
+            fprintf(stderr, "mmap camera buffer: %s\n", strerror(errno));
+            goto FAIL;
+        }
         // export dma-buf fd
         memset(&expbuf, 0, sizeof(expbuf));
         expbuf.type = ctx->type;
@@ -166,7 +192,7 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
 
     // queue buffer
     for (int i = 0; i < ctx->bufcnt; i++ ) {
-        struct v4l2_plane planes[FMT_NUM_PLANES];
+        struct v4l2_plane planes[FMT_NUM_PLANES] = {0};
 
         buf = (struct v4l2_buffer) {0};
         buf.type    = ctx->type;
@@ -200,7 +226,7 @@ FAIL:
 int camera_get_frame(camera_t *ctx, camera_frame_t *frame)
 {
     struct v4l2_buffer buf;
-    struct v4l2_plane planes[FMT_NUM_PLANES];
+    struct v4l2_plane planes[FMT_NUM_PLANES] = {0};
 
     if (ctx == NULL || frame == NULL)
         return -1;
@@ -214,7 +240,8 @@ int camera_get_frame(camera_t *ctx, camera_frame_t *frame)
     }
 
     if (ioctl(ctx->fd, VIDIOC_DQBUF, &buf) != 0) {
-        fprintf(stderr, "VIDIOC_DQBUF: %s\n", strerror(errno));
+        if (errno != EAGAIN && errno != EINTR)
+            fprintf(stderr, "VIDIOC_DQBUF: %s\n", strerror(errno));
         return -1;
     }
 
@@ -234,7 +261,7 @@ int camera_get_frame(camera_t *ctx, camera_frame_t *frame)
 int camera_release_frame(camera_t *ctx, camera_frame_t *frame)
 {
     struct v4l2_buffer buf;
-    struct v4l2_plane planes[FMT_NUM_PLANES];
+    struct v4l2_plane planes[FMT_NUM_PLANES] = {0};
 
     if (ctx == NULL || frame == NULL)
         return -1;

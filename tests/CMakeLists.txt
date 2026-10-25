@@ -7,3 +7,7 @@ target_link_libraries(display-camera-test PRIVATE PkgConfig::RGA PkgConfig::LIBD
 add_executable(display_color_test display_color_test.c ${CMAKE_SOURCE_DIR}/hal/src/display_hal.c)
 target_include_directories(display_color_test PRIVATE ${CMAKE_SOURCE_DIR}/hal/include)
 target_link_libraries(display_color_test PRIVATE PkgConfig::LIBDRM)
+
+add_executable(preview-tests preview/preview_tests.cpp)
+target_link_libraries(preview-tests PRIVATE preview_ipc)
+add_test(NAME preview-protocol-and-lifetime COMMAND preview-tests)

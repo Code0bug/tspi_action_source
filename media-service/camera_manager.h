@@ -3,6 +3,7 @@
 
 #include <camera_hal.h>
 #include <atomic>
+#include "preview_server.h"
 
 class CameraManager {
 public:
@@ -21,6 +22,7 @@ private:
     camera_t *camera_photo = nullptr;
 
     std::atomic<bool> capturing_{false};
+    PreviewServer preview_;
 };
 
 #endif
