@@ -28,6 +28,7 @@ pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavut
 pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
 pkg_check_modules(MPP REQUIRED IMPORTED_TARGET rockchip_mpp)
 pkg_check_modules(RGA REQUIRED IMPORTED_TARGET librga)
+pkg_check_modules(LIBDRM REQUIRED IMPORTED_TARGET libdrm)
 add_subdirectory(ipc)
 add_subdirectory(hal)
 add_subdirectory(camera-ui)

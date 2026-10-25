@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
+#include <errno.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <fcntl.h>
@@ -57,23 +58,23 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
         ctx->fbuf[i].dmabuf_fd = -1;
     ctx->fd = open(device, O_RDWR | O_CLOEXEC);
     if (ctx->fd < 0) {
-        fprintf(stderr, "Cannot open device\n");
+        fprintf(stderr, "open %s: %s\n", device, strerror(errno));
         goto FAIL;
     }
 
     if (ioctl(ctx->fd, VIDIOC_QUERYCAP, &cap) != 0) {
-        fprintf(stderr, "Not v4l2 compatible\n");
+        fprintf(stderr, "VIDIOC_QUERYCAP %s: %s\n", device, strerror(errno));
         goto FAIL;
     }
 
     if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) &&
         !(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE)) {
-        fprintf(stderr, "Capture not supported\n");
+        fprintf(stderr, "%s: no capture capability\n", device);
         goto FAIL;
     }
 
     if (!(cap.capabilities & V4L2_CAP_STREAMING)) {
-        fprintf(stderr, "Streaming IO Not Supported\n");
+        fprintf(stderr, "%s: no streaming capability\n", device);
         goto FAIL;
     }
 
@@ -86,12 +87,12 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
     vfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_NV12;
     
     if (ioctl(ctx->fd, VIDIOC_S_FMT, &vfmt) != 0) {
-        fprintf(stderr, "VIDIOC_S_FMT\n");
+        fprintf(stderr, "VIDIOC_S_FMT %ux%u: %s\n", width, height, strerror(errno));
         goto FAIL;
     }
 
     if (ioctl(ctx->fd, VIDIOC_G_FMT, &vfmt) != 0) {
-        fprintf(stderr, "VIDIOC_G_FMT\n");
+        fprintf(stderr, "VIDIOC_G_FMT: %s\n", strerror(errno));
         goto FAIL;
     }
     ctx->type = vfmt.type;
@@ -116,7 +117,7 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
     req.type   = ctx->type;
     req.memory = V4L2_MEMORY_MMAP;
     if (ioctl(ctx->fd, VIDIOC_REQBUFS, &req) != 0) {
-        fprintf(stderr, "VIDIOC_REQBUFS\n");
+        fprintf(stderr, "VIDIOC_REQBUFS count %u: %s\n", bufcnt, strerror(errno));
         goto FAIL;
     }
 
@@ -131,7 +132,7 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
             buf.length = FMT_NUM_PLANES;
         }
         if (ioctl(ctx->fd, VIDIOC_QUERYBUF, &buf) != 0) {
-            fprintf(stderr, "VIDIOC_QUERYBUF\n");
+            fprintf(stderr, "VIDIOC_QUERYBUF buf %d: %s\n", i, strerror(errno));
             goto FAIL;
         }
 
@@ -151,11 +152,13 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
         }
 
         // export dma-buf fd
+        memset(&expbuf, 0, sizeof(expbuf));
         expbuf.type = ctx->type;
         expbuf.index = i;
+        expbuf.plane = 0;
         expbuf.flags = O_CLOEXEC;
         if (ioctl(ctx->fd, VIDIOC_EXPBUF, &expbuf) != 0) {
-            fprintf(stderr, "VIDIOC_EXPBUF\n");
+            fprintf(stderr, "VIDIOC_EXPBUF buf %d: %s\n", i, strerror(errno));
             goto FAIL;
         }
         ctx->fbuf[i].dmabuf_fd = expbuf.fd;
@@ -176,14 +179,14 @@ camera_t* camera_init(const char *device, uint32_t bufcnt, uint32_t width, uint3
         }
 
         if (ioctl(ctx->fd, VIDIOC_QBUF, &buf) != 0) {
-            fprintf(stderr, "VIDIOC_QBUF %d\n", i);
+            fprintf(stderr, "VIDIOC_QBUF buf %d: %s\n", i, strerror(errno));
             goto FAIL;
         }
     }
 
     // start streaming
     if (ioctl(ctx->fd, VIDIOC_STREAMON, &ctx->type) != 0) {
-        fprintf(stderr, "VIDIOC_STREAMON\n");
+        fprintf(stderr, "VIDIOC_STREAMON: %s\n", strerror(errno));
         goto FAIL;
     }
 
@@ -211,12 +214,13 @@ int camera_get_frame(camera_t *ctx, camera_frame_t *frame)
     }
 
     if (ioctl(ctx->fd, VIDIOC_DQBUF, &buf) != 0) {
-        fprintf(stderr, "VIDIOC_DQBUF\n");
+        fprintf(stderr, "VIDIOC_DQBUF: %s\n", strerror(errno));
         return -1;
     }
 
     if (buf.index >= ctx->bufcnt) {
-        fprintf(stderr, "buffer index out of bounds\n");
+        fprintf(stderr, "VIDIOC_DQBUF: index %u out of bounds (%u)\n",
+                buf.index, ctx->bufcnt);
         return -1;
     }
 
@@ -247,7 +251,7 @@ int camera_release_frame(camera_t *ctx, camera_frame_t *frame)
     }
 
     if (ioctl(ctx->fd, VIDIOC_QBUF, &buf) != 0) {
-        fprintf(stderr, "VIDIOC_QBUF\n");
+        fprintf(stderr, "VIDIOC_QBUF buf %d: %s\n", frame->index, strerror(errno));
         return -1;
     }
 
