@@ -2,6 +2,12 @@ CompileFlags:
   CompilationDatabase: out/rk3566
   Add:
     - --target=aarch64-linux-gnu
+    - --sysroot=/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/sysroot
     - -isystem/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0
     - -isystem/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/aarch64-buildroot-linux-gnu
     - -isystem/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/aarch64-buildroot-linux-gnu/include/c++/10.3.0/backward
+    - -isystem/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include
+    - -isystem/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host/lib/gcc/aarch64-buildroot-linux-gnu/10.3.0/include-fixed
+
+Index:
+  Background: true
