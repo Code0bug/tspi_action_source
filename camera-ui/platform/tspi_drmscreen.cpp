@@ -6,9 +6,18 @@
  * tspi_drmscreen 中定义 DrmDevice 类，替代 QLinuxFbDevice + QKmsDevice 类
  * QKmsDevice 中默认使用 primary plane，我们要在 DrmDevice 中同时使用 primary plane 和 overlay plane
  * 
- * 同时，需要支持 socket 接收 media 进程发来的视频数据的 dma-buf fd
  * 视频数据显示在 overlay plane 上，qt ui 显示在 primary plane 上
  * 并且 ui 要悬浮于视频之上，也就是 primary plane 要在 overlay plane 之上
+ *
+ * 方案（10.29）
+ * DRM 只在本插件操作。camera 4 块与 overlay 3 块是两套池，不 1:1。
+ *
+ * 1. Qt 创建 3 块屏幕大小的 NV12 overlay framebuffer（CREATE_DUMB + AddFB2），
+ *    drmPrimeHandleToFD 导出可写 fd，经 socket 发给 media（带 width/height/pitch）。
+ * 2. media 保存这 3 个 fd。采集 DQBUF 后 RGA 旋转缩放到空闲槽的 fd，立刻还 camera。
+ * 3. media 只发 {slot, sequence} 通知 Qt：该槽已写好。Qt 用 m_overlayFbs[slot].fb_id
+ *    提交 overlay。page flip 完成后再 RELEASE 该槽，media 才能再往里写。
+ * 4. 3 槽都忙则丢预览帧，不阻塞 V4L2。断线丢弃旧池，重连再发新的 3 个 fd。
  */
 #include "tspi_drmscreen.h"
 
