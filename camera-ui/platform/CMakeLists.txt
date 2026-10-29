@@ -15,7 +15,8 @@ set_target_properties(qtspi PROPERTIES AUTOMOC ON
 target_include_directories(qtspi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(qtspi PRIVATE Qt5::GuiPrivate Qt5::FbSupportPrivate
     Qt5::FontDatabaseSupportPrivate Qt5::EventDispatcherSupportPrivate
-    Qt5::ServiceSupportPrivate Qt5::InputSupportPrivate)
+    Qt5::ServiceSupportPrivate Qt5::InputSupportPrivate
+    ipc_socket PkgConfig::LIBDRM)
 target_compile_options(qtspi PRIVATE -Wall -Wextra -Werror)
 target_link_options(qtspi PRIVATE -Wl,--no-undefined)
 install(TARGETS qtspi LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/qt/plugins/platforms)

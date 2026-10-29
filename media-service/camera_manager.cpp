@@ -1,7 +1,11 @@
 #include "camera_manager.h"
 
+#include "ipc_socket.h"
+
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <thread>
 
 static const char *const kMainCameraDevice = "/dev/video0";
@@ -25,6 +29,29 @@ void CameraManager::start()
                                kMainWidth, kMainHeight);
     if (camera_photo == nullptr)
         std::fprintf(stderr, "CameraManager: open %s failed\n", kMainCameraDevice);
+}
+
+bool CameraManager::sendDisplayFds(int socket)
+{
+    if (socket < 0 || camera_display == nullptr)
+        return false;
+
+    tspi_preview_buf msg = {};
+    msg.width = camera_display->width;
+    msg.height = camera_display->height;
+    msg.pitch = camera_display->bytesperline;
+    msg.count = camera_display->bufcnt;
+    for (unsigned int i = 0; i < camera_display->bufcnt; ++i) {
+        msg.slot = i;
+        if (ipc_send(socket, &msg, sizeof(msg), camera_display->fbuf[i].dmabuf_fd) < 0) {
+            std::fprintf(stderr, "CameraManager: send display fd %u: %s\n",
+                         i, std::strerror(errno));
+            return false;
+        }
+    }
+    std::fprintf(stderr, "CameraManager: sent %u preview fds %ux%u pitch %u\n",
+                 msg.count, msg.width, msg.height, msg.pitch);
+    return true;
 }
 
 CameraManager::~CameraManager()

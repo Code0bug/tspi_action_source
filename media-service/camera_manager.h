@@ -13,6 +13,7 @@ public:
     CameraManager &operator=(const CameraManager &) = delete;
 
     void start();
+    bool sendDisplayFds(int socket);
     void startCapture();
     void stopCapture();
 
