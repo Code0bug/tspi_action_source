@@ -86,7 +86,7 @@ VideoManager::~VideoManager()
     camera_deinit(camera_photo);
 }
 
-int VideoManager::rga_rotate_scale(int src_fd, int src_w, int src_h,
+int VideoManager::rga_process(int src_fd, int src_w, int src_h,
                                    int src_ws, int src_hs, int dst_fd)
 {
     rga_buffer_t src, out, pat;
@@ -133,8 +133,8 @@ void VideoManager::startCapture()
             continue;
         }
 
-        if (frame.dmabuf_fd < 0 || overlay_fds[slot] < 0 ||
-            rga_rotate_scale(frame.dmabuf_fd,
+        // rga 图像处理：旋转 90 度 和 缩放为屏幕尺寸大小
+        if (rga_process(frame.dmabuf_fd,
                              (int)camera_display->width,
                              (int)camera_display->height,
                              (int)camera_display->bytesperline,

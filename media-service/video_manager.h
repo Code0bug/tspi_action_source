@@ -18,7 +18,7 @@ public:
 
 private:
     bool createSocket();
-    int rga_rotate_scale(int src_fd, int src_w, int src_h,
+    int rga_process(int src_fd, int src_w, int src_h,
                          int src_ws, int src_hs, int dst_fd);
 
     static const int kOverlayCount = 2;
