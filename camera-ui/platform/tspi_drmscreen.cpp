@@ -22,6 +22,7 @@
 #include "tspi_drmscreen.h"
 
 #include <QLoggingCategory>
+#include <QPainter>
 #include <QtCore/private/qcore_unix_p.h>
 #include <cstring>
 #include <drm_fourcc.h>
@@ -44,6 +45,7 @@ DrmDevice::DrmDevice()
     , m_connId(0)
     , m_width(0)
     , m_height(0)
+    , m_primaryBack(0)
     , m_socket(-1)
 {
 }
@@ -221,6 +223,7 @@ bool DrmDevice::loadPlaneProp(uint32_t planeId, PlaneProp *prop)
     getProperty(props, "SRC_W", &prop->src_w, nullptr);
     getProperty(props, "SRC_H", &prop->src_h, nullptr);
     getProperty(props, "zpos", &prop->zpos, nullptr);
+    getProperty(props, "pixel blend mode", &prop->pixel_blend_mode, nullptr);
     drmModeFreeObjectProperties(props);
 
     if (!prop->crtc_id || !prop->fb_id
@@ -258,7 +261,13 @@ bool DrmDevice::update_plane(PlaneType type, const Framebuffer *buf)
     drmModeAtomicAddProperty(req, prop->plane_id, prop->src_y, 0);
     drmModeAtomicAddProperty(req, prop->plane_id, prop->src_w, uint64_t(buf->width) << 16);
     drmModeAtomicAddProperty(req, prop->plane_id, prop->src_h, uint64_t(buf->height) << 16);
+    if (prop->zpos)
+        drmModeAtomicAddProperty(req, prop->plane_id, prop->zpos,
+                                 type == PLANE_PRIMARY ? 1 : 0);
+    if (type == PLANE_PRIMARY && prop->pixel_blend_mode)
+        drmModeAtomicAddProperty(req, prop->plane_id, prop->pixel_blend_mode, 1);
 
+    std::lock_guard<std::mutex> lock(m_commitMutex);
     const int ret = drmModeAtomicCommit(m_fd, req, 0, nullptr);
     drmModeAtomicFree(req);
     if (ret != 0) {
@@ -510,7 +519,7 @@ void DrmDevice::createFramebuffers()
 {
     // 为 UI 准备 framebuffer
     for (int i = 0; i < PRIMARY_BUFFER_COUNT; ++i) {
-        if (!createFramebuffer(&m_primary_fbs[i], DRM_FORMAT_XRGB8888, true, false))
+        if (!createFramebuffer(&m_primary_fbs[i], DRM_FORMAT_ARGB8888, true, false))
             return;
     }
     // 为 video 准备 framebuffer
@@ -518,6 +527,18 @@ void DrmDevice::createFramebuffers()
         if (!createFramebuffer(&m_overlay_fbs[i], DRM_FORMAT_NV12, false, true))
             return;
     }
+}
+
+void DrmDevice::markPrimaryDirty(const QRegion &dirty)
+{
+    for (int i = 0; i < PRIMARY_BUFFER_COUNT; ++i)
+        m_primaryDirty[i] += dirty;
+}
+
+void DrmDevice::swapPrimary()
+{
+    m_primaryDirty[m_primaryBack] = QRegion();
+    m_primaryBack = (m_primaryBack + 1) % PRIMARY_BUFFER_COUNT;
 }
 
 bool DrmDevice::createSocket()
@@ -590,6 +611,13 @@ bool TspiDrmScreen::initialize()
     // 为 ui 和 video 创建 framebuffer
     m_device->createFramebuffers();
 
+    mGeometry = QRect(0, 0, int(m_device->width()), int(m_device->height()));
+    mDepth = 32;
+    mFormat = QImage::Format_ARGB32;
+    mPhysicalSize = QSizeF(mGeometry.width() * 25.4 / 96, mGeometry.height() * 25.4 / 96);
+    initializeCompositor();
+    mScreenImage.fill(Qt::transparent);
+
     // 创建 socket，并将给 video 创建的 framebuffer dma-buf fd 发送给 media 进程
     if (!m_device->createSocket())
         return false;
@@ -603,7 +631,21 @@ bool TspiDrmScreen::initialize()
 // 处理屏幕重绘
 QRegion TspiDrmScreen::doRedraw()
 {
-    return QFbScreen::doRedraw();
+    const QRegion dirty = QFbScreen::doRedraw();
+    if (dirty.isEmpty())
+        return dirty;
+
+    m_device->markPrimaryDirty(dirty);
+    QImage *dst = m_device->primaryBackImage();
+    if (dst && !dst->isNull()) {
+        QPainter p(dst);
+        p.setCompositionMode(QPainter::CompositionMode_Source);
+        for (const QRect &rect : m_device->primaryBackDirty())
+            p.drawImage(rect, mScreenImage, rect);
+    }
+    m_device->update_plane(PLANE_PRIMARY, m_device->primaryBackFb());
+    m_device->swapPrimary();
+    return dirty;
 }
 
 // 获取屏幕或窗口的截图

@@ -4,6 +4,7 @@
 #include <QImage>
 #include <QVector>
 #include <QtFbSupport/private/qfbscreen_p.h>
+#include <mutex>
 #include <thread>
 #include <xf86drmMode.h>
 
@@ -28,6 +29,7 @@ struct PlaneProp
     uint32_t src_w = 0;
     uint32_t src_h = 0;
     uint32_t zpos = 0;
+    uint32_t pixel_blend_mode = 0;
 };
 
 class DrmDevice
@@ -56,6 +58,14 @@ public:
     void createFramebuffers();
     bool createSocket();
     void startPreview();
+    bool update_plane(PlaneType type, const Framebuffer *buf);
+    uint32_t width() const { return m_width; }
+    uint32_t height() const { return m_height; }
+    void markPrimaryDirty(const QRegion &dirty);
+    const Framebuffer *primaryBackFb() const { return &m_primary_fbs[m_primaryBack]; }
+    QImage *primaryBackImage() { return &m_primary_fbs[m_primaryBack].wrapper; }
+    QRegion primaryBackDirty() const { return m_primaryDirty[m_primaryBack]; }
+    void swapPrimary();
     int fd() const { return m_fd; }
 
 private:
@@ -71,7 +81,6 @@ private:
     void destroyFramebuffer(Framebuffer *buf);
     void destroyFramebuffers();
     void previewLoop();
-    bool update_plane(PlaneType type, const Framebuffer *buf);
 
     // DRM 相关资源
     int m_fd;
@@ -88,8 +97,11 @@ private:
     // UI 和 video 的 framebuffer
     Framebuffer m_primary_fbs[PRIMARY_BUFFER_COUNT];
     Framebuffer m_overlay_fbs[OVERLAY_BUFFER_COUNT];
+    QRegion m_primaryDirty[PRIMARY_BUFFER_COUNT];
+    int m_primaryBack;
     int m_socket;
     std::thread m_previewThread;
+    std::mutex m_commitMutex;
 };
 
 class TspiDrmScreen : public QFbScreen
