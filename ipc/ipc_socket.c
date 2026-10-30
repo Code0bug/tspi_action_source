@@ -2,7 +2,6 @@
 #include "ipc_socket.h"
 
 #include <errno.h>
-#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -15,7 +14,6 @@ int ipc_server_create(const char *path)
     size_t path_len;
     int fd;
     int conn;
-    int flags;
     int saved_errno;
 
     if (path == NULL || path[0] == '\0') {
@@ -33,7 +31,7 @@ int ipc_server_create(const char *path)
     memcpy(address.sun_path, path, path_len + 1);
 
     // create socket
-    fd = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    fd = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
     if (fd < 0)
         return -1;
 
@@ -48,15 +46,6 @@ int ipc_server_create(const char *path)
 
     // listen for connections
     if (listen(fd, 1) < 0) {
-        saved_errno = errno;
-        close(fd);
-        unlink(path);
-        errno = saved_errno;
-        return -1;
-    }
-
-    flags = fcntl(fd, F_GETFL);
-    if (flags < 0 || fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) < 0) {
         saved_errno = errno;
         close(fd);
         unlink(path);
@@ -98,7 +87,7 @@ int ipc_client_create(const char *path)
     memcpy(address.sun_path, path, path_len + 1);
 
     // create socket
-    fd = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+    fd = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
     if (fd < 0)
         return -1;
 

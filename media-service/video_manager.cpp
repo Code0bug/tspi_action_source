@@ -145,6 +145,11 @@ void VideoManager::startCapture()
         }
         camera_release_frame(camera_display, &frame);
 
+        // socket 发送给 UI 显示
+        tspi_preview_buf msg = {};
+        msg.slot = uint32_t(slot);
+        ipc_send(m_socket, &msg, sizeof(msg), nullptr, 0);
+
         if (overlay_count > 1)
             slot ^= 1;
     }

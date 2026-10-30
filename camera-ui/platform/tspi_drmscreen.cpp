@@ -78,12 +78,14 @@ bool DrmDevice::open()
 
 void DrmDevice::close()
 {
-    destroyFramebuffers();
-
     if (m_socket >= 0) {
         qt_safe_close(m_socket);
         m_socket = -1;
     }
+    if (m_previewThread.joinable())
+        m_previewThread.join();
+
+    destroyFramebuffers();
 
     if (m_conn) {
         drmModeFreeConnector(m_conn);
@@ -105,11 +107,11 @@ void DrmDevice::close()
     }
 }
 
-static void getProperty(int fd, drmModeObjectProperties *props,
-                        const char *name, uint32_t *propId, uint64_t *value)
+void DrmDevice::getProperty(drmModeObjectProperties *props, const char *name,
+                            uint32_t *propId, uint64_t *value)
 {
     for (uint32_t i = 0; i < props->count_props; ++i) {
-        drmModePropertyPtr property = drmModeGetProperty(fd, props->props[i]);
+        drmModePropertyPtr property = drmModeGetProperty(m_fd, props->props[i]);
         if (property && !strcmp(property->name, name)) {
             if (propId)
                 *propId = property->prop_id;
@@ -181,7 +183,7 @@ bool DrmDevice::getPlanes()
             props = drmModeObjectGetProperties(m_fd, planeId, DRM_MODE_OBJECT_PLANE);
 
         if (props) {
-            getProperty(m_fd, props, "type", nullptr, &type);
+            getProperty(props, "type", nullptr, &type);
             if (type == DRM_PLANE_TYPE_PRIMARY && m_primary.plane_id == 0)
                 m_primary.plane_id = planeId;
             else if (type == DRM_PLANE_TYPE_OVERLAY && m_overlay.plane_id == 0)
@@ -208,17 +210,17 @@ bool DrmDevice::loadPlaneProp(uint32_t planeId, PlaneProp *prop)
         return false;
 
     prop->plane_id = planeId;
-    getProperty(m_fd, props, "CRTC_ID", &prop->crtc_id, nullptr);
-    getProperty(m_fd, props, "FB_ID", &prop->fb_id, nullptr);
-    getProperty(m_fd, props, "CRTC_X", &prop->crtc_x, nullptr);
-    getProperty(m_fd, props, "CRTC_Y", &prop->crtc_y, nullptr);
-    getProperty(m_fd, props, "CRTC_W", &prop->crtc_w, nullptr);
-    getProperty(m_fd, props, "CRTC_H", &prop->crtc_h, nullptr);
-    getProperty(m_fd, props, "SRC_X", &prop->src_x, nullptr);
-    getProperty(m_fd, props, "SRC_Y", &prop->src_y, nullptr);
-    getProperty(m_fd, props, "SRC_W", &prop->src_w, nullptr);
-    getProperty(m_fd, props, "SRC_H", &prop->src_h, nullptr);
-    getProperty(m_fd, props, "zpos", &prop->zpos, nullptr);
+    getProperty(props, "CRTC_ID", &prop->crtc_id, nullptr);
+    getProperty(props, "FB_ID", &prop->fb_id, nullptr);
+    getProperty(props, "CRTC_X", &prop->crtc_x, nullptr);
+    getProperty(props, "CRTC_Y", &prop->crtc_y, nullptr);
+    getProperty(props, "CRTC_W", &prop->crtc_w, nullptr);
+    getProperty(props, "CRTC_H", &prop->crtc_h, nullptr);
+    getProperty(props, "SRC_X", &prop->src_x, nullptr);
+    getProperty(props, "SRC_Y", &prop->src_y, nullptr);
+    getProperty(props, "SRC_W", &prop->src_w, nullptr);
+    getProperty(props, "SRC_H", &prop->src_h, nullptr);
+    getProperty(props, "zpos", &prop->zpos, nullptr);
     drmModeFreeObjectProperties(props);
 
     if (!prop->crtc_id || !prop->fb_id
@@ -229,6 +231,43 @@ bool DrmDevice::loadPlaneProp(uint32_t planeId, PlaneProp *prop)
     }
     return true;
 }
+
+bool DrmDevice::update_plane(PlaneType type, const Framebuffer *buf)
+{
+    const PlaneProp *prop;
+
+    switch (type) {
+    case PLANE_PRIMARY: prop = &m_primary; break;
+    case PLANE_OVERLAY: prop = &m_overlay; break;
+    default:
+        qWarning("update_plane: invalid plane type %d", int(type));
+        return false;
+    }
+
+    drmModeAtomicReq *req = drmModeAtomicAlloc();
+    if (!req)
+        return false;
+
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->crtc_id, m_crtcId);
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->fb_id, buf->fb_id);
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->crtc_x, 0);
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->crtc_y, 0);
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->crtc_w, m_width);
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->crtc_h, m_height);
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->src_x, 0);
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->src_y, 0);
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->src_w, uint64_t(buf->width) << 16);
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->src_h, uint64_t(buf->height) << 16);
+
+    const int ret = drmModeAtomicCommit(m_fd, req, 0, nullptr);
+    drmModeAtomicFree(req);
+    if (ret != 0) {
+        qErrnoWarning("update_plane %u failed", prop->plane_id);
+        return false;
+    }
+    return true;
+}
+
 
 bool DrmDevice::createScreens()
 {
@@ -283,7 +322,7 @@ bool DrmDevice::createScreens()
         qWarning("Cannot get connector properties");
         return false;
     }
-    getProperty(m_fd, props, "CRTC_ID", &propConnCrtcId, nullptr);
+    getProperty(props, "CRTC_ID", &propConnCrtcId, nullptr);
     drmModeFreeObjectProperties(props);
     if (propConnCrtcId == 0) {
         qWarning("Cannot find connector property CRTC_ID");
@@ -295,8 +334,8 @@ bool DrmDevice::createScreens()
         qWarning("Cannot get crtc properties");
         return false;
     }
-    getProperty(m_fd, props, "ACTIVE", &propCrtcActive, nullptr);
-    getProperty(m_fd, props, "MODE_ID", &propCrtcModeId, nullptr);
+    getProperty(props, "ACTIVE", &propCrtcActive, nullptr);
+    getProperty(props, "MODE_ID", &propCrtcModeId, nullptr);
     drmModeFreeObjectProperties(props);
     if (propCrtcActive == 0 || propCrtcModeId == 0) {
         qWarning("Cannot find crtc property ACTIVE or MODE_ID");
@@ -481,38 +520,6 @@ void DrmDevice::createFramebuffers()
     }
 }
 
-TspiDrmScreen::TspiDrmScreen(const QStringList &args)
-    : m_device(nullptr)
-{
-    Q_UNUSED(args);
-}
-
-TspiDrmScreen::~TspiDrmScreen()
-{
-    if (m_device) {
-        m_device->close();
-        delete m_device;
-    }
-}
-
-// 初始化屏幕
-bool TspiDrmScreen::initialize()
-{
-    m_device = new DrmDevice;
-    if (!m_device->open())
-        return false;
-    if (!m_device->createScreens())
-        return false;
-    // 为 ui 创建 framebuffer
-    m_device->createFramebuffers();
-
-    if (!m_device->createSocket()) {
-        qWarning("preview: send overlay fds failed");
-    }
-
-    return QFbScreen::initialize();
-}
-
 bool DrmDevice::createSocket()
 {
     int fds[OVERLAY_BUFFER_COUNT];
@@ -536,6 +543,61 @@ bool DrmDevice::createSocket()
         return false;
     }
     return true;
+}
+
+void DrmDevice::startPreview()
+{
+    m_previewThread = std::thread(&DrmDevice::previewLoop, this);
+}
+
+void DrmDevice::previewLoop()
+{
+    while (true) {
+        tspi_preview_buf msg = {};
+        int nfds = 0;
+        if (ipc_recv(m_socket, &msg, sizeof(msg), nullptr, &nfds) != ssize_t(sizeof(msg)))
+            break;
+
+        // 更新 overlay plane 预览画面
+        update_plane(PLANE_OVERLAY, &m_overlay_fbs[msg.slot]);
+    }
+}
+
+
+TspiDrmScreen::TspiDrmScreen(const QStringList &args)
+    : m_device(nullptr)
+{
+    Q_UNUSED(args);
+}
+
+TspiDrmScreen::~TspiDrmScreen()
+{
+    if (m_device) {
+        m_device->close();
+        delete m_device;
+    }
+}
+
+// 初始化屏幕
+bool TspiDrmScreen::initialize()
+{
+    m_device = new DrmDevice;
+    if (!m_device->open())
+        return false;
+    if (!m_device->createScreens())
+        return false;
+
+    // 为 ui 和 video 创建 framebuffer
+    m_device->createFramebuffers();
+
+    // 创建 socket，并将给 video 创建的 framebuffer dma-buf fd 发送给 media 进程
+    if (!m_device->createSocket())
+        return false;
+
+    // 视频预览在单独线程中运行
+    m_device->startPreview();
+
+    return QFbScreen::initialize();
 }
 
 // 处理屏幕重绘

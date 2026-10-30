@@ -4,9 +4,15 @@
 #include <QImage>
 #include <QVector>
 #include <QtFbSupport/private/qfbscreen_p.h>
+#include <thread>
 #include <xf86drmMode.h>
 
 QT_BEGIN_NAMESPACE
+
+enum PlaneType {
+    PLANE_PRIMARY,
+    PLANE_OVERLAY,
+};
 
 struct PlaneProp
 {
@@ -49,6 +55,7 @@ public:
     bool createScreens();
     void createFramebuffers();
     bool createSocket();
+    void startPreview();
     int fd() const { return m_fd; }
 
 private:
@@ -57,10 +64,14 @@ private:
 
     bool getCrtcAndConnector();
     bool getPlanes();
+    void getProperty(drmModeObjectProperties *props, const char *name,
+                     uint32_t *propId, uint64_t *value);
     bool loadPlaneProp(uint32_t planeId, PlaneProp *prop);
     bool createFramebuffer(Framebuffer *buf, uint32_t format, bool map, bool export_fd);
     void destroyFramebuffer(Framebuffer *buf);
     void destroyFramebuffers();
+    void previewLoop();
+    bool update_plane(PlaneType type, const Framebuffer *buf);
 
     // DRM 相关资源
     int m_fd;
@@ -78,6 +89,7 @@ private:
     Framebuffer m_primary_fbs[PRIMARY_BUFFER_COUNT];
     Framebuffer m_overlay_fbs[OVERLAY_BUFFER_COUNT];
     int m_socket;
+    std::thread m_previewThread;
 };
 
 class TspiDrmScreen : public QFbScreen
