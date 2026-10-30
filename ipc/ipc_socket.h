@@ -21,8 +21,8 @@ typedef struct tspi_preview_buf {
 
 int ipc_server_create(const char *path);
 int ipc_client_create(const char *path);
-ssize_t ipc_send(int socket_fd, const void *data, size_t size, int send_fd);
-ssize_t ipc_rec(int socket_fd, void *data, size_t size, int *recv_fd);
+ssize_t ipc_send(int socket_fd, const void *data, size_t size, const int *fds, int nfds);
+ssize_t ipc_recv(int socket_fd, void *data, size_t size, int *fds, int *nfds);
 
 #ifdef __cplusplus
 }

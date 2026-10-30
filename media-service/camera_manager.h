@@ -13,13 +13,22 @@ public:
     CameraManager &operator=(const CameraManager &) = delete;
 
     void start();
-    bool sendDisplayFds(int socket);
     void startCapture();
     void stopCapture();
 
 private:
+    bool createSocket();
+
+    static const int kOverlayCount = 2;
+
     camera_t *camera_display = nullptr;
     camera_t *camera_photo = nullptr;
+    int m_socket = -1;
+    int overlay_fds[kOverlayCount] = {-1, -1};
+    uint32_t overlay_width = 0;
+    uint32_t overlay_height = 0;
+    uint32_t overlay_pitch = 0;
+    uint32_t overlay_count = 0;
 
     std::atomic<bool> capturing_{false};
 };

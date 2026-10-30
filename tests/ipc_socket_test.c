@@ -26,6 +26,7 @@ static int run_server(void)
     struct frame_msg msg;
     int conn;
     int recv_fd = -1;
+    int nfds = 1;
     ssize_t n;
 
     unlink(SOCK_PATH);
@@ -35,9 +36,9 @@ static int run_server(void)
         return 1;
     }
 
-    n = ipc_rec(conn, &msg, sizeof(msg), &recv_fd);
+    n = ipc_recv(conn, &msg, sizeof(msg), &recv_fd, &nfds);
     if (n < 0) {
-        perror("ipc_rec");
+        perror("ipc_recv");
         close(conn);
         return 1;
     }
@@ -98,7 +99,7 @@ static int run_client(const char *device)
     msg.width = cam->width;
     msg.height = cam->height;
     msg.length = (uint32_t)frame.length;
-    if (ipc_send(sock, &msg, sizeof(msg), frame.dmabuf_fd) < 0) {
+    if (ipc_send(sock, &msg, sizeof(msg), &frame.dmabuf_fd, 1) < 0) {
         perror("ipc_send");
         camera_release_frame(cam, &frame);
         camera_deinit(cam);

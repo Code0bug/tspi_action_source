@@ -3,6 +3,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -113,67 +114,101 @@ int ipc_client_create(const char *path)
     return fd;
 }
 
-ssize_t ipc_send(int socket_fd, const void *data, size_t size, int send_fd)
+ssize_t ipc_send(int socket_fd, const void *data, size_t size, const int *fds, int nfds)
 {
-    struct iovec iov = {(void *)data, size};    // 普通数据
+    struct iovec iov = {(void *)data, size};
     struct msghdr msg = {0};
-    union {
-        struct cmsghdr align;
-        char data[CMSG_SPACE(sizeof(int))];
-    } control = {0};    // 准备附加数据 这里就是文件描述符
+    char *control = NULL;
+    ssize_t n;
+    int saved_errno;
 
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-
-    msg.msg_control = control.data;
-    msg.msg_controllen = sizeof(control.data);
-
-    struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
-    cmsg->cmsg_level = SOL_SOCKET;
-    cmsg->cmsg_type = SCM_RIGHTS;   // 表述传递文件描述符
-    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
-    memcpy(CMSG_DATA(cmsg), &send_fd, sizeof(send_fd));
-
-    return sendmsg(socket_fd, &msg, MSG_NOSIGNAL);
-}
-
-ssize_t ipc_rec(int socket_fd, void *data, size_t size, int *recv_fd)
-{
-    struct iovec iov = {data, size};
-    struct msghdr msg = {0};
-    union {
-        struct cmsghdr align;
-        char data[CMSG_SPACE(sizeof(int))];
-    } control = {0};
-
-    if (recv_fd == NULL) {
+    if ((size > 0 && data == NULL) || nfds < 0 || (nfds > 0 && fds == NULL)) {
         errno = EINVAL;
         return -1;
     }
-    *recv_fd = -1;
 
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
-    msg.msg_control = control.data;
-    msg.msg_controllen = sizeof(control.data);
 
+    if (nfds > 0) {
+        size_t ctrl_len = CMSG_SPACE(sizeof(int) * (size_t)nfds);
+        control = calloc(1, ctrl_len);
+        if (control == NULL)
+            return -1;
+        msg.msg_control = control;
+        msg.msg_controllen = ctrl_len;
+
+        struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg);
+        cmsg->cmsg_level = SOL_SOCKET;
+        cmsg->cmsg_type = SCM_RIGHTS;
+        cmsg->cmsg_len = CMSG_LEN(sizeof(int) * (size_t)nfds);
+        memcpy(CMSG_DATA(cmsg), fds, sizeof(int) * (size_t)nfds);
+    }
+
+    n = sendmsg(socket_fd, &msg, MSG_NOSIGNAL);
+    saved_errno = errno;
+    free(control);
+    errno = saved_errno;
+    return n;
+}
+
+ssize_t ipc_recv(int socket_fd, void *data, size_t size, int *fds, int *nfds)
+{
+    struct iovec iov = {data, size};
+    struct msghdr msg = {0};
+    char *control = NULL;
+    int max_fds;
+    int got = 0;
+    int invalid;
     ssize_t bytes;
-    bytes = recvmsg(socket_fd, &msg, MSG_CMSG_CLOEXEC);
-    if (bytes < 0)
-        return -1;
+    int saved_errno;
+    int i;
 
-    int invalid = msg.msg_flags & (MSG_TRUNC | MSG_CTRUNC);
+    if (nfds == NULL || *nfds < 0 || (*nfds > 0 && fds == NULL)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    max_fds = *nfds;
+    *nfds = 0;
+    for (i = 0; i < max_fds; ++i)
+        fds[i] = -1;
+
+    if (max_fds > 0) {
+        size_t ctrl_len = CMSG_SPACE(sizeof(int) * (size_t)max_fds);
+        control = calloc(1, ctrl_len);
+        if (control == NULL)
+            return -1;
+        msg.msg_control = control;
+        msg.msg_controllen = ctrl_len;
+    }
+
+    msg.msg_iov = &iov;
+    msg.msg_iovlen = 1;
+
+    bytes = recvmsg(socket_fd, &msg, MSG_CMSG_CLOEXEC);
+    if (bytes < 0) {
+        saved_errno = errno;
+        free(control);
+        errno = saved_errno;
+        return -1;
+    }
+
+    invalid = msg.msg_flags & (MSG_TRUNC | MSG_CTRUNC);
     for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
          cmsg = CMSG_NXTHDR(&msg, cmsg)) {
+        size_t count;
+        size_t j;
+
         if (cmsg->cmsg_level != SOL_SOCKET || cmsg->cmsg_type != SCM_RIGHTS)
             continue;
 
-        size_t count = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int);
-        for (size_t i = 0; i < count; ++i) {
+        count = (cmsg->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+        for (j = 0; j < count; ++j) {
             int fd;
-            memcpy(&fd, CMSG_DATA(cmsg) + i * sizeof(int), sizeof(fd));
-            if (*recv_fd < 0)
-                *recv_fd = fd;
+            memcpy(&fd, CMSG_DATA(cmsg) + j * sizeof(int), sizeof(fd));
+            if (got < max_fds)
+                fds[got++] = fd;
             else {
                 close(fd);
                 invalid = 1;
@@ -181,12 +216,17 @@ ssize_t ipc_rec(int socket_fd, void *data, size_t size, int *recv_fd)
         }
     }
 
+    free(control);
+
     if (invalid) {
-        if (*recv_fd >= 0)
-            close(*recv_fd);
-        *recv_fd = -1;
+        for (i = 0; i < got; ++i)
+            close(fds[i]);
+        for (i = 0; i < max_fds; ++i)
+            fds[i] = -1;
         errno = EPROTO;
         return -1;
     }
+
+    *nfds = got;
     return bytes;
 }

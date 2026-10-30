@@ -48,33 +48,36 @@ public:
     void close();
     bool createScreens();
     void createFramebuffers();
-    bool importFramebuffers(const int *fds, int count,
-                            uint32_t width, uint32_t height, uint32_t pitch);
+    bool createSocket();
     int fd() const { return m_fd; }
 
 private:
-    static const int BUFFER_COUNT = 3;
+    static const int PRIMARY_BUFFER_COUNT = 2;
+    static const int OVERLAY_BUFFER_COUNT = 2;
 
     bool getCrtcAndConnector();
     bool getPlanes();
     bool loadPlaneProp(uint32_t planeId, PlaneProp *prop);
-    bool createFramebuffer(Framebuffer *buf);
-    bool importFramebuffer(Framebuffer *buf, int primeFd);
+    bool createFramebuffer(Framebuffer *buf, uint32_t format, bool map, bool export_fd);
     void destroyFramebuffer(Framebuffer *buf);
     void destroyFramebuffers();
 
+    // DRM 相关资源
     int m_fd;
     drmModeResPtr m_res;
     drmModePlaneResPtr m_planeRes;
     drmModeConnectorPtr m_conn;
     uint32_t m_crtcId;
     uint32_t m_connId;
-    uint32_t m_width;
-    uint32_t m_height;
     PlaneProp m_primary;
     PlaneProp m_overlay;
-    Framebuffer m_fbs[BUFFER_COUNT];
-    QVector<Framebuffer> m_overlayFbs;
+    // 屏幕宽度/高度
+    uint32_t m_width;
+    uint32_t m_height;
+    // UI 和 video 的 framebuffer
+    Framebuffer m_primary_fbs[PRIMARY_BUFFER_COUNT];
+    Framebuffer m_overlay_fbs[OVERLAY_BUFFER_COUNT];
+    int m_socket;
 };
 
 class TspiDrmScreen : public QFbScreen
@@ -89,10 +92,7 @@ public:
     QPixmap grabWindow(WId wid, int x, int y, int width, int height) const override;
 
 private:
-    bool receivePreviewBuffers();
-
     DrmDevice *m_device;
-    int m_previewSocket;
 };
 
 QT_END_NAMESPACE

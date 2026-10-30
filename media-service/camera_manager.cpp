@@ -6,7 +6,9 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <sys/stat.h>
 #include <thread>
+#include <unistd.h>
 
 static const char *const kMainCameraDevice = "/dev/video0";
 static const uint32_t kMainWidth = 3264;
@@ -29,33 +31,54 @@ void CameraManager::start()
                                kMainWidth, kMainHeight);
     if (camera_photo == nullptr)
         std::fprintf(stderr, "CameraManager: open %s failed\n", kMainCameraDevice);
+
+    // 创建 socket
+    if (!createSocket())
+        std::fprintf(stderr, "CameraManager: recv overlay fds failed\n");
 }
 
-bool CameraManager::sendDisplayFds(int socket)
+bool CameraManager::createSocket()
 {
-    if (socket < 0 || camera_display == nullptr)
-        return false;
-
     tspi_preview_buf msg = {};
-    msg.width = camera_display->width;
-    msg.height = camera_display->height;
-    msg.pitch = camera_display->bytesperline;
-    msg.count = camera_display->bufcnt;
-    for (unsigned int i = 0; i < camera_display->bufcnt; ++i) {
-        msg.slot = i;
-        if (ipc_send(socket, &msg, sizeof(msg), camera_display->fbuf[i].dmabuf_fd) < 0) {
-            std::fprintf(stderr, "CameraManager: send display fd %u: %s\n",
-                         i, std::strerror(errno));
-            return false;
-        }
+    int fds[kOverlayCount];
+    int nfds = kOverlayCount;
+
+    if (mkdir("/run/tspi-camera", 0750) < 0 && errno != EEXIST)
+        std::fprintf(stderr, "CameraManager: mkdir /run/tspi-camera: %s\n", std::strerror(errno));
+
+    unlink(TSPI_PREVIEW_SOCKET_PATH);
+
+    m_socket = ipc_server_create(TSPI_PREVIEW_SOCKET_PATH);
+    if (m_socket < 0) {
+        std::fprintf(stderr, "CameraManager: preview socket %s: %s\n",
+                     TSPI_PREVIEW_SOCKET_PATH, std::strerror(errno));
+        return false;
     }
-    std::fprintf(stderr, "CameraManager: sent %u preview fds %ux%u pitch %u\n",
-                 msg.count, msg.width, msg.height, msg.pitch);
+
+    // socket 连接成功后，UI 会发送为 video 准备的显示 framebuffer dma-buf fd
+    ipc_recv(m_socket, &msg, sizeof(msg), fds, &nfds);
+
+    overlay_width = msg.width;
+    overlay_height = msg.height;
+    overlay_pitch = msg.pitch;
+    overlay_count = msg.count;
+    for (int i = 0; i < nfds; ++i)
+        overlay_fds[i] = fds[i];
+
+    std::printf("CameraManager: recv %u overlay fds %ux%u pitch %u\n",
+                overlay_count, overlay_width, overlay_height, overlay_pitch);
+                
     return true;
 }
 
 CameraManager::~CameraManager()
 {
+    for (int i = 0; i < kOverlayCount; ++i) {
+        if (overlay_fds[i] >= 0)
+            close(overlay_fds[i]);
+    }
+    if (m_socket >= 0)
+        close(m_socket);
     camera_deinit(camera_display);
     camera_deinit(camera_photo);
 }

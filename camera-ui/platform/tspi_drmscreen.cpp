@@ -44,6 +44,7 @@ DrmDevice::DrmDevice()
     , m_connId(0)
     , m_width(0)
     , m_height(0)
+    , m_socket(-1)
 {
 }
 
@@ -78,6 +79,11 @@ bool DrmDevice::open()
 void DrmDevice::close()
 {
     destroyFramebuffers();
+
+    if (m_socket >= 0) {
+        qt_safe_close(m_socket);
+        m_socket = -1;
+    }
 
     if (m_conn) {
         drmModeFreeConnector(m_conn);
@@ -323,17 +329,34 @@ bool DrmDevice::createScreens()
     return true;
 }
 
-// 为 UI 准备 framebuffer
-bool DrmDevice::createFramebuffer(Framebuffer *buf)
+bool DrmDevice::createFramebuffer(Framebuffer *buf, uint32_t format, bool map, bool export_fd)
 {
     struct drm_mode_create_dumb create = {};
     uint32_t handles[4] = {};
     uint32_t pitches[4] = {};
     uint32_t offsets[4] = {};
 
+    if (!buf || m_width == 0 || m_height == 0)
+        return false;
+
+    *buf = Framebuffer();
+
     create.width = m_width;
-    create.height = m_height;
-    create.bpp = 32;
+    switch (format) {
+    case DRM_FORMAT_XRGB8888:
+    case DRM_FORMAT_ARGB8888:
+        create.height = m_height;
+        create.bpp = 32;
+        break;
+    case DRM_FORMAT_NV12:
+        create.height = m_height * 3 / 2;
+        create.bpp = 8;
+        break;
+    default:
+        qWarning("createFramebuffer: unsupported format 0x%08x", format);
+        return false;
+    }
+
     if (drmIoctl(m_fd, DRM_IOCTL_MODE_CREATE_DUMB, &create) < 0) {
         qErrnoWarning("CREATE_DUMB failed");
         return false;
@@ -341,97 +364,72 @@ bool DrmDevice::createFramebuffer(Framebuffer *buf)
 
     buf->width = m_width;
     buf->height = m_height;
-    buf->format = DRM_FORMAT_XRGB8888;
+    buf->format = format;
     buf->pitch = create.pitch;
     buf->handle = create.handle;
     buf->size = create.size;
 
     handles[0] = create.handle;
     pitches[0] = create.pitch;
-    if (drmModeAddFB2(m_fd, m_width, m_height, DRM_FORMAT_XRGB8888,
+    if (format == DRM_FORMAT_NV12) {
+        handles[1] = create.handle;
+        pitches[1] = create.pitch;
+        offsets[1] = create.pitch * m_height;
+        if (create.pitch < m_width || create.size < offsets[1] + offsets[1] / 2) {
+            qWarning("createFramebuffer: NV12 buffer too small, pitch %u size %llu",
+                     create.pitch, static_cast<unsigned long long>(create.size));
+            destroyFramebuffer(buf);
+            return false;
+        }
+    }
+
+    if (drmModeAddFB2(m_fd, m_width, m_height, format,
                       handles, pitches, offsets, &buf->fb_id, 0) != 0) {
         qErrnoWarning("drmModeAddFB2 %ux%u failed", m_width, m_height);
         destroyFramebuffer(buf);
         return false;
     }
 
-    struct drm_mode_map_dumb mreq = {};
-    mreq.handle = create.handle;
-    if (drmIoctl(m_fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq) < 0) {
-        qErrnoWarning("MAP_DUMB failed");
-        destroyFramebuffer(buf);
-        return false;
+    if (map) {
+        struct drm_mode_map_dumb mreq = {};
+        mreq.handle = create.handle;
+        if (drmIoctl(m_fd, DRM_IOCTL_MODE_MAP_DUMB, &mreq) < 0) {
+            qErrnoWarning("MAP_DUMB failed");
+            destroyFramebuffer(buf);
+            return false;
+        }
+        buf->vaddr = mmap(nullptr, create.size, PROT_READ | PROT_WRITE,
+                          MAP_SHARED, m_fd, mreq.offset);
+        if (buf->vaddr == MAP_FAILED) {
+            qErrnoWarning("mmap dumb failed");
+            buf->vaddr = nullptr;
+            destroyFramebuffer(buf);
+            return false;
+        }
+        if (format == DRM_FORMAT_XRGB8888 || format == DRM_FORMAT_ARGB8888) {
+            memset(buf->vaddr, 0, create.size);
+            buf->wrapper = QImage(static_cast<uchar *>(buf->vaddr),
+                                  int(buf->width), int(buf->height),
+                                  int(buf->pitch),
+                                  format == DRM_FORMAT_ARGB8888
+                                      ? QImage::Format_ARGB32
+                                      : QImage::Format_RGB32);
+        }
     }
-    buf->vaddr = mmap(nullptr, create.size, PROT_READ | PROT_WRITE,
-                      MAP_SHARED, m_fd, mreq.offset);
-    if (buf->vaddr == MAP_FAILED) {
-        qErrnoWarning("mmap dumb failed");
-        buf->vaddr = nullptr;
-        destroyFramebuffer(buf);
-        return false;
+
+    if (export_fd) {
+        if (drmPrimeHandleToFD(m_fd, create.handle, DRM_CLOEXEC | DRM_RDWR,
+                               &buf->prime_fd) != 0) {
+            qErrnoWarning("drmPrimeHandleToFD failed");
+            buf->prime_fd = -1;
+            destroyFramebuffer(buf);
+            return false;
+        }
     }
-    memset(buf->vaddr, 0, create.size);
-    buf->wrapper = QImage(static_cast<uchar *>(buf->vaddr),
-                          int(buf->width), int(buf->height),
-                          int(buf->pitch), QImage::Format_RGB32);
 
     qCDebug(lcTspiDrm, "dumb buffer %ux%u format 0x%x handle %u pitch %u size %llu fb %u",
             buf->width, buf->height, buf->format, buf->handle, buf->pitch,
             static_cast<unsigned long long>(buf->size), buf->fb_id);
-    return true;
-}
-
-// 为视频数据准备 framebuffer
-bool DrmDevice::importFramebuffer(Framebuffer *buf, int primeFd)
-{
-    uint32_t handles[4] = {};
-    uint32_t pitches[4] = {};
-    uint32_t offsets[4] = {};
-
-    if (drmPrimeFDToHandle(m_fd, primeFd, &buf->handle) != 0) {
-        qErrnoWarning("drmPrimeFDToHandle failed");
-        return false;
-    }
-
-    buf->imported = true;
-    buf->format = DRM_FORMAT_NV12;
-    handles[0] = buf->handle;
-    handles[1] = buf->handle;
-    pitches[0] = buf->pitch;
-    pitches[1] = buf->pitch;
-    offsets[1] = buf->pitch * buf->height;
-    buf->size = offsets[1] + offsets[1] / 2;
-
-    if (drmModeAddFB2(m_fd, buf->width, buf->height, DRM_FORMAT_NV12,
-                      handles, pitches, offsets, &buf->fb_id, 0) != 0) {
-        qErrnoWarning("drmModeAddFB2 import %ux%u failed", buf->width, buf->height);
-        destroyFramebuffer(buf);
-        return false;
-    }
-
-    qCDebug(lcTspiDrm, "imported buffer %ux%u format 0x%x handle %u pitch %u fb %u",
-            buf->width, buf->height, buf->format, buf->handle, buf->pitch, buf->fb_id);
-    return true;
-}
-
-bool DrmDevice::importFramebuffers(const int *fds, int count,
-                                   uint32_t width, uint32_t height, uint32_t pitch)
-{
-    if (!fds || count <= 0)
-        return false;
-
-    m_overlayFbs.resize(count);
-    for (int i = 0; i < count; ++i) {
-        m_overlayFbs[i].width = width;
-        m_overlayFbs[i].height = height;
-        m_overlayFbs[i].pitch = pitch;
-        if (!importFramebuffer(&m_overlayFbs[i], fds[i])) {
-            for (Framebuffer &buf : m_overlayFbs)
-                destroyFramebuffer(&buf);
-            m_overlayFbs.clear();
-            return false;
-        }
-    }
     return true;
 }
 
@@ -463,34 +461,34 @@ void DrmDevice::destroyFramebuffer(Framebuffer *buf)
 
 void DrmDevice::destroyFramebuffers()
 {
-    for (int i = 0; i < BUFFER_COUNT; ++i)
-        destroyFramebuffer(&m_fbs[i]);
-    for (Framebuffer &buf : m_overlayFbs)
-        destroyFramebuffer(&buf);
-    m_overlayFbs.clear();
+    for (int i = 0; i < PRIMARY_BUFFER_COUNT; ++i)
+        destroyFramebuffer(&m_primary_fbs[i]);
+    for (int i = 0; i < OVERLAY_BUFFER_COUNT; ++i)
+        destroyFramebuffer(&m_overlay_fbs[i]);
 }
 
 void DrmDevice::createFramebuffers()
 {
-    for (int i = 0; i < BUFFER_COUNT; ++i) {
-        if (!createFramebuffer(&m_fbs[i]))
+    // 为 UI 准备 framebuffer
+    for (int i = 0; i < PRIMARY_BUFFER_COUNT; ++i) {
+        if (!createFramebuffer(&m_primary_fbs[i], DRM_FORMAT_XRGB8888, true, false))
+            return;
+    }
+    // 为 video 准备 framebuffer
+    for (int i = 0; i < OVERLAY_BUFFER_COUNT; ++i) {
+        if (!createFramebuffer(&m_overlay_fbs[i], DRM_FORMAT_NV12, false, true))
             return;
     }
 }
 
 TspiDrmScreen::TspiDrmScreen(const QStringList &args)
     : m_device(nullptr)
-    , m_previewSocket(-1)
 {
     Q_UNUSED(args);
 }
 
 TspiDrmScreen::~TspiDrmScreen()
 {
-    if (m_previewSocket >= 0) {
-        qt_safe_close(m_previewSocket);
-        m_previewSocket = -1;
-    }
     if (m_device) {
         m_device->close();
         delete m_device;
@@ -508,67 +506,36 @@ bool TspiDrmScreen::initialize()
     // 为 ui 创建 framebuffer
     m_device->createFramebuffers();
 
-    // 创建 socket 客户端
-    m_previewSocket = ipc_client_create(TSPI_PREVIEW_SOCKET_PATH);
-    if (m_previewSocket < 0) {
-        qErrnoWarning("preview socket connect %s failed", TSPI_PREVIEW_SOCKET_PATH);
-        return false;
-    }
-    // 导入 camera dma-buf fd 到 drm framebuffer 
-    if (!receivePreviewBuffers()) {
-        qWarning("preview: connected, but receiving camera fds failed");
+    if (!m_device->createSocket()) {
+        qWarning("preview: send overlay fds failed");
     }
 
     return QFbScreen::initialize();
 }
 
-bool TspiDrmScreen::receivePreviewBuffers()
+bool DrmDevice::createSocket()
 {
-    int flags = fcntl(m_previewSocket, F_GETFL);
-    if (flags >= 0)
-        fcntl(m_previewSocket, F_SETFL, flags & ~O_NONBLOCK);
-
+    int fds[OVERLAY_BUFFER_COUNT];
     tspi_preview_buf msg = {};
-    int fd = -1;
-    if (ipc_rec(m_previewSocket, &msg, sizeof(msg), &fd) != ssize_t(sizeof(msg))
-        || fd < 0 || msg.count == 0 || msg.slot >= msg.count) {
-        qErrnoWarning("preview recv first camera fd failed");
-        if (fd >= 0)
-            qt_safe_close(fd);
+
+    m_socket = ipc_client_create(TSPI_PREVIEW_SOCKET_PATH);
+    if (m_socket < 0) {
+        qErrnoWarning("preview socket connect %s failed", TSPI_PREVIEW_SOCKET_PATH);
         return false;
     }
 
-    QVector<int> fds(int(msg.count), -1);
-    fds[int(msg.slot)] = fd;
-    qWarning("preview: recv slot=%u fd=%d %ux%u pitch=%u count=%u",
-             msg.slot, fd, msg.width, msg.height, msg.pitch, msg.count);
-    for (uint32_t i = 1; i < msg.count; ++i) {
-        tspi_preview_buf next = {};
-        fd = -1;
-        if (ipc_rec(m_previewSocket, &next, sizeof(next), &fd) != ssize_t(sizeof(next))
-            || fd < 0 || next.slot >= msg.count || fds[int(next.slot)] >= 0) {
-            qErrnoWarning("preview recv camera fd %u failed", i);
-            if (fd >= 0)
-                qt_safe_close(fd);
-            for (int owned : fds) {
-                if (owned >= 0)
-                    qt_safe_close(owned);
-            }
-            return false;
-        }
-        fds[int(next.slot)] = fd;
-        qWarning("preview: recv slot=%u fd=%d", next.slot, fd);
-    }
+    msg.width = m_overlay_fbs[0].width;
+    msg.height = m_overlay_fbs[0].height;
+    msg.pitch = m_overlay_fbs[0].pitch;
+    msg.count = OVERLAY_BUFFER_COUNT;
+    for (int i = 0; i < OVERLAY_BUFFER_COUNT; ++i)
+        fds[i] = m_overlay_fbs[i].prime_fd;
 
-    const bool ok = m_device->importFramebuffers(fds.constData(), int(msg.count),
-                                                 msg.width, msg.height, msg.pitch);
-    for (int owned : fds) {
-        if (owned >= 0)
-            qt_safe_close(owned);
+    if (ipc_send(m_socket, &msg, sizeof(msg), fds, OVERLAY_BUFFER_COUNT) < 0) {
+        qErrnoWarning("preview send overlay fds failed");
+        return false;
     }
-    if (!ok)
-        qWarning("preview: importFramebuffers failed");
-    return ok;
+    return true;
 }
 
 // 处理屏幕重绘
