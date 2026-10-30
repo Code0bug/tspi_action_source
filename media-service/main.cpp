@@ -1,4 +1,4 @@
-#include "camera_manager.h"
+#include "video_manager.h"
 #include "service.h"
 
 #include <csignal>
@@ -15,9 +15,9 @@ int main()
     sigaddset(&set, SIGTERM);
     pthread_sigmask(SIG_BLOCK, &set, nullptr);
 
-    CameraManager camera;
-    camera.start();
-    std::thread captureThread(&CameraManager::startCapture, &camera);
+    VideoManager video;
+    video.start();
+    std::thread captureThread(&VideoManager::startCapture, &video);
 
     Service service;
     if (!service.start())
@@ -26,7 +26,7 @@ int main()
     sigwait(&set, &sig);
 
     service.stop();
-    camera.stopCapture();
+    video.stopCapture();
     captureThread.join();
     return 0;
 }

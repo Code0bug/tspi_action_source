@@ -1,16 +1,16 @@
-#ifndef MEDIA_SERVICE_CAMERA_MANAGER_H
-#define MEDIA_SERVICE_CAMERA_MANAGER_H
+#ifndef MEDIA_SERVICE_VIDEO_MANAGER_H
+#define MEDIA_SERVICE_VIDEO_MANAGER_H
 
 #include <camera_hal.h>
 #include <atomic>
 
-class CameraManager {
+class VideoManager {
 public:
-    CameraManager() = default;
-    ~CameraManager();
+    VideoManager() = default;
+    ~VideoManager();
 
-    CameraManager(const CameraManager &) = delete;
-    CameraManager &operator=(const CameraManager &) = delete;
+    VideoManager(const VideoManager &) = delete;
+    VideoManager &operator=(const VideoManager &) = delete;
 
     void start();
     void startCapture();
@@ -18,6 +18,8 @@ public:
 
 private:
     bool createSocket();
+    int rga_rotate_scale(int src_fd, int src_w, int src_h,
+                         int src_ws, int src_hs, int dst_fd);
 
     static const int kOverlayCount = 2;
 
