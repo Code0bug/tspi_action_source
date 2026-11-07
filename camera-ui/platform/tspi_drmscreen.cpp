@@ -611,7 +611,8 @@ bool TspiDrmScreen::initialize()
     // 为 ui 和 video 创建 framebuffer
     m_device->createFramebuffers();
 
-    mGeometry = QRect(0, 0, int(m_device->width()), int(m_device->height()));
+    // Qt 逻辑屏幕为横屏 552x368；DRM 原生时序仍是竖屏 368x552
+    mGeometry = QRect(0, 0, int(m_device->height()), int(m_device->width()));
     mDepth = 32;
     mFormat = QImage::Format_ARGB32;
     mPhysicalSize = QSizeF(mGeometry.width() * 25.4 / 96, mGeometry.height() * 25.4 / 96);
@@ -640,6 +641,9 @@ QRegion TspiDrmScreen::doRedraw()
     if (dst && !dst->isNull()) {
         QPainter p(dst);
         p.setCompositionMode(QPainter::CompositionMode_Source);
+        // 逻辑横屏逆时针 90° 写入竖屏
+        p.translate(0, dst->height());
+        p.rotate(-90);
         for (const QRect &rect : m_device->primaryBackDirty())
             p.drawImage(rect, mScreenImage, rect);
     }
