@@ -55,7 +55,7 @@ public:
     bool open();
     void close();
     bool createScreens();
-    void createFramebuffers();
+    bool createFramebuffers();
     bool createSocket();
     void startPreview();
     bool update_plane(PlaneType type, const Framebuffer *buf);

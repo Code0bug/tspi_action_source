@@ -10,14 +10,12 @@
  * 并且 ui 要悬浮于视频之上，也就是 primary plane 要在 overlay plane 之上
  *
  * 方案（10.29）
- * DRM 只在本插件操作。camera 4 块与 overlay 3 块是两套池，不 1:1。
  *
- * 1. Qt 创建 3 块屏幕大小的 NV12 overlay framebuffer（CREATE_DUMB + AddFB2），
- *    drmPrimeHandleToFD 导出可写 fd，经 socket 发给 media（带 width/height/pitch）。
- * 2. media 保存这 3 个 fd。采集 DQBUF 后 RGA 旋转缩放到空闲槽的 fd，立刻还 camera。
- * 3. media 只发 {slot, sequence} 通知 Qt：该槽已写好。Qt 用 m_overlayFbs[slot].fb_id
- *    提交 overlay。page flip 完成后再 RELEASE 该槽，media 才能再往里写。
- * 4. 3 槽都忙则丢预览帧，不阻塞 V4L2。断线丢弃旧池，重连再发新的 3 个 fd。
+ * 1. Qt 创建 2 块屏幕大小的 NV12 overlay framebuffer（CREATE_DUMB + AddFB2），
+ *    drmPrimeHandleToFD 导出可写 dma-buf fd，经 socket 发给 media 进程
+ * 2. media 保存这 2 个 dma-buf fd，将处理好的视频流数据写入该 fd 对应的 framebuffer
+ * 3. media 通过 socket 发对应 framebuffer 的编号（slot），通知 Qt 该块显存已写好
+ *    Qt 用 m_overlayFbs[slot].fb_id 提交 overlay 实现视频更新
  */
 #include "tspi_drmscreen.h"
 
@@ -222,7 +220,7 @@ bool DrmDevice::loadPlaneProp(uint32_t planeId, PlaneProp *prop)
     getProperty(props, "SRC_Y", &prop->src_y, nullptr);
     getProperty(props, "SRC_W", &prop->src_w, nullptr);
     getProperty(props, "SRC_H", &prop->src_h, nullptr);
-    getProperty(props, "zpos", &prop->zpos, nullptr);
+    getProperty(props, "zpos", &prop->zpos, nullptr);  
     getProperty(props, "pixel blend mode", &prop->pixel_blend_mode, nullptr);
     drmModeFreeObjectProperties(props);
 
@@ -240,11 +238,11 @@ bool DrmDevice::update_plane(PlaneType type, const Framebuffer *buf)
     const PlaneProp *prop;
 
     switch (type) {
-    case PLANE_PRIMARY: prop = &m_primary; break;
-    case PLANE_OVERLAY: prop = &m_overlay; break;
-    default:
-        qWarning("update_plane: invalid plane type %d", int(type));
-        return false;
+        case PLANE_PRIMARY: prop = &m_primary; break;
+        case PLANE_OVERLAY: prop = &m_overlay; break;
+        default:
+            qWarning("update_plane: invalid plane type %d", int(type));
+            return false;
     }
 
     drmModeAtomicReq *req = drmModeAtomicAlloc();
@@ -261,10 +259,11 @@ bool DrmDevice::update_plane(PlaneType type, const Framebuffer *buf)
     drmModeAtomicAddProperty(req, prop->plane_id, prop->src_y, 0);
     drmModeAtomicAddProperty(req, prop->plane_id, prop->src_w, uint64_t(buf->width) << 16);
     drmModeAtomicAddProperty(req, prop->plane_id, prop->src_h, uint64_t(buf->height) << 16);
-    if (prop->zpos)
-        drmModeAtomicAddProperty(req, prop->plane_id, prop->zpos,
-                                 type == PLANE_PRIMARY ? 1 : 0);
-    if (type == PLANE_PRIMARY && prop->pixel_blend_mode)
+    // zpos property 决定 plane 的叠放顺序：0 为最底层，1 为最上层
+    // 这里将放 UI 的 primary plane 放在最上层，video 的overlay plane 放在底层
+    drmModeAtomicAddProperty(req, prop->plane_id, prop->zpos,type == PLANE_PRIMARY ? 1 : 0);
+    // 给 UI 层设置透明属性
+    if (type == PLANE_PRIMARY)
         drmModeAtomicAddProperty(req, prop->plane_id, prop->pixel_blend_mode, 1);
 
     std::lock_guard<std::mutex> lock(m_commitMutex);
@@ -515,18 +514,19 @@ void DrmDevice::destroyFramebuffers()
         destroyFramebuffer(&m_overlay_fbs[i]);
 }
 
-void DrmDevice::createFramebuffers()
+bool DrmDevice::createFramebuffers()
 {
     // 为 UI 准备 framebuffer
     for (int i = 0; i < PRIMARY_BUFFER_COUNT; ++i) {
         if (!createFramebuffer(&m_primary_fbs[i], DRM_FORMAT_ARGB8888, true, false))
-            return;
+            return false;
     }
     // 为 video 准备 framebuffer
     for (int i = 0; i < OVERLAY_BUFFER_COUNT; ++i) {
         if (!createFramebuffer(&m_overlay_fbs[i], DRM_FORMAT_NV12, false, true))
-            return;
+            return false;
     }
+    return true;
 }
 
 void DrmDevice::markPrimaryDirty(const QRegion &dirty)
@@ -609,9 +609,12 @@ bool TspiDrmScreen::initialize()
         return false;
 
     // 为 ui 和 video 创建 framebuffer
-    m_device->createFramebuffers();
+    if (!m_device->createFramebuffers())
+        return false;
 
-    // Qt 逻辑屏幕为横屏 552x368；DRM 原生时序仍是竖屏 368x552
+    // mGeometry 是 mScreenImage 的矩形区域 initializeCompositor 中用 mGeometry.size() 去建 mScreenImage
+    // mScreenImage 是 Qt UI 的软件缓冲区，UI 更新后先画到这里，再拷贝进 DRM primary framebuffer 实现 UI 上屏
+    // 我们希望 mScreenImage 应该是横屏显示，但当前屏幕默认竖屏，因此 DRM 返回的也是竖屏参数，所以这里 height 和 width 要反过来 
     mGeometry = QRect(0, 0, int(m_device->height()), int(m_device->width()));
     mDepth = 32;
     mFormat = QImage::Format_ARGB32;
@@ -632,21 +635,22 @@ bool TspiDrmScreen::initialize()
 // 处理屏幕重绘
 QRegion TspiDrmScreen::doRedraw()
 {
+    // 返回需要重绘的 dirty 区域
     const QRegion dirty = QFbScreen::doRedraw();
     if (dirty.isEmpty())
         return dirty;
 
     m_device->markPrimaryDirty(dirty);
     QImage *dst = m_device->primaryBackImage();
-    if (dst && !dst->isNull()) {
-        QPainter p(dst);
-        p.setCompositionMode(QPainter::CompositionMode_Source);
-        // 逻辑横屏逆时针 90° 写入竖屏
-        p.translate(0, dst->height());
-        p.rotate(-90);
-        for (const QRect &rect : m_device->primaryBackDirty())
-            p.drawImage(rect, mScreenImage, rect);
-    }
+    
+    QPainter p(dst);
+    p.setCompositionMode(QPainter::CompositionMode_Source);
+    // dst 默认是竖屏内存，这里逆时针 90° 旋转为横屏，和 mScreenImage 的横屏一致
+    p.translate(0, dst->height());
+    p.rotate(-90);
+    for (const QRect &rect : m_device->primaryBackDirty())
+        p.drawImage(rect, mScreenImage, rect);
+    
     m_device->update_plane(PLANE_PRIMARY, m_device->primaryBackFb());
     m_device->swapPrimary();
     return dirty;
