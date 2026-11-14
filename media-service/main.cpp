@@ -1,5 +1,7 @@
-#include "video_manager.h"
+#include "key_manager.h"
+#include "media_manager.h"
 #include "service.h"
+#include "video_manager.h"
 
 #include <csignal>
 #include <cstdio>
@@ -15,9 +17,14 @@ int main()
     sigaddset(&set, SIGTERM);
     pthread_sigmask(SIG_BLOCK, &set, nullptr);
 
+    MediaManager media;
     VideoManager video;
     video.start();
     std::thread captureThread(&VideoManager::startCapture, &video);
+
+    KeyManager keys;
+    keys.start();
+    std::thread keyThread(&KeyManager::listen, &keys);
 
     Service service;
     if (!service.start())
@@ -26,7 +33,9 @@ int main()
     sigwait(&set, &sig);
 
     service.stop();
+    keys.stop();
     video.stopCapture();
+    keyThread.join();
     captureThread.join();
     return 0;
 }
