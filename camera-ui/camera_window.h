@@ -49,6 +49,7 @@ private:
     QPushButton *prevBtn_ = nullptr;
     QPushButton *nextBtn_ = nullptr;
     int photoIndex_ = 0;
+    bool albumDragged_ = false;
 };
 
 #endif

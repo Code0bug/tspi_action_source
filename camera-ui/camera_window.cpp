@@ -11,6 +11,7 @@
 #include <QPainterPath>
 #include <QResizeEvent>
 #include <QScrollBar>
+#include <QScroller>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -145,9 +146,24 @@ void CameraWindow::setupAlbumPage()
     pictureList_->setIconSize(QSize(150, 150));
     pictureList_->setGridSize(QSize(165, 165));
     pictureList_->setSpacing(4);
+    pictureList_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    pictureList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    QScroller::grabGesture(pictureList_->viewport(), QScroller::LeftMouseButtonGesture);
+    QScroller::grabGesture(pictureList_->viewport(), QScroller::TouchGesture);
+    QScroller *scroller = QScroller::scroller(pictureList_->viewport());
+    connect(scroller, &QScroller::stateChanged, this, [this](QScroller::State state) {
+        if (state == QScroller::Dragging || state == QScroller::Scrolling)
+            albumDragged_ = true;
+        else if (state == QScroller::Inactive)
+            QTimer::singleShot(0, this, [this] { albumDragged_ = false; });
+    });
     pictureList_->setStyleSheet(QStringLiteral(
         "QListWidget { background: #f0f0f0; border: none; outline: none; }"
-        "QListWidget::item { background: transparent; border: none; }"));
+        "QListWidget::item { background: transparent; border: none; }"
+        "QListWidget::item:selected, QListWidget::item:pressed {"
+        "    background: rgba(0, 0, 0, 50);"
+        "    border-radius: 20px;"
+        "}"));
     setupTouchScrollBar(pictureList_->verticalScrollBar());
     connect(pictureList_, &QListWidget::itemClicked, this, &CameraWindow::onThumbClicked);
 
@@ -258,6 +274,8 @@ void CameraWindow::showAlbum()
 
 void CameraWindow::onThumbClicked(QListWidgetItem *item)
 {
+    if (albumDragged_)
+        return;
     showPhotoAt(pictureList_->row(item));
     stack_->setCurrentWidget(viewerPage_);
     layoutOverlayButtons();
