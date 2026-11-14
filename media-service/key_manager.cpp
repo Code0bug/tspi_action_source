@@ -1,5 +1,7 @@
 #include "key_manager.h"
 
+#include "media_manager.h"
+
 #include <cerrno>
 #include <chrono>
 #include <cstdint>
@@ -11,6 +13,11 @@
 #include <unistd.h>
 
 const char *const KeyManager::kDevicePath = "/dev/input/event3";
+
+KeyManager::KeyManager(MediaManager &media)
+    : media_(media)
+{
+}
 
 KeyManager::~KeyManager()
 {
@@ -38,7 +45,6 @@ void KeyManager::listen()
 {
     struct pollfd pfd;
     struct input_event ev;
-    uint8_t recording = 0;
     bool pressed = false;
     std::chrono::steady_clock::time_point press_time;
 
@@ -80,16 +86,17 @@ void KeyManager::listen()
             int64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                                   std::chrono::steady_clock::now() - press_time)
                                   .count();
-            if (elapsed < 500) {
-                if (recording == 0)
-                    std::printf("KeyManager: short press, take photo\n");
-                else {
+            if (elapsed < 500) {    // 短按
+                if (media_.statusGet() == CamStatus::Record) { // 如果此时正在录像，短按则停止录像回到预览
                     std::printf("KeyManager: short press, stop video\n");
-                    recording = 0;
+                    media_.statusUpdate(CamStatus::Preview);
+                } else {    // 拍照
+                    std::printf("KeyManager: short press, take photo\n");
+                    media_.statusUpdate(CamStatus::Photo);
                 }
-            } else {
+            } else {        // 长按-录像
                 std::printf("KeyManager: long press, start video\n");
-                recording = 1;
+                media_.statusUpdate(CamStatus::Record);
             }
         }
     }

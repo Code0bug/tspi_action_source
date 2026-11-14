@@ -6,10 +6,13 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
+#include <fcntl.h>
 #include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 
+#include <opencv2/imgcodecs.hpp>
 #include <rga/im2d.h>
 #include <rga/rga.h>
 
@@ -87,7 +90,9 @@ VideoManager::~VideoManager()
 }
 
 int VideoManager::rga_process(int src_fd, int src_w, int src_h,
-                                   int src_ws, int src_hs, int dst_fd)
+                              int src_ws, int src_hs, int dst_fd, void *dst_vir,
+                              int dst_w, int dst_h, int dst_ws, int dst_fmt,
+                              int usage)
 {
     rga_buffer_t src, out, pat;
     im_rect srect, drect, prect;
@@ -100,18 +105,19 @@ int VideoManager::rga_process(int src_fd, int src_w, int src_h,
 
     src = wrapbuffer_fd(src_fd, src_w, src_h, RK_FORMAT_YCbCr_420_SP,
                         src_ws, src_hs);
-    out = wrapbuffer_fd(dst_fd, (int)overlay_width, (int)overlay_height,
-                        RK_FORMAT_YCbCr_420_SP, (int)overlay_pitch,
-                        (int)overlay_height);
+    if (dst_fd >= 0)
+        out = wrapbuffer_fd(dst_fd, dst_w, dst_h, dst_fmt, dst_ws, dst_h);
+    else
+        out = wrapbuffer_virtualaddr(dst_vir, dst_w, dst_h, dst_fmt, dst_ws,
+                                     dst_h);
     srect.width = src_w;
     srect.height = src_h;
-    drect.width = (int)overlay_width;
-    drect.height = (int)overlay_height;
+    drect.width = dst_w;
+    drect.height = dst_h;
 
-    status = improcess(src, out, pat, srect, drect, prect,
-                       IM_HAL_TRANSFORM_ROT_90 | IM_SYNC);
+    status = improcess(src, out, pat, srect, drect, prect, usage);
     if (status != IM_STATUS_SUCCESS && status != IM_STATUS_NOERROR) {
-        std::fprintf(stderr, "improcess rotate: %s (%d)\n",
+        std::fprintf(stderr, "improcess: %s (%d)\n",
                      imStrError(status), status);
         return -1;
     }
@@ -135,11 +141,14 @@ void VideoManager::startCapture()
 
         // rga 图像处理：旋转 90 度 和 缩放为屏幕尺寸大小
         if (rga_process(frame.dmabuf_fd,
-                             (int)camera_display->width,
-                             (int)camera_display->height,
-                             (int)camera_display->bytesperline,
-                             (int)camera_display->height,
-                             overlay_fds[slot]) != 0) {
+                        (int)camera_display->width,
+                        (int)camera_display->height,
+                        (int)camera_display->bytesperline,
+                        (int)camera_display->height,
+                        overlay_fds[slot], nullptr,
+                        (int)overlay_width, (int)overlay_height,
+                        (int)overlay_pitch, RK_FORMAT_YCbCr_420_SP,
+                        IM_HAL_TRANSFORM_ROT_90 | IM_SYNC) != 0) {
             camera_release_frame(camera_display, &frame);
             continue;
         }
@@ -158,4 +167,68 @@ void VideoManager::startCapture()
 void VideoManager::stopCapture()
 {
     capturing_ = false;
+}
+
+void VideoManager::takePhoto()
+{
+    camera_frame_t frame;
+    const int drop_frames = 5;
+    char path[128];
+    time_t now;
+    struct tm tm_now;
+    int fd;
+
+    std::printf("VideoManager: take photo\n");
+    if (camera_photo == nullptr)
+        return;
+
+    for (int i = 0; i < drop_frames; ++i) {
+        if (camera_get_frame(camera_photo, &frame) != 0)
+            return;
+        camera_release_frame(camera_photo, &frame);
+    }
+    if (camera_get_frame(camera_photo, &frame) != 0) {
+        std::fprintf(stderr, "VideoManager: take photo get frame failed\n");
+        return;
+    }
+
+    now = time(nullptr);
+    localtime_r(&now, &tm_now);
+    std::strftime(path, sizeof(path), "/userdata/picture/%Y%m%d_%H%M%S.png",
+                  &tm_now);
+
+    cv::Mat bgr((int)camera_photo->height, (int)camera_photo->width, CV_8UC3);
+    int ret = rga_process(frame.dmabuf_fd,
+                          (int)camera_photo->width,
+                          (int)camera_photo->height,
+                          (int)camera_photo->bytesperline,
+                          (int)camera_photo->height,
+                          -1, bgr.data,
+                          (int)camera_photo->width, (int)camera_photo->height,
+                          (int)camera_photo->width, RK_FORMAT_BGR_888,
+                          IM_HAL_TRANSFORM_ROT_180 | IM_SYNC);
+    camera_release_frame(camera_photo, &frame);
+    if (ret != 0)
+        return;
+
+    if (!cv::imwrite(path, bgr)) {
+        std::fprintf(stderr, "VideoManager: imwrite failed: %s\n", path);
+        return;
+    }
+    fd = open(path, O_RDONLY);
+    if (fd >= 0) {
+        fsync(fd);
+        close(fd);
+    }
+    std::printf("taking photo: %s\n", path);
+}
+
+void VideoManager::startRecord()
+{
+    std::printf("VideoManager: start video\n");
+}
+
+void VideoManager::stopRecord()
+{
+    std::printf("VideoManager: stop video\n");
 }

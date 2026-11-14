@@ -3,9 +3,11 @@
 
 #include <atomic>
 
+class MediaManager;
+
 class KeyManager {
 public:
-    KeyManager() = default;
+    explicit KeyManager(MediaManager &media);
     ~KeyManager();
 
     KeyManager(const KeyManager &) = delete;
@@ -18,6 +20,7 @@ public:
 private:
     static const char *const kDevicePath;
 
+    MediaManager &media_;
     int fd_ = -1;
     std::atomic<bool> running_{false};
 };

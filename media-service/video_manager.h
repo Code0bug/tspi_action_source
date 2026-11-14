@@ -15,11 +15,15 @@ public:
     void start();
     void startCapture();
     void stopCapture();
+    void takePhoto();
+    void startRecord();
+    void stopRecord();
 
 private:
     bool createSocket();
     int rga_process(int src_fd, int src_w, int src_h,
-                         int src_ws, int src_hs, int dst_fd);
+                    int src_ws, int src_hs, int dst_fd, void *dst_vir,
+                    int dst_w, int dst_h, int dst_ws, int dst_fmt, int usage);
 
     static const int kOverlayCount = 2;
 
