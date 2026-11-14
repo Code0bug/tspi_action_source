@@ -70,7 +70,7 @@ public:
 
 private:
     static const int PRIMARY_BUFFER_COUNT = 2;
-    static const int OVERLAY_BUFFER_COUNT = 2;
+    static const int OVERLAY_BUFFER_COUNT = 3;
 
     bool getCrtcAndConnector();
     bool getPlanes();

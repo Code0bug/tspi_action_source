@@ -11,9 +11,9 @@
  *
  * 方案（10.29）
  *
- * 1. Qt 创建 2 块屏幕大小的 NV12 overlay framebuffer（CREATE_DUMB + AddFB2），
+ * 1. Qt 创建 3 块屏幕大小的 NV12 overlay framebuffer（CREATE_DUMB + AddFB2），
  *    drmPrimeHandleToFD 导出可写 dma-buf fd，经 socket 发给 media 进程
- * 2. media 保存这 2 个 dma-buf fd，将处理好的视频流数据写入该 fd 对应的 framebuffer
+ * 2. media 保存这 3 个 dma-buf fd，将处理好的视频流数据写入该 fd 对应的 framebuffer
  * 3. media 通过 socket 发对应 framebuffer 的编号（slot），通知 Qt 该块显存已写好
  *    Qt 用 m_overlayFbs[slot].fb_id 提交 overlay 实现视频更新
  */

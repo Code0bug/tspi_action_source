@@ -160,7 +160,7 @@ void VideoManager::startCapture()
         ipc_send(m_socket, &msg, sizeof(msg), nullptr, 0);
 
         if (overlay_count > 1)
-            slot ^= 1;
+            slot = (slot + 1) % int(overlay_count);
     }
 }
 
