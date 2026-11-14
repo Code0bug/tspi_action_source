@@ -14,18 +14,10 @@
 #include <qpa/qplatforminputcontextfactory_p.h>
 #include <qpa/qwindowsysteminterface.h>
 
-#if QT_CONFIG(libinput)
-#include <QtInputSupport/private/qlibinputhandler_p.h>
-#endif
-
 #if QT_CONFIG(evdev)
 #include <QtInputSupport/private/qevdevmousemanager_p.h>
 #include <QtInputSupport/private/qevdevkeyboardmanager_p.h>
 #include <QtInputSupport/private/qevdevtouchmanager_p.h>
-#endif
-
-#if QT_CONFIG(tslib)
-#include <QtInputSupport/private/qtslib_p.h>
 #endif
 
 #include <QtPlatformHeaders/qlinuxfbfunctions.h>
@@ -104,26 +96,16 @@ QPlatformServices *TspiIntegration::services() const
 
 void TspiIntegration::createInputHandlers()
 {
-#if QT_CONFIG(libinput)
-    if (!qEnvironmentVariableIntValue("QT_QPA_FB_NO_LIBINPUT")) {
-        new QLibInputHandler(QLatin1String("libinput"), QString());
-        return;
-    }
-#endif
-
-#if QT_CONFIG(tslib)
-    bool useTslib = qEnvironmentVariableIntValue("QT_QPA_FB_TSLIB");
-    if (useTslib)
-        new QTsLibMouseHandler(QLatin1String("TsLib"), QString());
-#endif
-
+    // 画面在 TspiDrmScreen::doRedraw 里按竖屏 DRM 逆时针 90° 画成横屏 UI
+    // libinput 只把 ABS_X/ABS_Y 线性映射到 QScreen 宽高，没有 rotate，点下去会对不齐
+    // 走 evdev，并用 rotate=90 让归一化坐标转同样的 90°（与截图 transpose=1 一致）
 #if QT_CONFIG(evdev)
     m_kbdMgr = new QEvdevKeyboardManager(QLatin1String("EvdevKeyboard"), QString(), this);
     new QEvdevMouseManager(QLatin1String("EvdevMouse"), QString(), this);
-#if QT_CONFIG(tslib)
-    if (!useTslib)
-#endif
-        new QEvdevTouchManager(QLatin1String("EvdevTouch"), QString() /* spec */, this);
+    new QEvdevTouchManager(QLatin1String("EvdevTouch"),
+                           QStringLiteral("rotate=90"), this);
+#else
+    Q_UNUSED(this);
 #endif
 }
 
