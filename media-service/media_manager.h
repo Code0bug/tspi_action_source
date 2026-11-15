@@ -13,6 +13,7 @@ enum class CamStatus {
     Preview,    // 预览
     Photo,      // 拍照
     Record,     // 录像
+    Paused,     // 采集暂停
 };
 
 class MediaManager {
@@ -30,7 +31,7 @@ public:
     void stop();
 
 private:
-    void listen();
+    void run();
 
     VideoManager video_;
     KeyManager keys_;

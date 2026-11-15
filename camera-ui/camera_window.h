@@ -1,6 +1,8 @@
 #ifndef CAMERA_WINDOW_H
 #define CAMERA_WINDOW_H
 
+#include "media_client.h"
+
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
@@ -50,6 +52,7 @@ private:
     QPushButton *nextBtn_ = nullptr;
     int photoIndex_ = 0;
     bool albumDragged_ = false;
+    MediaClient media_;
 };
 
 #endif

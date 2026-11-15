@@ -41,7 +41,7 @@ void KeyManager::stop()
     running_ = false;
 }
 
-void KeyManager::listen()
+void KeyManager::run()
 {
     struct pollfd pfd;
     struct input_event ev;

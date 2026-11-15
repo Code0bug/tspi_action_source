@@ -264,10 +264,12 @@ void CameraWindow::loadAlbum()
 void CameraWindow::showPreview()
 {
     stack_->setCurrentWidget(previewPage_);
+    media_.startCapture();
 }
 
 void CameraWindow::showAlbum()
 {
+    media_.stopCapture();
     stack_->setCurrentWidget(albumPage_);
     layoutOverlayButtons();
 }

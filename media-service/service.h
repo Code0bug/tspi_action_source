@@ -6,10 +6,12 @@
 
 #include <dbus/dbus.h>
 
+class MediaManager;
+
 // 在 system bus 上导出媒体服务接口，接口见 ipc/include/media_service.h。
 class Service {
 public:
-    Service() = default;
+    explicit Service(MediaManager &media);
     ~Service();
 
     Service(const Service &) = delete;
@@ -23,6 +25,7 @@ private:
                                        void *user);
     void loop(std::future<void> stopRequested);
 
+    MediaManager &media_;
     DBusConnection *conn_ = nullptr;
     std::thread thread_;
     std::promise<void> stopRequest_;

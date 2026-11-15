@@ -2,7 +2,9 @@
 #define MEDIA_SERVICE_VIDEO_MANAGER_H
 
 #include <camera_hal.h>
-#include <atomic>
+
+#include <condition_variable>
+#include <mutex>
 
 class VideoManager {
 public:
@@ -13,6 +15,8 @@ public:
     VideoManager &operator=(const VideoManager &) = delete;
 
     void start();
+    void stop();
+    void run();
     void startCapture();
     void stopCapture();
     void takePhoto();
@@ -36,7 +40,10 @@ private:
     uint32_t overlay_pitch = 0;
     uint32_t overlay_count = 0;
 
-    std::atomic<bool> capturing_{false};
+    bool running_ = true;
+    bool capturing_ = true;
+    std::mutex mu_;
+    std::condition_variable cv_;
 };
 
 #endif

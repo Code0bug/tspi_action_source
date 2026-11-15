@@ -124,20 +124,33 @@ int VideoManager::rga_process(int src_fd, int src_w, int src_h,
     return 0;
 }
 
-void VideoManager::startCapture()
+void VideoManager::stop()
+{
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        running_ = false;
+    }
+    cv_.notify_one();
+}
+
+void VideoManager::run()
 {
     int slot = 0;
 
-    if (camera_display == nullptr)
-        return;
+    for (;;) {
+        {
+            std::unique_lock<std::mutex> lock(mu_);
+            cv_.wait(lock, [this] { return !running_ || capturing_; });
+            if (!running_)
+                return;
+        }
 
-    capturing_ = true;
-    while (capturing_) {
         camera_frame_t frame;
         if (camera_get_frame(camera_display, &frame) != 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
             continue;
         }
+        // std::printf("VideoManager: get frame %d\n", frame.index);
 
         // rga 图像处理：旋转 90 度 和 缩放为屏幕尺寸大小
         if (rga_process(frame.dmabuf_fd,
@@ -164,8 +177,18 @@ void VideoManager::startCapture()
     }
 }
 
+void VideoManager::startCapture()
+{
+    {
+        std::lock_guard<std::mutex> lock(mu_);
+        capturing_ = true;
+    }
+    cv_.notify_one();
+}
+
 void VideoManager::stopCapture()
 {
+    std::lock_guard<std::mutex> lock(mu_);
     capturing_ = false;
 }
 
@@ -177,10 +200,6 @@ void VideoManager::takePhoto()
     time_t now;
     struct tm tm_now;
     int fd;
-
-    std::printf("VideoManager: take photo\n");
-    if (camera_photo == nullptr)
-        return;
 
     for (int i = 0; i < drop_frames; ++i) {
         if (camera_get_frame(camera_photo, &frame) != 0)

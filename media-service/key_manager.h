@@ -14,7 +14,7 @@ public:
     KeyManager &operator=(const KeyManager &) = delete;
 
     void start();
-    void listen();
+    void run();
     void stop();
 
 private:

@@ -1,9 +1,16 @@
 #include "service.h"
 
+#include "media_manager.h"
+
 #include <media_service.h>
 
 #include <cstdio>
 #include <chrono>
+
+Service::Service(MediaManager &media)
+    : media_(media)
+{
+}
 
 Service::~Service()
 {
@@ -82,20 +89,24 @@ void Service::loop(std::future<void> stopRequested)
 }
 
 DBusHandlerResult Service::onMessage(DBusConnection *,
-                                     DBusMessage *msg, void *)
+                                     DBusMessage *msg, void *user)
 {
+    auto *self = static_cast<Service *>(user);
+
     if (dbus_message_get_type(msg) != DBUS_MESSAGE_TYPE_METHOD_CALL)
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
     // Start Capture
     if (dbus_message_is_method_call(msg, MEDIA_SERVICE_INTERFACE,
                                     MEDIA_SERVICE_METHOD_START_CAPTURE)) {
+        self->media_.statusUpdate(CamStatus::Preview);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
     // Stop Capture
     if (dbus_message_is_method_call(msg, MEDIA_SERVICE_INTERFACE,
                                     MEDIA_SERVICE_METHOD_STOP_CAPTURE)) {
+        self->media_.statusUpdate(CamStatus::Paused);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
