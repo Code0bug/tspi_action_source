@@ -1,33 +1,39 @@
-#define MODULE_TAG "video_encoder"
+#define MODULE_TAG "mpp_encoder"
 
-#include "video_encoder.h"
+#include "mpp_encoder.h"
 
+#include "rk_mpi.h"
+#include "rk_venc_cfg.h"
+#include "rk_venc_rc.h"
+#include "mpp_buffer.h"
+#include "mpp_frame.h"
+#include "mpp_packet.h"
 #include "mpp_meta.h"
 
 #include <cstdio>
 #include <cstring>
 
-VideoEncoder::VideoEncoder()
-    : ctx(nullptr)
-    , mpi(nullptr)
-    , cfg(nullptr)
-    , buf_grp(nullptr)
-    , pkt_buf(nullptr)
-    , packet(nullptr)
-    , width_(0)
-    , height_(0)
-    , hor_stride_(0)
-    , type(MPP_VIDEO_CodingAVC)
-    , fmt(MPP_FMT_YUV420SP)
+static MppCtx ctx;
+static MppApi *mpi;
+static MppEncCfg cfg;
+static MppBufferGroup buf_grp;
+static MppBuffer pkt_buf;
+static MppPacket packet;
+static RK_U32 width_;
+static RK_U32 height_;
+static RK_U32 hor_stride_;
+static MppCodingType type;
+static MppFrameFormat fmt;
+
+static void release_packet(void)
 {
+    if (packet) {
+        mpp_packet_deinit(&packet);
+        packet = nullptr;
+    }
 }
 
-VideoEncoder::~VideoEncoder()
-{
-    deinit();
-}
-
-int VideoEncoder::init(uint32_t width, uint32_t height, uint32_t hor_stride)
+int mpp_encoder_init(uint32_t width, uint32_t height, uint32_t hor_stride)
 {
     int ret;
     width_ = width;
@@ -36,21 +42,18 @@ int VideoEncoder::init(uint32_t width, uint32_t height, uint32_t hor_stride)
     type = MPP_VIDEO_CodingAVC;     // H.264
     fmt  = MPP_FMT_YUV420SP;        // NV12 格式
 
-    // 2. 创建编码器上下文
     ret = mpp_create(&ctx, &mpi);
     if (ret) {
         printf("mpp_create failed %d\n", ret);
         return ret;
     }
 
-    // 3. 初始化编码器
     ret = mpp_init(ctx, MPP_CTX_ENC, type);
     if (ret) {
         printf("mpp_init failed %d\n", ret);
         return ret;
     }
 
-    // 4. 获取编码配置
     ret = mpp_enc_cfg_init(&cfg);
     if (ret) {
         printf("mpp_enc_cfg_init failed %d\n", ret);
@@ -74,7 +77,6 @@ int VideoEncoder::init(uint32_t width, uint32_t height, uint32_t hor_stride)
     mpi->control(ctx, MPP_SET_INPUT_TIMEOUT, &timeout);
     mpi->control(ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout);
 
-    // 5. 分配缓冲区
     mpp_buffer_group_get_internal(&buf_grp, MPP_BUFFER_TYPE_DRM);
     size_t frame_size = hor_stride * height * 3 / 2;
     mpp_buffer_get(buf_grp, &pkt_buf, frame_size);
@@ -82,14 +84,14 @@ int VideoEncoder::init(uint32_t width, uint32_t height, uint32_t hor_stride)
     return 0;
 }
 
-int VideoEncoder::encode(int dmabuf_fd, size_t buf_size, uint64_t pts, EncodedPacket *out)
+int mpp_encoder_encode(int dmabuf_fd, size_t buf_size, uint64_t pts, EncodedPacket *out)
 {
     int ret = 0;
     MppFrame frame = nullptr;
     MppBuffer frm_buf = nullptr;
     MppBufferInfo info;
 
-    releasePacket();
+    release_packet();
 
     memset(&info, 0, sizeof(info));
     info.type = MPP_BUFFER_TYPE_EXT_DMA;
@@ -148,17 +150,9 @@ int VideoEncoder::encode(int dmabuf_fd, size_t buf_size, uint64_t pts, EncodedPa
     return 0;
 }
 
-void VideoEncoder::releasePacket()
+void mpp_encoder_deinit(void)
 {
-    if (packet) {
-        mpp_packet_deinit(&packet);
-        packet = nullptr;
-    }
-}
-
-void VideoEncoder::deinit()
-{
-    releasePacket();
+    release_packet();
     if (pkt_buf) {
         mpp_buffer_put(pkt_buf);
         pkt_buf = nullptr;

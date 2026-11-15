@@ -3,12 +3,15 @@
 
 #include <camera_hal.h>
 
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 
+class MediaManager;
+
 class VideoManager {
 public:
-    VideoManager() = default;
+    explicit VideoManager(MediaManager &media);
     ~VideoManager();
 
     VideoManager(const VideoManager &) = delete;
@@ -22,6 +25,8 @@ public:
     void takePhoto();
     void startRecord();
     void stopRecord();
+    void encoderSize(uint32_t *width, uint32_t *height, uint32_t *stride) const;
+    void releaseFrame(camera_frame_t &frame);
 
 private:
     bool createSocket();
@@ -31,6 +36,7 @@ private:
 
     static const int kOverlayCount = 3;
 
+    MediaManager &media_;
     camera_t *camera_display = nullptr;
     camera_t *camera_photo = nullptr;
     int m_socket = -1;
@@ -42,6 +48,7 @@ private:
 
     bool running_ = true;
     bool capturing_ = true;
+    std::atomic<bool> recording_{false};
     std::mutex mu_;
     std::condition_variable cv_;
 };

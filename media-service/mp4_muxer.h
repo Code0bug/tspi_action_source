@@ -1,7 +1,7 @@
 #ifndef MEDIA_SERVICE_MP4_MUXER_H
 #define MEDIA_SERVICE_MP4_MUXER_H
 
-#include "video_encoder.h"
+#include "mpp_encoder.h"
 
 #include <cstdint>
 #include <string>
@@ -12,13 +12,19 @@ struct AVCodecContext;
 struct AVFrame;
 struct SwrContext;
 
+class MediaManager;
+
 class Mp4Muxer {
 public:
-    Mp4Muxer();
+    explicit Mp4Muxer(MediaManager &media);
     ~Mp4Muxer();
 
     Mp4Muxer(const Mp4Muxer &) = delete;
     Mp4Muxer &operator=(const Mp4Muxer &) = delete;
+
+    void start(uint32_t width, uint32_t height, uint32_t stride);
+    void stop();
+    void run();
 
     bool initMp4Mux(const std::string &filename);
     void closeMp4Mux();
@@ -30,6 +36,8 @@ private:
     int addSpsPpsAndWriteHeader();
     int initAudioEncoder();
     int writeAudioFrame(AVFrame *frame);
+
+    MediaManager &media_;
 
     AVFormatContext *m_outFmt;
     AVCodecContext *m_audioEncCtx;

@@ -1,6 +1,7 @@
 #include "video_manager.h"
 
 #include "ipc_socket.h"
+#include "media_manager.h"
 
 #include <cerrno>
 #include <chrono>
@@ -23,6 +24,11 @@ static const char *const kSelfCameraDevice = "/dev/video1";
 static const uint32_t kSelfWidth = 1920;
 static const uint32_t kSelfHeight = 1080;
 static const uint32_t kBufCount = 4;
+
+VideoManager::VideoManager(MediaManager &media)
+    : media_(media)
+{
+}
 
 void VideoManager::start()
 {
@@ -165,7 +171,15 @@ void VideoManager::run()
             camera_release_frame(camera_display, &frame);
             continue;
         }
-        camera_release_frame(camera_display, &frame);
+
+        if (recording_.load()) {
+            MuxJob job = {};
+            job.type = MuxJobType::Video;
+            job.video = frame;
+            media_.mux_queue.push(job);
+        } else {
+            camera_release_frame(camera_display, &frame);
+        }
 
         // socket 发送给 UI 显示
         tspi_preview_buf msg = {};
@@ -242,12 +256,45 @@ void VideoManager::takePhoto()
     std::printf("taking photo: %s\n", path);
 }
 
+void VideoManager::encoderSize(uint32_t *width, uint32_t *height, uint32_t *stride) const
+{
+    *width = camera_display->width;
+    *height = camera_display->height;
+    *stride = camera_display->bytesperline;
+}
+
+void VideoManager::releaseFrame(camera_frame_t &frame)
+{
+    camera_release_frame(camera_display, &frame);
+}
+
 void VideoManager::startRecord()
 {
-    std::printf("VideoManager: start video\n");
+    char path[128];
+    time_t now;
+    struct tm tm_now;
+
+    if (mkdir("/userdata/video", 0750) < 0 && errno != EEXIST)
+        std::fprintf(stderr, "VideoManager: mkdir /userdata/video: %s\n",
+                     std::strerror(errno));
+
+    now = time(nullptr);
+    localtime_r(&now, &tm_now);
+    std::strftime(path, sizeof(path), "/userdata/video/%Y%m%d_%H%M%S.mp4",
+                  &tm_now);
+    MuxJob job = {};
+    job.type = MuxJobType::Open;
+    job.path = path;
+    media_.mux_queue.push(job);
+    recording_ = true;
+    std::printf("VideoManager: start video %s\n", path);
 }
 
 void VideoManager::stopRecord()
 {
+    recording_ = false;
+    MuxJob job = {};
+    job.type = MuxJobType::Close;
+    media_.mux_queue.push(job);
     std::printf("VideoManager: stop video\n");
 }

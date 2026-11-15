@@ -25,6 +25,8 @@
  */
 #include "mp4_muxer.h"
 
+#include "media_manager.h"
+
 #include <iostream>
 #include <string>
 #include <cstring>
@@ -191,8 +193,9 @@ bool annexbToAvcc(const uint8_t *data, uint32_t size, std::vector<uint8_t> &out)
 }
 } // namespace
 
-Mp4Muxer::Mp4Muxer()
-    : m_outFmt(nullptr)
+Mp4Muxer::Mp4Muxer(MediaManager &media)
+    : media_(media)
+    , m_outFmt(nullptr)
     , m_audioEncCtx(nullptr)
     , m_swrCtx(nullptr)
     , m_audioFrame(nullptr)
@@ -210,6 +213,48 @@ Mp4Muxer::Mp4Muxer()
 Mp4Muxer::~Mp4Muxer()
 {
     closeMp4Mux();
+    mpp_encoder_deinit();
+}
+
+void Mp4Muxer::start(uint32_t width, uint32_t height, uint32_t stride)
+{
+    mpp_encoder_init(width, height, stride);
+}
+
+void Mp4Muxer::stop()
+{
+    MuxJob job = {};
+    job.type = MuxJobType::Stop;
+    media_.mux_queue.push(job);
+}
+
+void Mp4Muxer::run()
+{
+    for (;;) {
+        MuxJob job = media_.mux_queue.pop();
+        switch (job.type) {
+        case MuxJobType::Open:
+            initMp4Mux(job.path);
+            break;
+        case MuxJobType::Video: {
+            EncodedPacket pkt;
+            if (mpp_encoder_encode(job.video.dmabuf_fd, job.video.length,
+                                   (uint64_t)job.video.timestamp_us, &pkt) == 0)
+                writeVideoToMp4(&pkt);
+            media_.releaseVideoFrame(job.video);
+            break;
+        }
+        case MuxJobType::Audio:
+            writeAudioToMp4(job.pcm.data(), (int)job.pcm.size(), job.pts);
+            break;
+        case MuxJobType::Close:
+            closeMp4Mux();
+            break;
+        case MuxJobType::Stop:
+            closeMp4Mux();
+            return;
+        }
+    }
 }
 
 bool Mp4Muxer::initMp4Mux(const std::string &filename)
