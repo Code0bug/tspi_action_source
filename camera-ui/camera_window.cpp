@@ -1,7 +1,5 @@
 #include "camera_window.h"
 
-#include <cstdio>
-
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
@@ -30,7 +28,8 @@ static void setupButton(QPushButton *btn, const QString &iconPath)
         "QPushButton:focus { outline: none; }"));
 }
 
-static void setupOsdLabel(QLabel *lbl, int x, int y, int w, int h, Qt::Alignment align)
+static void setupOsdLabel(QLabel *lbl, int x, int y, int w, int h,
+                          Qt::Alignment align, bool recording = false)
 {
     QFont font = lbl->font();
     font.setPixelSize(25);
@@ -39,8 +38,13 @@ static void setupOsdLabel(QLabel *lbl, int x, int y, int w, int h, Qt::Alignment
     lbl->setAlignment(align);
     lbl->setGeometry(x, y, w, h);
     lbl->setFixedSize(w, h);
-    lbl->setStyleSheet(QStringLiteral(
-        "QLabel { color: white; background: transparent; padding: 2px 4px; }"));
+    if (recording) {
+        lbl->setStyleSheet(QStringLiteral(
+            "QLabel { color: white; background-color: rgb(200, 0, 0); padding: 2px 4px; }"));
+    } else {
+        lbl->setStyleSheet(QStringLiteral(
+            "QLabel { color: white; background: transparent; padding: 2px 4px; }"));
+    }
 }
 
 static void setupTouchScrollBar(QScrollBar *bar)
@@ -105,6 +109,7 @@ CameraWindow::CameraWindow(QWidget *parent)
     setupPreviewPage();
     setupAlbumPage();
     setupViewerPage();
+    setupRecordPage();
     stack_->setCurrentWidget(previewPage_);
 
     connect(&media_, &MediaClient::recordStarted, this, &CameraWindow::onRecordStarted);
@@ -137,6 +142,24 @@ void CameraWindow::setupPreviewPage()
     videoBtn_->move(0, 270);
 
     stack_->addWidget(previewPage_);
+}
+
+void CameraWindow::setupRecordPage()
+{
+    recordPage_ = new QWidget;
+    recordPage_->setAttribute(Qt::WA_TranslucentBackground);
+    recordPage_->setStyleSheet(QStringLiteral("background: transparent;"));
+
+    recTimeLabel_ = new QLabel(recordPage_);
+    setupOsdLabel(recTimeLabel_, 20, 20, 90, 30, Qt::AlignLeft | Qt::AlignVCenter, true);
+
+    recFpsLabel_ = new QLabel(recordPage_);
+    setupOsdLabel(recFpsLabel_, 380, 20, 160, 30, Qt::AlignRight | Qt::AlignVCenter);
+
+    recTimer_ = new QTimer(this);
+    connect(recTimer_, &QTimer::timeout, this, &CameraWindow::updateRecTime);
+
+    stack_->addWidget(recordPage_);
 }
 
 void CameraWindow::setupAlbumPage()
@@ -227,6 +250,8 @@ void CameraWindow::layoutOverlayButtons()
         emptyLabel_->setGeometry(albumPage_->rect());
     if (albumBackBtn_)
         albumBackBtn_->raise();
+    if (recFpsLabel_ && recordPage_)
+        recFpsLabel_->move(recordPage_->width() - recFpsLabel_->width() - 20, 20);
 
     if (!viewerPage_)
         return;
@@ -266,14 +291,29 @@ void CameraWindow::loadAlbum()
     emptyLabel_->setVisible(pictureList_->count() == 0);
 }
 
+void CameraWindow::updateRecTime()
+{
+    const qint64 ms = recordStart_.msecsTo(QDateTime::currentDateTime());
+    const int seconds = static_cast<int>((ms / 1000) % 60);
+    const int minutes = static_cast<int>((ms / 60000) % 60);
+    recTimeLabel_->setText(QStringLiteral("%1:%2")
+                               .arg(minutes, 2, 10, QChar('0'))
+                               .arg(seconds, 2, 10, QChar('0')));
+}
+
 void CameraWindow::onRecordStarted()
 {
-    std::fprintf(stderr, "CameraWindow: record started\n");
+    recordStart_ = QDateTime::currentDateTime();
+    updateRecTime();
+    recTimer_->start(200);
+    stack_->setCurrentWidget(recordPage_);
+    layoutOverlayButtons();
 }
 
 void CameraWindow::onRecordStopped()
 {
-    std::fprintf(stderr, "CameraWindow: record stopped\n");
+    recTimer_->stop();
+    stack_->setCurrentWidget(previewPage_);
 }
 
 void CameraWindow::showPreview()

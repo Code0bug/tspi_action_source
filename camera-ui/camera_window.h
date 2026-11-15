@@ -3,10 +3,12 @@
 
 #include "media_client.h"
 
+#include <QDateTime>
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
 #include <QStackedWidget>
+#include <QTimer>
 #include <QWidget>
 
 class CameraWindow : public QWidget
@@ -30,8 +32,10 @@ private:
     void setupPreviewPage();
     void setupAlbumPage();
     void setupViewerPage();
+    void setupRecordPage();
     void loadAlbum();
     void showPhotoAt(int index);
+    void updateRecTime();
     void layoutOverlayButtons();
     void resizeEvent(QResizeEvent *event) override;
 
@@ -39,6 +43,7 @@ private:
     QWidget *previewPage_ = nullptr;
     QWidget *albumPage_ = nullptr;
     QWidget *viewerPage_ = nullptr;
+    QWidget *recordPage_ = nullptr;
 
     QLabel *timeLabel_ = nullptr;
     QPushButton *albumBtn_ = nullptr;
@@ -55,6 +60,11 @@ private:
     int photoIndex_ = 0;
     bool albumDragged_ = false;
     MediaClient media_;
+
+    QLabel *recTimeLabel_ = nullptr;
+    QLabel *recFpsLabel_ = nullptr;
+    QTimer *recTimer_ = nullptr;
+    QDateTime recordStart_;
 };
 
 #endif
