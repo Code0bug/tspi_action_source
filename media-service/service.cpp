@@ -79,11 +79,28 @@ void Service::stop()
     conn_ = nullptr;
 }
 
+void Service::emit(const char *signal)
+{
+    if (conn_ == nullptr)
+        return;
+
+    DBusMessage *msg = dbus_message_new_signal(
+        MEDIA_SERVICE_OBJECT_PATH,
+        MEDIA_SERVICE_INTERFACE,
+        signal);
+    if (msg == nullptr)
+        return;
+
+    dbus_connection_send(conn_, msg, nullptr);
+    dbus_connection_flush(conn_);
+    dbus_message_unref(msg);
+}
+
 void Service::loop(std::future<void> stopRequested)
 {
     while (stopRequested.wait_for(std::chrono::milliseconds(0)) !=
            std::future_status::ready) {
-        if (!dbus_connection_read_write_dispatch(conn_, 200))
+        if (!dbus_connection_read_write_dispatch(conn_, 20))
             break;
     }
 }

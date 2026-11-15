@@ -1,8 +1,6 @@
 #include "media_manager.h"
-#include "service.h"
 
 #include <csignal>
-#include <cstdio>
 
 int main()
 {
@@ -17,13 +15,8 @@ int main()
     MediaManager media;
     media.start();
 
-    Service service(media);
-    if (!service.start())
-        std::fprintf(stderr, "media-service: D-Bus control unavailable\n");
-
     sigwait(&set, &sig);
 
-    service.stop();
     media.stop();
     return 0;
 }

@@ -8,6 +8,10 @@
  * 当前相机采集方法：
  *   StartCapture() -> b   开启采集；返回调用后是否处于采集状态
  *   StopCapture()  -> b   暂停采集；返回调用后是否处于采集状态
+ *
+ * 服务端发出的信号：
+ *   RecordStarted()
+ *   RecordStopped()
  */
 #define MEDIA_SERVICE_BUS_NAME     "com.tspi.MediaService"
 #define MEDIA_SERVICE_OBJECT_PATH  "/com/tspi/MediaService"
@@ -15,5 +19,8 @@
 
 #define MEDIA_SERVICE_METHOD_START_CAPTURE "StartCapture"
 #define MEDIA_SERVICE_METHOD_STOP_CAPTURE  "StopCapture"
+
+#define MEDIA_SERVICE_SIGNAL_RECORD_STARTED "RecordStarted"
+#define MEDIA_SERVICE_SIGNAL_RECORD_STOPPED "RecordStopped"
 
 #endif

@@ -1,7 +1,12 @@
 #include "media_manager.h"
 
+#include <media_service.h>
+
+#include <cstdio>
+
 MediaManager::MediaManager()
     : keys_(*this)
+    , service_(*this)
 {
 }
 
@@ -28,6 +33,8 @@ void MediaManager::start()
 {
     video_.start();
     keys_.start();
+    if (!service_.start())
+        std::fprintf(stderr, "media-service: D-Bus control unavailable\n");
 
     running_ = true;
     thread_ = std::thread(&MediaManager::run, this);
@@ -47,6 +54,7 @@ void MediaManager::stop()
         capture_thread_.join();
     if (thread_.joinable())
         thread_.join();
+    service_.stop();
 }
 
 void MediaManager::run()
@@ -73,10 +81,12 @@ void MediaManager::run()
         // 预览状态，按键长按：录像
         else if (last == CamStatus::Preview && cur == CamStatus::Record) {
             video_.startRecord();
+            service_.emit(MEDIA_SERVICE_SIGNAL_RECORD_STARTED);
         } 
         // 录像状态，按键松开：停止录像
         else if (last == CamStatus::Record && cur == CamStatus::Preview) {
             video_.stopRecord();
+            service_.emit(MEDIA_SERVICE_SIGNAL_RECORD_STOPPED);
         } 
         // 预览状态，切到相册：停止采集
         else if (last == CamStatus::Preview && cur == CamStatus::Paused) {

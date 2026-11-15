@@ -1,5 +1,7 @@
 #include "camera_window.h"
 
+#include <cstdio>
+
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
@@ -104,6 +106,9 @@ CameraWindow::CameraWindow(QWidget *parent)
     setupAlbumPage();
     setupViewerPage();
     stack_->setCurrentWidget(previewPage_);
+
+    connect(&media_, &MediaClient::recordStarted, this, &CameraWindow::onRecordStarted);
+    connect(&media_, &MediaClient::recordStopped, this, &CameraWindow::onRecordStopped);
 }
 
 void CameraWindow::setupPreviewPage()
@@ -259,6 +264,16 @@ void CameraWindow::loadAlbum()
     }
 
     emptyLabel_->setVisible(pictureList_->count() == 0);
+}
+
+void CameraWindow::onRecordStarted()
+{
+    std::fprintf(stderr, "CameraWindow: record started\n");
+}
+
+void CameraWindow::onRecordStopped()
+{
+    std::fprintf(stderr, "CameraWindow: record stopped\n");
 }
 
 void CameraWindow::showPreview()

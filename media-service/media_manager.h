@@ -2,6 +2,7 @@
 #define MEDIA_SERVICE_MEDIA_MANAGER_H
 
 #include "key_manager.h"
+#include "service.h"
 #include "video_manager.h"
 
 #include <atomic>
@@ -35,6 +36,7 @@ private:
 
     VideoManager video_;
     KeyManager keys_;
+    Service service_;
 
     std::atomic<CamStatus> status_{CamStatus::Preview};
     std::atomic<bool> running_{false};

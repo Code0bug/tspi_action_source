@@ -23,6 +23,8 @@ private slots:
     void showNextPhoto();
     void showPrevPhoto();
     void backToAlbum();
+    void onRecordStarted();
+    void onRecordStopped();
 
 private:
     void setupPreviewPage();
