@@ -94,9 +94,9 @@ void MediaManager::run()
 
         // 预览状态，按键按下：拍照
         if (last == CamStatus::Preview && cur == CamStatus::Photo) {
+            service_.emit(MEDIA_SERVICE_SIGNAL_PHOTO_STARTED);
             std::string path = video_.takePhoto();
-            if (!path.empty())
-                service_.emit(MEDIA_SERVICE_SIGNAL_PHOTO_SAVED, path.c_str());
+            service_.emit(MEDIA_SERVICE_SIGNAL_PHOTO_SAVED, path.c_str());
             // 拍完照后状态重新变成预览
             status_.store(CamStatus::Preview);
             cur = status_.load(); // 重新更新 cur

@@ -108,6 +108,8 @@ void MediaClient::handleSignal(const char *member)
         emit recordStarted();
     else if (std::strcmp(member, MEDIA_SERVICE_SIGNAL_RECORD_STOPPED) == 0)
         emit recordStopped();
+    else if (std::strcmp(member, MEDIA_SERVICE_SIGNAL_PHOTO_STARTED) == 0)
+        emit photoStarted();
 }
 
 void MediaClient::dispatch()

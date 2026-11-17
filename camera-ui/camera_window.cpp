@@ -117,6 +117,7 @@ CameraWindow::CameraWindow(QWidget *parent)
 
     connect(&media_, &MediaClient::recordStarted, this, &CameraWindow::onRecordStarted);
     connect(&media_, &MediaClient::recordStopped, this, &CameraWindow::onRecordStopped);
+    connect(&media_, &MediaClient::photoStarted, this, &CameraWindow::onPhotoStarted);
     connect(&media_, &MediaClient::photoSaved, this, &CameraWindow::onPhotoSaved);
     connect(&media_, &MediaClient::videoSaved, this, &CameraWindow::onVideoSaved);
 }
@@ -136,6 +137,11 @@ void CameraWindow::setupPreviewPage()
     auto *timeTimer = new QTimer(this);
     connect(timeTimer, &QTimer::timeout, this, updateTime);
     timeTimer->start(1000);
+
+    captureHint_ = new QLabel(QStringLiteral("拍摄中"), previewPage_);
+    setupOsdLabel(captureHint_, 380, 20, 110, 30,
+                  Qt::AlignRight | Qt::AlignVCenter, true);
+    captureHint_->hide();
 
     albumBtn_ = new QPushButton(previewPage_);
     setupButton(albumBtn_, QStringLiteral("/root/photo1.png"));
@@ -314,6 +320,8 @@ void CameraWindow::layoutOverlayButtons()
         videoEmptyLabel_->setGeometry(videoAlbumPage_->rect());
     if (videoBackBtn_)
         videoBackBtn_->raise();
+    if (captureHint_ && previewPage_)
+        captureHint_->move(previewPage_->width() - captureHint_->width() - 20, 20);
     if (recFpsLabel_ && recordPage_)
         recFpsLabel_->move(recordPage_->width() - recFpsLabel_->width() - 20, 20);
 
@@ -401,8 +409,20 @@ void CameraWindow::onRecordStopped()
     stack_->setCurrentWidget(previewPage_);
 }
 
+void CameraWindow::onPhotoStarted()
+{
+    if (captureHint_) {
+        captureHint_->show();
+        captureHint_->raise();
+    }
+}
+
 void CameraWindow::onPhotoSaved(const QString &path)
 {
+    if (captureHint_)
+        captureHint_->hide();
+    if (path.isEmpty())
+        return;
     auto *item = new QListWidgetItem;
     item->setIcon(QIcon(loadThumb(path, 160)));
     item->setData(Qt::UserRole, path);

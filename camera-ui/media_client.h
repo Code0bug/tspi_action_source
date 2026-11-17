@@ -26,6 +26,7 @@ public:
 signals:
     void recordStarted();
     void recordStopped();
+    void photoStarted();
     void photoSaved(const QString &path);
     void videoSaved(const QString &path);
 

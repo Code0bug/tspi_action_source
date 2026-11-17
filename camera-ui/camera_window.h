@@ -28,6 +28,7 @@ private slots:
     void backToAlbum();
     void onRecordStarted();
     void onRecordStopped();
+    void onPhotoStarted();
     void onPhotoSaved(const QString &path);
     void onVideoSaved(const QString &path);
 
@@ -52,6 +53,7 @@ private:
     QWidget *recordPage_ = nullptr;
 
     QLabel *timeLabel_ = nullptr;
+    QLabel *captureHint_ = nullptr;
     QPushButton *albumBtn_ = nullptr;
     QPushButton *videoBtn_ = nullptr;
 
