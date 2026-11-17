@@ -3,17 +3,16 @@
 
 /*
  * UI 与 media-service 之间的共享 D-Bus 接口（system bus）。
- * 统一定义服务标识及各业务接口，后续可扩展音频、录像、播放等功能。
  *
- * 当前相机采集方法：
- *   StartCapture() -> b   开启采集；返回调用后是否处于采集状态
- *   StopCapture()  -> b   暂停采集；返回调用后是否处于采集状态
+ * UI -> MediaService：
+ *   StartCapture() : 切回预览界面后，开启采集
+ *   StopCapture()  : 离开预览界面后，停止采集
  *
- * 服务端发出的信号：
- *   RecordStarted()
- *   RecordStopped()
- *   PhotoSaved(s path)
- *   VideoSaved(s path)
+ * MediaService -> UI：
+ *   RecordStarted()      : 开始录像，UI 切到录像计时页
+ *   RecordStopped()      : 停止录像，UI 回到预览页
+ *   PhotoSaved(s path)   : 拍照完成，更新相册
+ *   VideoSaved(s path)   : 录像完成，更新录像列表
  */
 #define MEDIA_SERVICE_BUS_NAME     "com.tspi.MediaService"
 #define MEDIA_SERVICE_OBJECT_PATH  "/com/tspi/MediaService"
