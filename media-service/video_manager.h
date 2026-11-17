@@ -49,6 +49,8 @@ private:
     bool running_ = true;
     bool capturing_ = true;
     std::atomic<bool> recording_{false};
+    bool save_first_frame_ = false;
+    char first_frame_path_[128] = {0};
     std::mutex mu_;
     std::condition_variable cv_;
 };

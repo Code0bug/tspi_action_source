@@ -173,6 +173,19 @@ void VideoManager::run()
         }
 
         if (recording_.load()) {
+            if (save_first_frame_) { // 录像记录下第一帧图像，用于预览图显示
+                save_first_frame_ = false;
+                cv::Mat ui_frame(160, 160, CV_8UC3);
+                if (rga_process(frame.dmabuf_fd,
+                                (int)camera_display->width,
+                                (int)camera_display->height,
+                                (int)camera_display->bytesperline,
+                                (int)camera_display->height,
+                                -1, ui_frame.data,
+                                160, 160, 160, RK_FORMAT_BGR_888,
+                                IM_HAL_TRANSFORM_ROT_180 | IM_SYNC) == 0)
+                    cv::imwrite(first_frame_path_, ui_frame);
+            }
             MuxJob job = {};
             job.type = MuxJobType::Video;
             job.video = frame;
@@ -270,24 +283,32 @@ void VideoManager::releaseFrame(camera_frame_t &frame)
 
 void VideoManager::startRecord()
 {
-    char path[128];
+    char name[32];
+    char video_path[128];
     time_t now;
     struct tm tm_now;
 
     if (mkdir("/userdata/video", 0750) < 0 && errno != EEXIST)
         std::fprintf(stderr, "VideoManager: mkdir /userdata/video: %s\n",
                      std::strerror(errno));
+    if (mkdir("/userdata/firstFrame", 0750) < 0 && errno != EEXIST)
+        std::fprintf(stderr, "VideoManager: mkdir /userdata/firstFrame: %s\n",
+                     std::strerror(errno));
 
     now = time(nullptr);
     localtime_r(&now, &tm_now);
-    std::strftime(path, sizeof(path), "/userdata/video/%Y%m%d_%H%M%S.mp4",
-                  &tm_now);
+    std::strftime(name, sizeof(name), "%Y%m%d_%H%M%S", &tm_now);
+    std::snprintf(video_path, sizeof(video_path), "/userdata/video/%s.mp4", name);
+    std::snprintf(first_frame_path_, sizeof(first_frame_path_),
+                  "/userdata/firstFrame/%s.jpg", name);
+
     MuxJob job = {};
     job.type = MuxJobType::Open;
-    job.path = path;
+    job.path = video_path;
     media_.mux_queue.push(job);
+    save_first_frame_ = true;
     recording_ = true;
-    std::printf("VideoManager: start video %s\n", path);
+    std::printf("VideoManager: start video %s\n", video_path);
 }
 
 void VideoManager::stopRecord()

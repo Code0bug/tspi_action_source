@@ -21,6 +21,7 @@ public:
 private slots:
     void showPreview();
     void showAlbum();
+    void showVideoAlbum();
     void onThumbClicked(QListWidgetItem *item);
     void showNextPhoto();
     void showPrevPhoto();
@@ -31,9 +32,11 @@ private slots:
 private:
     void setupPreviewPage();
     void setupAlbumPage();
+    void setupVideoAlbumPage();
     void setupViewerPage();
     void setupRecordPage();
     void loadAlbum();
+    void loadVideoAlbum();
     void showPhotoAt(int index);
     void updateRecTime();
     void layoutOverlayButtons();
@@ -42,6 +45,7 @@ private:
     QStackedWidget *stack_ = nullptr;
     QWidget *previewPage_ = nullptr;
     QWidget *albumPage_ = nullptr;
+    QWidget *videoAlbumPage_ = nullptr;
     QWidget *viewerPage_ = nullptr;
     QWidget *recordPage_ = nullptr;
 
@@ -52,6 +56,11 @@ private:
     QListWidget *pictureList_ = nullptr;
     QLabel *emptyLabel_ = nullptr;
     QPushButton *albumBackBtn_ = nullptr;
+
+    QListWidget *videoList_ = nullptr;
+    QLabel *videoEmptyLabel_ = nullptr;
+    QPushButton *videoBackBtn_ = nullptr;
+    bool videoAlbumDragged_ = false;
 
     QLabel *pictureLabel_ = nullptr;
     QPushButton *viewerBackBtn_ = nullptr;

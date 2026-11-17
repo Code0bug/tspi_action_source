@@ -16,6 +16,8 @@
 #include <QVBoxLayout>
 
 static const QString kPictureDir = QStringLiteral("/userdata/picture");
+static const QString kVideoDir = QStringLiteral("/userdata/video");
+static const QString kFirstFrameDir = QStringLiteral("/userdata/firstFrame");
 
 static void setupButton(QPushButton *btn, const QString &iconPath)
 {
@@ -108,6 +110,7 @@ CameraWindow::CameraWindow(QWidget *parent)
 
     setupPreviewPage();
     setupAlbumPage();
+    setupVideoAlbumPage();
     setupViewerPage();
     setupRecordPage();
     stack_->setCurrentWidget(previewPage_);
@@ -140,6 +143,7 @@ void CameraWindow::setupPreviewPage()
     videoBtn_ = new QPushButton(previewPage_);
     setupButton(videoBtn_, QStringLiteral("/root/video1.png"));
     videoBtn_->move(0, 270);
+    connect(videoBtn_, &QPushButton::clicked, this, &CameraWindow::showVideoAlbum);
 
     stack_->addWidget(previewPage_);
 }
@@ -217,6 +221,60 @@ void CameraWindow::setupAlbumPage()
     stack_->addWidget(albumPage_);
 }
 
+void CameraWindow::setupVideoAlbumPage()
+{
+    videoAlbumPage_ = new QWidget;
+    videoAlbumPage_->setStyleSheet(QStringLiteral("background: #f0f0f0;"));
+
+    videoList_ = new QListWidget(videoAlbumPage_);
+    videoList_->setViewMode(QListView::IconMode);
+    videoList_->setResizeMode(QListView::Adjust);
+    videoList_->setMovement(QListView::Static);
+    videoList_->setIconSize(QSize(150, 150));
+    videoList_->setGridSize(QSize(165, 165));
+    videoList_->setSpacing(4);
+    videoList_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    videoList_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    QScroller::grabGesture(videoList_->viewport(), QScroller::LeftMouseButtonGesture);
+    QScroller::grabGesture(videoList_->viewport(), QScroller::TouchGesture);
+    QScroller *scroller = QScroller::scroller(videoList_->viewport());
+    connect(scroller, &QScroller::stateChanged, this, [this](QScroller::State state) {
+        if (state == QScroller::Dragging || state == QScroller::Scrolling)
+            videoAlbumDragged_ = true;
+        else if (state == QScroller::Inactive)
+            QTimer::singleShot(0, this, [this] { videoAlbumDragged_ = false; });
+    });
+    videoList_->setStyleSheet(QStringLiteral(
+        "QListWidget { background: #f0f0f0; border: none; outline: none; }"
+        "QListWidget::item { background: transparent; border: none; }"
+        "QListWidget::item:selected, QListWidget::item:pressed {"
+        "    background: rgba(0, 0, 0, 50);"
+        "    border-radius: 20px;"
+        "}"));
+    setupTouchScrollBar(videoList_->verticalScrollBar());
+
+    auto *layout = new QVBoxLayout(videoAlbumPage_);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    layout->addWidget(videoList_);
+
+    videoEmptyLabel_ = new QLabel(QStringLiteral("暂无视频"), videoAlbumPage_);
+    videoEmptyLabel_->setAlignment(Qt::AlignCenter);
+    videoEmptyLabel_->setStyleSheet(QStringLiteral(
+        "QLabel { color: #666666; background: transparent; }"));
+    QFont emptyFont = videoEmptyLabel_->font();
+    emptyFont.setPixelSize(28);
+    videoEmptyLabel_->setFont(emptyFont);
+
+    videoBackBtn_ = new QPushButton(videoAlbumPage_);
+    setupButton(videoBackBtn_, QStringLiteral("/root/back.png"));
+    videoBackBtn_->move(0, 20);
+    connect(videoBackBtn_, &QPushButton::clicked, this, &CameraWindow::showPreview);
+
+    loadVideoAlbum();
+    stack_->addWidget(videoAlbumPage_);
+}
+
 void CameraWindow::setupViewerPage()
 {
     viewerPage_ = new QWidget;
@@ -246,10 +304,14 @@ void CameraWindow::setupViewerPage()
 
 void CameraWindow::layoutOverlayButtons()
 {
-    if (emptyLabel_)
+    if (emptyLabel_ && albumPage_)
         emptyLabel_->setGeometry(albumPage_->rect());
     if (albumBackBtn_)
         albumBackBtn_->raise();
+    if (videoEmptyLabel_ && videoAlbumPage_)
+        videoEmptyLabel_->setGeometry(videoAlbumPage_->rect());
+    if (videoBackBtn_)
+        videoBackBtn_->raise();
     if (recFpsLabel_ && recordPage_)
         recFpsLabel_->move(recordPage_->width() - recFpsLabel_->width() - 20, 20);
 
@@ -291,6 +353,27 @@ void CameraWindow::loadAlbum()
     emptyLabel_->setVisible(pictureList_->count() == 0);
 }
 
+void CameraWindow::loadVideoAlbum()
+{
+    videoList_->clear();
+
+    QDir dir(kVideoDir);
+    const QFileInfoList files = dir.entryInfoList(
+        {QStringLiteral("*.mp4")}, QDir::Files);
+
+    for (const QFileInfo &file : files) {
+        const QString thumbPath = kFirstFrameDir + QLatin1Char('/')
+            + file.completeBaseName() + QStringLiteral(".jpg");
+        auto *item = new QListWidgetItem;
+        item->setIcon(QIcon(loadThumb(thumbPath, 160)));
+        item->setData(Qt::UserRole, file.absoluteFilePath());
+        item->setSizeHint(QSize(165, 165));
+        videoList_->addItem(item);
+    }
+
+    videoEmptyLabel_->setVisible(videoList_->count() == 0);
+}
+
 void CameraWindow::updateRecTime()
 {
     const qint64 ms = recordStart_.msecsTo(QDateTime::currentDateTime());
@@ -326,6 +409,14 @@ void CameraWindow::showAlbum()
 {
     media_.stopCapture();
     stack_->setCurrentWidget(albumPage_);
+    layoutOverlayButtons();
+}
+
+void CameraWindow::showVideoAlbum()
+{
+    media_.stopCapture();
+    loadVideoAlbum();
+    stack_->setCurrentWidget(videoAlbumPage_);
     layoutOverlayButtons();
 }
 
