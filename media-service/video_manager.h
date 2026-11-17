@@ -25,7 +25,7 @@ public:
     void stopCapture();
     std::string takePhoto();
     void startRecord();
-    void stopRecord();
+    std::string stopRecord();
     void encoderSize(uint32_t *width, uint32_t *height, uint32_t *stride) const;
     void releaseFrame(camera_frame_t &frame);
 

@@ -28,13 +28,19 @@ DBusHandlerResult MediaClient::onSignal(DBusConnection *, DBusMessage *msg,
     auto *self = static_cast<MediaClient *>(user);
     const char *member = dbus_message_get_member(msg);
     if (member != nullptr &&
-        std::strcmp(member, MEDIA_SERVICE_SIGNAL_PHOTO_SAVED) == 0) {
+        (std::strcmp(member, MEDIA_SERVICE_SIGNAL_PHOTO_SAVED) == 0 ||
+         std::strcmp(member, MEDIA_SERVICE_SIGNAL_VIDEO_SAVED) == 0)) {
         const char *path = nullptr;
         if (dbus_message_get_args(msg, nullptr,
                                   DBUS_TYPE_STRING, &path,
                                   DBUS_TYPE_INVALID) &&
-            path != nullptr)
-            emit self->photoSaved(QString::fromUtf8(path));
+            path != nullptr) {
+            const QString qpath = QString::fromUtf8(path);
+            if (std::strcmp(member, MEDIA_SERVICE_SIGNAL_PHOTO_SAVED) == 0)
+                emit self->photoSaved(qpath);
+            else
+                emit self->videoSaved(qpath);
+        }
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 

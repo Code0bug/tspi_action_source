@@ -118,6 +118,7 @@ CameraWindow::CameraWindow(QWidget *parent)
     connect(&media_, &MediaClient::recordStarted, this, &CameraWindow::onRecordStarted);
     connect(&media_, &MediaClient::recordStopped, this, &CameraWindow::onRecordStopped);
     connect(&media_, &MediaClient::photoSaved, this, &CameraWindow::onPhotoSaved);
+    connect(&media_, &MediaClient::videoSaved, this, &CameraWindow::onVideoSaved);
 }
 
 void CameraWindow::setupPreviewPage()
@@ -410,6 +411,19 @@ void CameraWindow::onPhotoSaved(const QString &path)
     emptyLabel_->setVisible(false);
 }
 
+void CameraWindow::onVideoSaved(const QString &path)
+{
+    QFileInfo fi(path);
+    const QString mp4 = kVideoDir + QLatin1Char('/')
+        + fi.completeBaseName() + QStringLiteral(".mp4");
+    auto *item = new QListWidgetItem;
+    item->setIcon(QIcon(loadThumb(path, 160)));
+    item->setData(Qt::UserRole, mp4);
+    item->setSizeHint(QSize(165, 165));
+    videoList_->addItem(item);
+    videoEmptyLabel_->setVisible(false);
+}
+
 void CameraWindow::showPreview()
 {
     stack_->setCurrentWidget(previewPage_);
@@ -426,7 +440,6 @@ void CameraWindow::showAlbum()
 void CameraWindow::showVideoAlbum()
 {
     media_.stopCapture();
-    loadVideoAlbum();
     stack_->setCurrentWidget(videoAlbumPage_);
     layoutOverlayButtons();
 }

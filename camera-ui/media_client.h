@@ -27,6 +27,7 @@ signals:
     void recordStarted();
     void recordStopped();
     void photoSaved(const QString &path);
+    void videoSaved(const QString &path);
 
 private slots:
     void dispatch();

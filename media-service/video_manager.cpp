@@ -312,11 +312,14 @@ void VideoManager::startRecord()
     std::printf("VideoManager: start video %s\n", video_path);
 }
 
-void VideoManager::stopRecord()
+std::string VideoManager::stopRecord()
 {
     recording_ = false;
     MuxJob job = {};
     job.type = MuxJobType::Close;
     media_.mux_queue.push(job);
+    std::string path = first_frame_path_;
+    first_frame_path_[0] = '\0';
     std::printf("VideoManager: stop video\n");
+    return path;
 }

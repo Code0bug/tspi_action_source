@@ -29,6 +29,7 @@ private slots:
     void onRecordStarted();
     void onRecordStopped();
     void onPhotoSaved(const QString &path);
+    void onVideoSaved(const QString &path);
 
 private:
     void setupPreviewPage();

@@ -107,11 +107,13 @@ void MediaManager::run()
             audio_.startCapture();
             service_.emit(MEDIA_SERVICE_SIGNAL_RECORD_STARTED);
         }
-        // 录像状态，按键松开：停止录像
+        // 录像状态，按键按下：停止录像
         else if (last == CamStatus::Record && cur == CamStatus::Preview) {
             audio_.stopCapture();
-            video_.stopRecord();
+            std::string path = video_.stopRecord();
             service_.emit(MEDIA_SERVICE_SIGNAL_RECORD_STOPPED);
+            if (!path.empty())
+                service_.emit(MEDIA_SERVICE_SIGNAL_VIDEO_SAVED, path.c_str());
         }
         // 预览状态，切到相册：停止采集
         else if (last == CamStatus::Preview && cur == CamStatus::Paused) {

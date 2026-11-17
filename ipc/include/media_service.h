@@ -13,6 +13,7 @@
  *   RecordStarted()
  *   RecordStopped()
  *   PhotoSaved(s path)
+ *   VideoSaved(s path)
  */
 #define MEDIA_SERVICE_BUS_NAME     "com.tspi.MediaService"
 #define MEDIA_SERVICE_OBJECT_PATH  "/com/tspi/MediaService"
@@ -24,5 +25,6 @@
 #define MEDIA_SERVICE_SIGNAL_RECORD_STARTED "RecordStarted"
 #define MEDIA_SERVICE_SIGNAL_RECORD_STOPPED "RecordStopped"
 #define MEDIA_SERVICE_SIGNAL_PHOTO_SAVED    "PhotoSaved"
+#define MEDIA_SERVICE_SIGNAL_VIDEO_SAVED    "VideoSaved"
 
 #endif
