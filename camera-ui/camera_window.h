@@ -28,6 +28,7 @@ private slots:
     void backToAlbum();
     void onRecordStarted();
     void onRecordStopped();
+    void onPhotoSaved(const QString &path);
 
 private:
     void setupPreviewPage();

@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include <QSocketNotifier>
+#include <QString>
 
 #include <dbus/dbus.h>
 
@@ -24,7 +25,20 @@ DBusHandlerResult MediaClient::onSignal(DBusConnection *, DBusMessage *msg,
     if (!dbus_message_has_interface(msg, MEDIA_SERVICE_INTERFACE))
         return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 
-    static_cast<MediaClient *>(user)->handleSignal(dbus_message_get_member(msg));
+    auto *self = static_cast<MediaClient *>(user);
+    const char *member = dbus_message_get_member(msg);
+    if (member != nullptr &&
+        std::strcmp(member, MEDIA_SERVICE_SIGNAL_PHOTO_SAVED) == 0) {
+        const char *path = nullptr;
+        if (dbus_message_get_args(msg, nullptr,
+                                  DBUS_TYPE_STRING, &path,
+                                  DBUS_TYPE_INVALID) &&
+            path != nullptr)
+            emit self->photoSaved(QString::fromUtf8(path));
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    self->handleSignal(member);
     return DBUS_HANDLER_RESULT_HANDLED;
 }
 

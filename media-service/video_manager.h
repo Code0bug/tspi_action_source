@@ -6,6 +6,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+#include <string>
 
 class MediaManager;
 
@@ -22,7 +23,7 @@ public:
     void run();
     void startCapture();
     void stopCapture();
-    void takePhoto();
+    std::string takePhoto();
     void startRecord();
     void stopRecord();
     void encoderSize(uint32_t *width, uint32_t *height, uint32_t *stride) const;

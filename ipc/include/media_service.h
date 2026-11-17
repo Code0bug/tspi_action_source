@@ -12,6 +12,7 @@
  * 服务端发出的信号：
  *   RecordStarted()
  *   RecordStopped()
+ *   PhotoSaved(s path)
  */
 #define MEDIA_SERVICE_BUS_NAME     "com.tspi.MediaService"
 #define MEDIA_SERVICE_OBJECT_PATH  "/com/tspi/MediaService"
@@ -22,5 +23,6 @@
 
 #define MEDIA_SERVICE_SIGNAL_RECORD_STARTED "RecordStarted"
 #define MEDIA_SERVICE_SIGNAL_RECORD_STOPPED "RecordStopped"
+#define MEDIA_SERVICE_SIGNAL_PHOTO_SAVED    "PhotoSaved"
 
 #endif

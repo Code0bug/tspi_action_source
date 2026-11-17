@@ -79,7 +79,7 @@ void Service::stop()
     conn_ = nullptr;
 }
 
-void Service::emit(const char *signal)
+void Service::emit(const char *signal, const char *arg)
 {
     if (conn_ == nullptr)
         return;
@@ -90,6 +90,12 @@ void Service::emit(const char *signal)
         signal);
     if (msg == nullptr)
         return;
+
+    if (arg != nullptr) {
+        dbus_message_append_args(msg,
+                                 DBUS_TYPE_STRING, &arg,
+                                 DBUS_TYPE_INVALID);
+    }
 
     dbus_connection_send(conn_, msg, nullptr);
     dbus_connection_flush(conn_);

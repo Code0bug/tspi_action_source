@@ -219,7 +219,7 @@ void VideoManager::stopCapture()
     capturing_ = false;
 }
 
-void VideoManager::takePhoto()
+std::string VideoManager::takePhoto()
 {
     camera_frame_t frame;
     const int drop_frames = 5;
@@ -230,12 +230,12 @@ void VideoManager::takePhoto()
 
     for (int i = 0; i < drop_frames; ++i) {
         if (camera_get_frame(camera_photo, &frame) != 0)
-            return;
+            return {};
         camera_release_frame(camera_photo, &frame);
     }
     if (camera_get_frame(camera_photo, &frame) != 0) {
         std::fprintf(stderr, "VideoManager: take photo get frame failed\n");
-        return;
+        return {};
     }
 
     now = time(nullptr);
@@ -255,11 +255,11 @@ void VideoManager::takePhoto()
                           IM_HAL_TRANSFORM_ROT_180 | IM_SYNC);
     camera_release_frame(camera_photo, &frame);
     if (ret != 0)
-        return;
+        return {};
 
     if (!cv::imwrite(path, bgr)) {
         std::fprintf(stderr, "VideoManager: imwrite failed: %s\n", path);
-        return;
+        return {};
     }
     fd = open(path, O_RDONLY);
     if (fd >= 0) {
@@ -267,6 +267,7 @@ void VideoManager::takePhoto()
         close(fd);
     }
     std::printf("taking photo: %s\n", path);
+    return path;
 }
 
 void VideoManager::encoderSize(uint32_t *width, uint32_t *height, uint32_t *stride) const

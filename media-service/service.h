@@ -19,7 +19,7 @@ public:
 
     bool start();
     void stop();
-    void emit(const char *signal);
+    void emit(const char *signal, const char *arg = nullptr);
 
 private:
     static DBusHandlerResult onMessage(DBusConnection *conn, DBusMessage *msg,

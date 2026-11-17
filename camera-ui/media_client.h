@@ -2,6 +2,7 @@
 #define MEDIA_CLIENT_H
 
 #include <QObject>
+#include <QString>
 #include <memory>
 
 #include <dbus/dbus.h>
@@ -25,6 +26,7 @@ public:
 signals:
     void recordStarted();
     void recordStopped();
+    void photoSaved(const QString &path);
 
 private slots:
     void dispatch();

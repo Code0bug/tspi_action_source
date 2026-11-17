@@ -117,6 +117,7 @@ CameraWindow::CameraWindow(QWidget *parent)
 
     connect(&media_, &MediaClient::recordStarted, this, &CameraWindow::onRecordStarted);
     connect(&media_, &MediaClient::recordStopped, this, &CameraWindow::onRecordStopped);
+    connect(&media_, &MediaClient::photoSaved, this, &CameraWindow::onPhotoSaved);
 }
 
 void CameraWindow::setupPreviewPage()
@@ -397,6 +398,16 @@ void CameraWindow::onRecordStopped()
 {
     recTimer_->stop();
     stack_->setCurrentWidget(previewPage_);
+}
+
+void CameraWindow::onPhotoSaved(const QString &path)
+{
+    auto *item = new QListWidgetItem;
+    item->setIcon(QIcon(loadThumb(path, 160)));
+    item->setData(Qt::UserRole, path);
+    item->setSizeHint(QSize(165, 165));
+    pictureList_->addItem(item);
+    emptyLabel_->setVisible(false);
 }
 
 void CameraWindow::showPreview()
