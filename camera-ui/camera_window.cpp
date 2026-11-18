@@ -260,6 +260,7 @@ void CameraWindow::setupVideoAlbumPage()
         "    border-radius: 20px;"
         "}"));
     setupTouchScrollBar(videoList_->verticalScrollBar());
+    connect(videoList_, &QListWidget::itemClicked, this, &CameraWindow::onVideoClicked);
 
     auto *layout = new QVBoxLayout(videoAlbumPage_);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -471,6 +472,13 @@ void CameraWindow::onThumbClicked(QListWidgetItem *item)
     showPhotoAt(pictureList_->row(item));
     stack_->setCurrentWidget(viewerPage_);
     layoutOverlayButtons();
+}
+
+void CameraWindow::onVideoClicked(QListWidgetItem *item)
+{
+    if (videoAlbumDragged_)
+        return;
+    media_.playVideo(item->data(Qt::UserRole).toString());
 }
 
 void CameraWindow::showPhotoAt(int index)

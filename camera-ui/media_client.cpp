@@ -121,7 +121,12 @@ void MediaClient::dispatch()
         ;
 }
 
-bool MediaClient::call(const char *method)
+bool MediaClient::playVideo(const QString &path)
+{
+    return call(MEDIA_SERVICE_METHOD_PLAY_VIDEO, path.toUtf8().constData());
+}
+
+bool MediaClient::call(const char *method, const char *arg)
 {
     if (impl_->conn == nullptr)
         return false;
@@ -133,6 +138,13 @@ bool MediaClient::call(const char *method)
         method);
     if (msg == nullptr) {
         std::fprintf(stderr, "MediaClient: %s: alloc message failed\n", method);
+        return false;
+    }
+
+    if (arg != nullptr &&
+        !dbus_message_append_args(msg, DBUS_TYPE_STRING, &arg, DBUS_TYPE_INVALID)) {
+        std::fprintf(stderr, "MediaClient: %s: append args failed\n", method);
+        dbus_message_unref(msg);
         return false;
     }
 

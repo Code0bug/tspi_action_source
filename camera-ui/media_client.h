@@ -22,6 +22,7 @@ public:
 
     bool startCapture();
     bool stopCapture();
+    bool playVideo(const QString &path);
 
 signals:
     void recordStarted();
@@ -34,7 +35,7 @@ private slots:
     void dispatch();
 
 private:
-    bool call(const char *method);
+    bool call(const char *method, const char *arg = nullptr);
     void handleSignal(const char *member);
     static DBusHandlerResult onSignal(DBusConnection *conn, DBusMessage *msg,
                                       void *user);

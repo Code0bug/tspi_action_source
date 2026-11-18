@@ -23,6 +23,7 @@ private slots:
     void showAlbum();
     void showVideoAlbum();
     void onThumbClicked(QListWidgetItem *item);
+    void onVideoClicked(QListWidgetItem *item);
     void showNextPhoto();
     void showPrevPhoto();
     void backToAlbum();

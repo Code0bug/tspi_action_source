@@ -33,6 +33,18 @@ CamStatus MediaManager::statusGet() const
     return status_.load();
 }
 
+void MediaManager::playPathSet(const std::string &path)
+{
+    std::lock_guard<std::mutex> lock(play_mu_);
+    play_path_ = path;
+}
+
+std::string MediaManager::playPathGet()
+{
+    std::lock_guard<std::mutex> lock(play_mu_);
+    return play_path_;
+}
+
 void MediaManager::start()
 {
     video_.start();
@@ -122,6 +134,13 @@ void MediaManager::run()
         // 暂停状态，切到预览：开始采集
         else if (last == CamStatus::Paused && cur == CamStatus::Preview) {
             video_.startCapture();
+        }
+        // 暂停状态，点击录像列表：播放录像
+        else if (last == CamStatus::Paused && cur == CamStatus::Playing) {
+            std::printf("MediaManager: play video %s\n", playPathGet().c_str());
+            // 播放结束后回到暂停状态（相册）
+            status_.store(CamStatus::Paused);
+            cur = status_.load();
         }
         last = cur;
     }

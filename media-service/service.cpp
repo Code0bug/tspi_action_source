@@ -133,5 +133,21 @@ DBusHandlerResult Service::onMessage(DBusConnection *,
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
+    // Play Video
+    if (dbus_message_is_method_call(msg, MEDIA_SERVICE_INTERFACE,
+                                    MEDIA_SERVICE_METHOD_PLAY_VIDEO)) {
+        const char *path = nullptr;
+        if (!dbus_message_get_args(msg, nullptr,
+                                   DBUS_TYPE_STRING, &path,
+                                   DBUS_TYPE_INVALID) ||
+            path == nullptr || path[0] == '\0') {
+            std::fprintf(stderr, "Service: PlayVideo: invalid path\n");
+            return DBUS_HANDLER_RESULT_HANDLED;
+        }
+        self->media_.playPathSet(path);
+        self->media_.statusUpdate(CamStatus::Playing);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }

@@ -12,6 +12,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+#include <string>
 #include <thread>
 
 enum class CamStatus {
@@ -19,6 +20,7 @@ enum class CamStatus {
     Photo,      // 拍照
     Record,     // 录像
     Paused,     // 采集暂停
+    Playing,    // 播放录像
 };
 
 class MediaManager {
@@ -31,6 +33,8 @@ public:
 
     bool statusUpdate(CamStatus next);
     CamStatus statusGet() const;
+    void playPathSet(const std::string &path);
+    std::string playPathGet();
 
     void start();
     void stop();
@@ -49,6 +53,8 @@ private:
 
     std::atomic<CamStatus> status_{CamStatus::Preview};
     std::atomic<bool> running_{false};
+    std::string play_path_;
+    std::mutex play_mu_;
     std::mutex mu_;
     std::condition_variable cv_;
     std::thread thread_;
