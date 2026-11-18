@@ -1,7 +1,7 @@
 #ifndef MEDIA_SERVICE_MP4_MUXER_H
 #define MEDIA_SERVICE_MP4_MUXER_H
 
-#include "mpp_encoder.h"
+#include "mpp_codec.h"
 
 #include <cstdint>
 #include <string>

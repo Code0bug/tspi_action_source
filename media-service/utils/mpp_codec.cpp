@@ -1,6 +1,6 @@
-#define MODULE_TAG "mpp_encoder"
+#define MODULE_TAG "mpp_codec"
 
-#include "mpp_encoder.h"
+#include "mpp_codec.h"
 
 #include "rk_mpi.h"
 #include "rk_venc_cfg.h"
@@ -12,6 +12,8 @@
 
 #include <cstdio>
 #include <cstring>
+
+/* ------------------------------- 编码器 ---------------------------------  */
 
 static MppCtx ctx;
 static MppApi *mpi;
@@ -169,5 +171,135 @@ void mpp_encoder_deinit(void)
         mpp_destroy(ctx);
         ctx = nullptr;
         mpi = nullptr;
+    }
+}
+
+/* ------------------------------- 解码器 ---------------------------------  */
+
+static MppCtx dec_ctx;
+static MppApi *dec_mpi;
+
+int mpp_decoder_init(void)
+{
+    int ret = mpp_create(&dec_ctx, &dec_mpi);
+    if (ret) {
+        printf("mpp_decoder: mpp_create failed %d\n", ret);
+        return ret;
+    }
+
+    RK_U32 need_split = 0;
+    dec_mpi->control(dec_ctx, MPP_DEC_SET_PARSER_SPLIT_MODE, &need_split);
+    RK_U32 fast_mode = 1;
+    dec_mpi->control(dec_ctx, MPP_DEC_SET_PARSER_FAST_MODE, &fast_mode);
+
+    ret = mpp_init(dec_ctx, MPP_CTX_DEC, MPP_VIDEO_CodingAVC);
+    if (ret) {
+        printf("mpp_decoder: mpp_init failed %d\n", ret);
+        mpp_destroy(dec_ctx);
+        dec_ctx = nullptr;
+        dec_mpi = nullptr;
+        return ret;
+    }
+
+    RK_S64 in_timeout = 20;
+    RK_S64 out_timeout = 100;
+    dec_mpi->control(dec_ctx, MPP_SET_INPUT_TIMEOUT, &in_timeout);
+    dec_mpi->control(dec_ctx, MPP_SET_OUTPUT_TIMEOUT, &out_timeout);
+
+    MppFrameFormat out_fmt = MPP_FMT_YUV420SP;
+    dec_mpi->control(dec_ctx, MPP_DEC_SET_OUTPUT_FORMAT, &out_fmt);
+    return 0;
+}
+
+int mpp_decoder_put_packet(const uint8_t *data, size_t size, uint64_t pts, bool eos)
+{
+    if (!dec_ctx)
+        return -1;
+
+    MppPacket pkt = nullptr;
+    int ret = mpp_packet_init(&pkt, const_cast<uint8_t *>(data), size);
+    if (ret) {
+        printf("mpp_decoder: mpp_packet_init failed %d\n", ret);
+        return -1;
+    }
+    mpp_packet_set_pts(pkt, (RK_S64)pts);
+    if (eos)
+        mpp_packet_set_eos(pkt);
+
+    ret = dec_mpi->decode_put_packet(dec_ctx, pkt);
+    mpp_packet_deinit(&pkt);
+    if (ret == MPP_ERR_BUFFER_FULL)
+        return 1;
+    if (ret) {
+        printf("mpp_decoder: decode_put_packet failed %d\n", ret);
+        return -1;
+    }
+    return 0;
+}
+
+int mpp_decoder_get_frame(DecodedFrame *out)
+{
+    if (!dec_ctx || !out)
+        return MPP_DEC_RES_ERR;
+
+    memset(out, 0, sizeof(*out));
+    out->fd = -1;
+
+    MppFrame frame = nullptr;
+    int ret = dec_mpi->decode_get_frame(dec_ctx, &frame);
+    if (ret) {
+        printf("mpp_decoder: decode_get_frame failed %d\n", ret);
+        return MPP_DEC_RES_ERR;
+    }
+    if (!frame)
+        return MPP_DEC_RES_NONE;
+
+    if (mpp_frame_get_info_change(frame)) {
+        printf("mpp_decoder: info change %ux%u stride %ux%u\n",
+               mpp_frame_get_width(frame), mpp_frame_get_height(frame),
+               mpp_frame_get_hor_stride(frame), mpp_frame_get_ver_stride(frame));
+        dec_mpi->control(dec_ctx, MPP_DEC_SET_INFO_CHANGE_READY, nullptr);
+        mpp_frame_deinit(&frame);
+        return MPP_DEC_RES_NONE;
+    }
+
+    if (mpp_frame_get_eos(frame)) {
+        out->eos = true;
+        mpp_frame_deinit(&frame);
+        return MPP_DEC_RES_FRAME;
+    }
+
+    MppBuffer buf = mpp_frame_get_buffer(frame);
+    if (mpp_frame_get_errinfo(frame) || mpp_frame_get_discard(frame) || !buf) {
+        mpp_frame_deinit(&frame);
+        return MPP_DEC_RES_NONE;
+    }
+
+    out->fd = mpp_buffer_get_fd(buf);
+    out->width = mpp_frame_get_width(frame);
+    out->height = mpp_frame_get_height(frame);
+    out->hor_stride = mpp_frame_get_hor_stride(frame);
+    out->ver_stride = mpp_frame_get_ver_stride(frame);
+    out->pts = static_cast<uint64_t>(mpp_frame_get_pts(frame));
+    out->handle = frame;
+    return MPP_DEC_RES_FRAME;
+}
+
+void mpp_decoder_release_frame(DecodedFrame *frame)
+{
+    if (!frame || !frame->handle)
+        return;
+    MppFrame f = static_cast<MppFrame>(frame->handle);
+    mpp_frame_deinit(&f);
+    frame->handle = nullptr;
+    frame->fd = -1;
+}
+
+void mpp_decoder_deinit(void)
+{
+    if (dec_ctx) {
+        mpp_destroy(dec_ctx);
+        dec_ctx = nullptr;
+        dec_mpi = nullptr;
     }
 }
