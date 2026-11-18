@@ -39,8 +39,10 @@ audio_t *audio_init(const audio_config_t *config)
     ctx->format = format;
     ctx->period_frames = config->period_frames;
     ctx->bytes_per_frame = (config->bits / 8) * config->channels;
+    ctx->playback = config->playback;
 
-    int rc = snd_pcm_open(&ctx->pcm, config->device, SND_PCM_STREAM_CAPTURE, 0);
+    int rc = snd_pcm_open(&ctx->pcm, config->device,
+                          ctx->playback ? SND_PCM_STREAM_PLAYBACK : SND_PCM_STREAM_CAPTURE, 0);
     if (rc < 0) {
         fprintf(stderr, "audio_init: snd_pcm_open(%s) failed: %s\n", config->device,
                 snd_strerror(rc));
@@ -56,6 +58,10 @@ audio_t *audio_init(const audio_config_t *config)
     snd_pcm_hw_params_set_channels(ctx->pcm, params, ctx->channels);
     snd_pcm_hw_params_set_rate_near(ctx->pcm, params, &ctx->sample_rate, &dir);
     snd_pcm_hw_params_set_period_size_near(ctx->pcm, params, &ctx->period_frames, &dir);
+    if (ctx->playback) {
+        snd_pcm_uframes_t buffer_frames = ctx->period_frames * 4;
+        snd_pcm_hw_params_set_buffer_size_near(ctx->pcm, params, &buffer_frames); // 播放缓冲大小
+    }
     rc = snd_pcm_hw_params(ctx->pcm, params);
     if (rc < 0) {
         fprintf(stderr, "audio_init: snd_pcm_hw_params failed: %s\n", snd_strerror(rc));
@@ -65,13 +71,20 @@ audio_t *audio_init(const audio_config_t *config)
     snd_pcm_sw_params_t *swparams;
     snd_pcm_sw_params_alloca(&swparams);
     snd_pcm_sw_params_current(ctx->pcm, swparams);
-    snd_pcm_sw_params_set_tstamp_mode(ctx->pcm, swparams, SND_PCM_TSTAMP_ENABLE);
-    snd_pcm_sw_params_set_tstamp_type(ctx->pcm, swparams, SND_PCM_TSTAMP_TYPE_MONOTONIC);
+    if (ctx->playback) {
+        snd_pcm_sw_params_set_start_threshold(ctx->pcm, swparams, ctx->period_frames); // 启动阈值
+    } else {
+        snd_pcm_sw_params_set_tstamp_mode(ctx->pcm, swparams, SND_PCM_TSTAMP_ENABLE);
+        snd_pcm_sw_params_set_tstamp_type(ctx->pcm, swparams, SND_PCM_TSTAMP_TYPE_MONOTONIC);
+    }
     rc = snd_pcm_sw_params(ctx->pcm, swparams);
     if (rc < 0) {
         fprintf(stderr, "audio_init: snd_pcm_sw_params failed: %s\n", snd_strerror(rc));
         goto fail;
     }
+
+    if (ctx->playback)
+        return ctx;
 
     // 每次读取的字节数
     ctx->bytes_per_period = (uint32_t)ctx->period_frames * ctx->bytes_per_frame;
@@ -94,6 +107,9 @@ fail:
 
 int audio_get_frame(audio_t *ctx, audio_frame_t *frame)
 {
+    if (ctx->playback)
+        return -EINVAL;
+
     snd_pcm_sframes_t got = snd_pcm_readi(ctx->pcm, ctx->buffer, ctx->period_frames);
     if (got == -EPIPE) {
         snd_pcm_prepare(ctx->pcm);
@@ -124,6 +140,49 @@ int audio_get_frame(audio_t *ctx, audio_frame_t *frame)
 int audio_release_frame(audio_t *ctx, audio_frame_t *frame)
 {
     return 0;
+}
+
+int audio_write(audio_t *ctx, const uint8_t *data, uint32_t length)
+{
+    if (!ctx->playback)
+        return -EINVAL;
+
+    snd_pcm_uframes_t remain = length / ctx->bytes_per_frame;
+
+    while (remain > 0) {
+        snd_pcm_sframes_t written = snd_pcm_writei(ctx->pcm, data, remain);
+        if (written < 0) {
+            written = snd_pcm_recover(ctx->pcm, (int)written, 1);
+            if (written < 0) {
+                fprintf(stderr, "audio_write: snd_pcm_writei failed: %s\n",
+                        snd_strerror((int)written));
+                return (int)written;
+            }
+            continue;
+        }
+        data += (uint32_t)written * ctx->bytes_per_frame;
+        remain -= (snd_pcm_uframes_t)written;
+    }
+    return 0;
+}
+
+int audio_flush(audio_t *ctx)
+{
+    if (!ctx->playback)
+        return -EINVAL;
+
+    int rc = snd_pcm_drop(ctx->pcm);
+    if (rc < 0)
+        return rc;
+    return snd_pcm_prepare(ctx->pcm);
+}
+
+int audio_drain(audio_t *ctx)
+{
+    if (!ctx->playback)
+        return -EINVAL;
+
+    return snd_pcm_drain(ctx->pcm);
 }
 
 void audio_deinit(audio_t *ctx)

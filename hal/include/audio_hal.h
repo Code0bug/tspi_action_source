@@ -13,7 +13,8 @@ typedef struct {
     unsigned int sample_rate;   // 采样率
     unsigned int channels;      // 通道数
     unsigned int bits;          // 样本位宽
-    unsigned int period_frames; // 每次读取帧数
+    unsigned int period_frames; // 每次读取/写入帧数
+    int playback;               // 0 采集，1 播放
 } audio_config_t;
 
 typedef struct {
@@ -24,6 +25,7 @@ typedef struct {
 
 typedef struct {
     snd_pcm_t *pcm;
+    int playback;
     unsigned int sample_rate;
     unsigned int channels;
     unsigned int bits;
@@ -39,6 +41,12 @@ audio_t *audio_init(const audio_config_t *config);
 int audio_get_frame(audio_t *ctx, audio_frame_t *frame);
 
 int audio_release_frame(audio_t *ctx, audio_frame_t *frame);
+
+int audio_write(audio_t *ctx, const uint8_t *data, uint32_t length);
+
+int audio_flush(audio_t *ctx);
+
+int audio_drain(audio_t *ctx);
 
 void audio_deinit(audio_t *ctx);
 
