@@ -137,11 +137,6 @@ int audio_get_frame(audio_t *ctx, audio_frame_t *frame)
     return 0;
 }
 
-int audio_release_frame(audio_t *ctx, audio_frame_t *frame)
-{
-    return 0;
-}
-
 int audio_write(audio_t *ctx, const uint8_t *data, uint32_t length)
 {
     if (!ctx->playback)

@@ -1,9 +1,12 @@
 #ifndef MEDIA_SERVICE_AUDIO_MANAGER_H
 #define MEDIA_SERVICE_AUDIO_MANAGER_H
 
+#include <audio_hal.h>
+
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+#include <thread>
 
 class MediaManager;
 
@@ -17,16 +20,18 @@ public:
 
     void start();
     void stop();
-    void run();
+    void captureRun();
     void startCapture();
     void stopCapture();
 
 private:
     MediaManager &media_;
+    audio_t *audio_capture = nullptr;
     std::atomic<bool> running_{true};
     std::atomic<bool> capturing_{false};
-    std::mutex mu_;
+    std::mutex mtx_;
     std::condition_variable cv_;
+    std::thread audio_thread;
 };
 
 #endif

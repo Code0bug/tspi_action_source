@@ -47,6 +47,8 @@ void VideoManager::start()
     // 创建 socket
     if (!createSocket())
         std::fprintf(stderr, "VideoManager: recv overlay fds failed\n");
+
+    capture_thread = std::thread(&VideoManager::captureRun, this);
 }
 
 bool VideoManager::createSocket()
@@ -133,19 +135,20 @@ int VideoManager::rga_process(int src_fd, int src_w, int src_h,
 void VideoManager::stop()
 {
     {
-        std::lock_guard<std::mutex> lock(mu_);
+        std::lock_guard<std::mutex> lock(mtx_);
         running_ = false;
     }
     cv_.notify_one();
+    capture_thread.join();
 }
 
-void VideoManager::run()
+void VideoManager::captureRun()
 {
     int slot = 0;
 
     for (;;) {
         {
-            std::unique_lock<std::mutex> lock(mu_);
+            std::unique_lock<std::mutex> lock(mtx_);
             cv_.wait(lock, [this] { return !running_ || capturing_; });
             if (!running_)
                 return;
@@ -207,7 +210,7 @@ void VideoManager::run()
 void VideoManager::startCapture()
 {
     {
-        std::lock_guard<std::mutex> lock(mu_);
+        std::lock_guard<std::mutex> lock(mtx_);
         capturing_ = true;
     }
     cv_.notify_one();
@@ -215,7 +218,7 @@ void VideoManager::startCapture()
 
 void VideoManager::stopCapture()
 {
-    std::lock_guard<std::mutex> lock(mu_);
+    std::lock_guard<std::mutex> lock(mtx_);
     capturing_ = false;
 }
 

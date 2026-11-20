@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <thread>
 #include <vector>
 
 struct AVFormatContext;
@@ -53,6 +54,7 @@ private:
     int64_t m_lastVideoPtsUs;
     std::vector<uint8_t> m_sps;
     std::vector<uint8_t> m_pps;
+    std::thread muxer_thread;
 };
 
 #endif

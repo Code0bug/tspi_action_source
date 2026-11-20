@@ -21,7 +21,6 @@ KeyManager::KeyManager(MediaManager &media)
 
 KeyManager::~KeyManager()
 {
-    stop();
     if (fd_ >= 0) {
         close(fd_);
         fd_ = -1;
@@ -34,11 +33,14 @@ void KeyManager::start()
     if (fd_ < 0)
         std::fprintf(stderr, "KeyManager: open %s failed: %s\n",
                      kDevicePath, std::strerror(errno));
+
+    key_thread = std::thread(&KeyManager::run, this);
 }
 
 void KeyManager::stop()
 {
     running_ = false;
+    key_thread.join();
 }
 
 void KeyManager::run()

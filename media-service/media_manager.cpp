@@ -16,7 +16,6 @@ MediaManager::MediaManager()
 
 MediaManager::~MediaManager()
 {
-    stop();
 }
 
 bool MediaManager::statusUpdate(MediaStatus next)
@@ -33,35 +32,31 @@ MediaStatus MediaManager::statusGet() const
     return status_.load();
 }
 
-void MediaManager::playPathSet(const std::string &path)
+void MediaManager::mp4PathSet(const std::string &path)
 {
-    std::lock_guard<std::mutex> lock(play_mu_);
-    play_path_ = path;
+    std::lock_guard<std::mutex> lock(mp4_mtx_);
+    mp4_path_ = path;
 }
 
-std::string MediaManager::playPathGet()
+std::string MediaManager::mp4PathGet()
 {
-    std::lock_guard<std::mutex> lock(play_mu_);
-    return play_path_;
+    std::lock_guard<std::mutex> lock(mp4_mtx_);
+    return mp4_path_;
 }
 
 void MediaManager::start()
 {
+    // TODO: start 统一添加返回条件
     video_.start();
     audio_.start();
     keys_.start();
-    uint32_t width = 0, height = 0, stride = 0;
-    video_.encoderSize(&width, &height, &stride);
-    muxer_.start(width, height, stride);
+    // TODO: 后续应使用环境变量导入
+    muxer_.start(1920, 1080, 1920);
     if (!service_.start())
         std::fprintf(stderr, "media-service: D-Bus control unavailable\n");
 
     running_ = true;
     thread_ = std::thread(&MediaManager::run, this);
-    capture_thread_ = std::thread(&VideoManager::run, &video_);
-    audio_thread_ = std::thread(&AudioManager::run, &audio_);
-    key_thread_ = std::thread(&KeyManager::run, &keys_);
-    muxer_thread_ = std::thread(&Mp4Muxer::run, &muxer_);
 }
 
 void MediaManager::stop()
@@ -71,18 +66,9 @@ void MediaManager::stop()
     keys_.stop();
     video_.stop();
     audio_.stop();
-    if (key_thread_.joinable())
-        key_thread_.join();
-    if (capture_thread_.joinable())
-        capture_thread_.join();
-    if (audio_thread_.joinable())
-        audio_thread_.join();
     muxer_.stop();
-    if (muxer_thread_.joinable())
-        muxer_thread_.join();
-    if (thread_.joinable())
-        thread_.join();
     service_.stop();
+    thread_.join();
 }
 
 void MediaManager::releaseVideoFrame(camera_frame_t &frame)
@@ -95,7 +81,7 @@ void MediaManager::run()
     MediaStatus last = MediaStatus::Preview;
 
     while (running_) {
-        std::unique_lock<std::mutex> lock(mu_);
+        std::unique_lock<std::mutex> lock(mtx_);
         cv_.wait(lock, [&] {
             return !running_.load() || status_.load() != last;
         });
@@ -137,7 +123,7 @@ void MediaManager::run()
         }
         // 暂停状态，点击录像列表：播放录像
         else if (last == MediaStatus::Paused && cur == MediaStatus::Playing) {
-            std::printf("MediaManager: play video %s\n", playPathGet().c_str());
+            std::printf("MediaManager: play video %s\n", mp4PathGet().c_str());
             // 播放结束后回到暂停状态（相册）
             status_.store(MediaStatus::Paused);
             cur = status_.load();

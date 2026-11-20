@@ -33,8 +33,8 @@ public:
 
     bool statusUpdate(MediaStatus next);
     MediaStatus statusGet() const;
-    void playPathSet(const std::string &path);
-    std::string playPathGet();
+    void mp4PathSet(const std::string &path);
+    std::string mp4PathGet();
 
     void start();
     void stop();
@@ -53,15 +53,11 @@ private:
 
     std::atomic<MediaStatus> status_{MediaStatus::Preview};
     std::atomic<bool> running_{false};
-    std::string play_path_;
-    std::mutex play_mu_;
-    std::mutex mu_;
+    std::string mp4_path_;
+    std::mutex mp4_mtx_;
+    std::mutex mtx_;
     std::condition_variable cv_;
     std::thread thread_;
-    std::thread capture_thread_;
-    std::thread key_thread_;
-    std::thread audio_thread_;
-    std::thread muxer_thread_;
 };
 
 #endif

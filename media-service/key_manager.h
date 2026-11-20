@@ -2,6 +2,7 @@
 #define MEDIA_SERVICE_KEY_MANAGER_H
 
 #include <atomic>
+#include <thread>
 
 class MediaManager;
 
@@ -23,6 +24,7 @@ private:
     MediaManager &media_;
     int fd_ = -1;
     std::atomic<bool> running_{false};
+    std::thread key_thread;
 };
 
 #endif

@@ -40,8 +40,6 @@ audio_t *audio_init(const audio_config_t *config);
 
 int audio_get_frame(audio_t *ctx, audio_frame_t *frame);
 
-int audio_release_frame(audio_t *ctx, audio_frame_t *frame);
-
 int audio_write(audio_t *ctx, const uint8_t *data, uint32_t length);
 
 int audio_flush(audio_t *ctx);

@@ -144,7 +144,7 @@ DBusHandlerResult Service::onMessage(DBusConnection *,
             std::fprintf(stderr, "Service: PlayVideo: invalid path\n");
             return DBUS_HANDLER_RESULT_HANDLED;
         }
-        self->media_.playPathSet(path);
+        self->media_.mp4PathSet(path);
         self->media_.statusUpdate(MediaStatus::Playing);
         return DBUS_HANDLER_RESULT_HANDLED;
     }

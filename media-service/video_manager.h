@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <mutex>
 #include <string>
+#include <thread>
 
 class MediaManager;
 
@@ -20,7 +21,7 @@ public:
 
     void start();
     void stop();
-    void run();
+    void captureRun();
     void startCapture();
     void stopCapture();
     std::string takePhoto();
@@ -52,8 +53,9 @@ private:
     std::atomic<bool> recording_{false};
     bool save_first_frame_ = false;
     char first_frame_path_[128] = {0};
-    std::mutex mu_;
+    std::mutex mtx_;
     std::condition_variable cv_;
+    std::thread capture_thread;
 };
 
 #endif

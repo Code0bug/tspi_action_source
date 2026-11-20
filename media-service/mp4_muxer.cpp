@@ -219,6 +219,7 @@ Mp4Muxer::~Mp4Muxer()
 void Mp4Muxer::start(uint32_t width, uint32_t height, uint32_t stride)
 {
     mpp_encoder_init(width, height, stride);
+    muxer_thread = std::thread(&Mp4Muxer::run, this);
 }
 
 void Mp4Muxer::stop()
@@ -226,6 +227,7 @@ void Mp4Muxer::stop()
     MuxJob job = {};
     job.type = MuxJobType::Stop;
     media_.mux_queue.push(job);
+    muxer_thread.join();
 }
 
 void Mp4Muxer::run()
