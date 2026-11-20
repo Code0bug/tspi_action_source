@@ -19,7 +19,7 @@ MediaManager::~MediaManager()
     stop();
 }
 
-bool MediaManager::statusUpdate(CamStatus next)
+bool MediaManager::statusUpdate(MediaStatus next)
 {
     if (status_.load() == next)
         return false;
@@ -28,7 +28,7 @@ bool MediaManager::statusUpdate(CamStatus next)
     return true;
 }
 
-CamStatus MediaManager::statusGet() const
+MediaStatus MediaManager::statusGet() const
 {
     return status_.load();
 }
@@ -92,7 +92,7 @@ void MediaManager::releaseVideoFrame(camera_frame_t &frame)
 
 void MediaManager::run()
 {
-    CamStatus last = CamStatus::Preview;
+    MediaStatus last = MediaStatus::Preview;
 
     while (running_) {
         std::unique_lock<std::mutex> lock(mu_);
@@ -101,26 +101,26 @@ void MediaManager::run()
         });
         if (!running_)
             break;
-        CamStatus cur = status_.load();
+        MediaStatus cur = status_.load();
         lock.unlock();
 
         // 预览状态，按键按下：拍照
-        if (last == CamStatus::Preview && cur == CamStatus::Photo) {
+        if (last == MediaStatus::Preview && cur == MediaStatus::Photo) {
             service_.emit(MEDIA_SERVICE_SIGNAL_PHOTO_STARTED);
             std::string path = video_.takePhoto();
             service_.emit(MEDIA_SERVICE_SIGNAL_PHOTO_SAVED, path.c_str());
             // 拍完照后状态重新变成预览
-            status_.store(CamStatus::Preview);
+            status_.store(MediaStatus::Preview);
             cur = status_.load(); // 重新更新 cur
         }
         // 预览状态，按键长按：录像
-        else if (last == CamStatus::Preview && cur == CamStatus::Record) {
+        else if (last == MediaStatus::Preview && cur == MediaStatus::Record) {
             video_.startRecord();
             audio_.startCapture();
             service_.emit(MEDIA_SERVICE_SIGNAL_RECORD_STARTED);
         }
         // 录像状态，按键按下：停止录像
-        else if (last == CamStatus::Record && cur == CamStatus::Preview) {
+        else if (last == MediaStatus::Record && cur == MediaStatus::Preview) {
             audio_.stopCapture();
             std::string path = video_.stopRecord();
             service_.emit(MEDIA_SERVICE_SIGNAL_RECORD_STOPPED);
@@ -128,18 +128,18 @@ void MediaManager::run()
                 service_.emit(MEDIA_SERVICE_SIGNAL_VIDEO_SAVED, path.c_str());
         }
         // 预览状态，切到相册：停止采集
-        else if (last == CamStatus::Preview && cur == CamStatus::Paused) {
+        else if (last == MediaStatus::Preview && cur == MediaStatus::Paused) {
             video_.stopCapture();
         }
         // 暂停状态，切到预览：开始采集
-        else if (last == CamStatus::Paused && cur == CamStatus::Preview) {
+        else if (last == MediaStatus::Paused && cur == MediaStatus::Preview) {
             video_.startCapture();
         }
         // 暂停状态，点击录像列表：播放录像
-        else if (last == CamStatus::Paused && cur == CamStatus::Playing) {
+        else if (last == MediaStatus::Paused && cur == MediaStatus::Playing) {
             std::printf("MediaManager: play video %s\n", playPathGet().c_str());
             // 播放结束后回到暂停状态（相册）
-            status_.store(CamStatus::Paused);
+            status_.store(MediaStatus::Paused);
             cur = status_.load();
         }
         last = cur;

@@ -122,14 +122,14 @@ DBusHandlerResult Service::onMessage(DBusConnection *,
     // Start Capture
     if (dbus_message_is_method_call(msg, MEDIA_SERVICE_INTERFACE,
                                     MEDIA_SERVICE_METHOD_START_CAPTURE)) {
-        self->media_.statusUpdate(CamStatus::Preview);
+        self->media_.statusUpdate(MediaStatus::Preview);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
     // Stop Capture
     if (dbus_message_is_method_call(msg, MEDIA_SERVICE_INTERFACE,
                                     MEDIA_SERVICE_METHOD_STOP_CAPTURE)) {
-        self->media_.statusUpdate(CamStatus::Paused);
+        self->media_.statusUpdate(MediaStatus::Paused);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
@@ -145,7 +145,7 @@ DBusHandlerResult Service::onMessage(DBusConnection *,
             return DBUS_HANDLER_RESULT_HANDLED;
         }
         self->media_.playPathSet(path);
-        self->media_.statusUpdate(CamStatus::Playing);
+        self->media_.statusUpdate(MediaStatus::Playing);
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 

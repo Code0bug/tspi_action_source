@@ -15,7 +15,7 @@
 #include <string>
 #include <thread>
 
-enum class CamStatus {
+enum class MediaStatus {
     Preview,    // 预览
     Photo,      // 拍照
     Record,     // 录像
@@ -31,8 +31,8 @@ public:
     MediaManager(const MediaManager &) = delete;
     MediaManager &operator=(const MediaManager &) = delete;
 
-    bool statusUpdate(CamStatus next);
-    CamStatus statusGet() const;
+    bool statusUpdate(MediaStatus next);
+    MediaStatus statusGet() const;
     void playPathSet(const std::string &path);
     std::string playPathGet();
 
@@ -51,7 +51,7 @@ private:
     Service service_;
     Mp4Muxer muxer_;
 
-    std::atomic<CamStatus> status_{CamStatus::Preview};
+    std::atomic<MediaStatus> status_{MediaStatus::Preview};
     std::atomic<bool> running_{false};
     std::string play_path_;
     std::mutex play_mu_;

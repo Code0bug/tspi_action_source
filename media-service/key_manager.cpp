@@ -87,16 +87,16 @@ void KeyManager::run()
                                   std::chrono::steady_clock::now() - press_time)
                                   .count();
             if (elapsed < 500) {    // 短按
-                if (media_.statusGet() == CamStatus::Record) { // 如果此时正在录像，短按则停止录像回到预览
+                if (media_.statusGet() == MediaStatus::Record) { // 如果此时正在录像，短按则停止录像回到预览
                     std::printf("KeyManager: short press, stop video\n");
-                    media_.statusUpdate(CamStatus::Preview);
+                    media_.statusUpdate(MediaStatus::Preview);
                 } else {    // 拍照
                     std::printf("KeyManager: short press, take photo\n");
-                    media_.statusUpdate(CamStatus::Photo);
+                    media_.statusUpdate(MediaStatus::Photo);
                 }
             } else {        // 长按-录像
                 std::printf("KeyManager: long press, start video\n");
-                media_.statusUpdate(CamStatus::Record);
+                media_.statusUpdate(MediaStatus::Record);
             }
         }
     }
