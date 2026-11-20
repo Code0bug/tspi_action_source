@@ -126,6 +126,11 @@ bool MediaClient::playVideo(const QString &path)
     return call(MEDIA_SERVICE_METHOD_PLAY_VIDEO, path.toUtf8().constData());
 }
 
+bool MediaClient::stopVideo()
+{
+    return call(MEDIA_SERVICE_METHOD_STOP_VIDEO);
+}
+
 bool MediaClient::call(const char *method, const char *arg)
 {
     if (impl_->conn == nullptr)

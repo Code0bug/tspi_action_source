@@ -23,6 +23,7 @@ public:
     bool startCapture();
     bool stopCapture();
     bool playVideo(const QString &path);
+    bool stopVideo();
 
 signals:
     void recordStarted();

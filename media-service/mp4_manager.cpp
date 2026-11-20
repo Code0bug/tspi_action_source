@@ -27,16 +27,19 @@
 
 #include "media_manager.h"
 
+#include <algorithm>
 #include <iostream>
 #include <string>
 #include <cstring>
 #include <cstdio>
 #include <cerrno>
+#include <unistd.h>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/error.h>
+#include <libavutil/time.h>
 #include <libavutil/opt.h>
 #include <libavutil/channel_layout.h>
 #include <libswresample/swresample.h>
@@ -59,6 +62,18 @@ std::string ffErrStr(int errnum)
 uint64_t channelLayoutFromChannels(int channels)
 {
     return channels == 2 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO;
+}
+
+int64_t packetTimeUs(const AVPacket &pkt, AVStream *stream)
+{
+    int64_t ts = pkt.pts;
+    if (ts == AV_NOPTS_VALUE) {
+        ts = pkt.dts;
+    }
+    if (ts == AV_NOPTS_VALUE || !stream) {
+        return AV_NOPTS_VALUE;
+    }
+    return av_rescale_q(ts, stream->time_base, AVRational{1, 1000000});
 }
 
 /*
@@ -228,17 +243,253 @@ void Mp4Manager::stop()
     job.type = MuxJobType::Stop;
     media_.mux_queue.push(job);
     muxer_thread.join();
-    demuxer_thread.join();
+    stopDemux();
 }
 
 void Mp4Manager::startDemux(const std::string &path)
 {
-    demuxer_thread = std::thread(&Mp4Manager::demuxRun, this, path);
+    stop_demux_ = false;
+    // detach：线程退出后自动回收，下次播放可重新创建
+    std::thread demuxer_thread(&Mp4Manager::demuxRun, this, path);
+    demuxer_thread.detach();
+}
+
+void Mp4Manager::stopDemux()
+{
+    stop_demux_ = true;
 }
 
 void Mp4Manager::demuxRun(std::string path)
 {
-    (void)path;
+    if (demuxMp4(path) < 0) {
+        printf("demux mp4 failed: %s\n", path.c_str());
+    }
+
+    // 无论正常结束、出错还是被打断，都要通知下游线程退出：
+    // 视频：向 MPP 发送 EOS，视频线程取到 eos 帧后退出
+    // 音频：向队列推送 AudioEnd，音频线程取到后退出（没有音频流时也一样）
+    sendVideoStream(nullptr, 0, true);
+    DemuxJob job = {};
+    job.type = DemuxJobType::AudioEnd;
+    media_.demux_queue.push(std::move(job));
+
+    // 播放结束，回到暂停状态（相册）
+    media_.statusUpdate(MediaStatus::Paused);
+}
+
+int Mp4Manager::sendVideoStream(const uint8_t *src, uint32_t len, bool eos, uint64_t ptsUs)
+{
+    int s32Ret = 0;
+    int failCount = 0;
+    // EOS 必须送达，即使已经请求停止
+    while (eos || !stop_demux_) {
+        s32Ret = mpp_decoder_put_packet(src, len, ptsUs, eos);
+        if (s32Ret == 0) {
+            break;
+        }
+        if (++failCount > 50) {
+            printf("send stream failed %d times, giving up! %d\n", failCount, s32Ret);
+            break;
+        }
+        usleep(1000llu);
+    }
+    return s32Ret;
+}
+
+int Mp4Manager::demuxMp4(const std::string &path)
+{
+    AVFormatContext *inFmt = nullptr;  // FFmpeg 解封装上下文，持有 MP4 文件的全部信息（流、编解码器、时长等）
+    AVBSFContext *bsfCtx = nullptr;    // Bitstream Filter 上下文，用于 H.264 AVCC → Annex-B 转换
+    int videoStreamIndex = -1;
+    int audioStreamIndex = -1;
+    int ret = 0;
+
+    // ---- 第一步：打开 MP4 容器 ----
+    // avformat_open_input 读取文件头，识别容器格式，填充 inFmt。
+    // 不会解码任何帧，只是解析容器结构。
+    ret = avformat_open_input(&inFmt, path.c_str(), nullptr, nullptr);
+    if (ret < 0) {
+        std::cerr << "avformat_open_input failed: " << ffErrStr(ret)
+                  << " path=" << path << std::endl;
+        return ret;
+    }
+
+    // avformat_find_stream_info 读取少量 packet 来探测每个流的详细信息
+    //（编码参数、帧率、时长等）。对 MP4 来说通常很快，因为 moov atom 里已有元数据。
+    ret = avformat_find_stream_info(inFmt, nullptr);
+    if (ret < 0) {
+        std::cerr << "avformat_find_stream_info failed: " << ffErrStr(ret)
+                  << " (ret=" << ret << ")" << std::endl;
+        avformat_close_input(&inFmt);
+        return ret;
+    }
+
+    // ---- 第二步：查找视频流和音频流 ----
+    // av_find_best_stream 按优先级找到指定类型的"最佳"流。
+    // 视频流必须存在，音频流可能没有（返回负值，不报错）。
+    ret = av_find_best_stream(inFmt, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    if (ret < 0) {
+        std::cerr << "av_find_best_stream(video) failed: " << ffErrStr(ret)
+                  << " (ret=" << ret << ")" << std::endl;
+        avformat_close_input(&inFmt);
+        return ret;
+    }
+    videoStreamIndex = ret;
+    audioStreamIndex = av_find_best_stream(inFmt, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+
+    // 当前 VDEC 只支持 H.264，其他编码直接拒绝。
+    // codecpar 存储的是 MP4 脱壳后的编解码参数（不含压缩数据）。
+    AVStream *videoStream = inFmt->streams[videoStreamIndex];
+    if (videoStream->codecpar->codec_id != AV_CODEC_ID_H264) {
+        std::cerr << "demuxMp4: unsupported video codec id="
+                  << videoStream->codecpar->codec_id << ", only H.264 is supported" << std::endl;
+        avformat_close_input(&inFmt);
+        return AVERROR(EINVAL);
+    }
+
+    // ---- 第三步：创建 H.264 BSF（Bitstream Filter）----
+    // MP4 中的 H.264 使用 AVCC 格式：每个 NAL 前面是 4 字节长度前缀。
+    // RK VDEC 需要 Annex-B 格式：每个 NAL 前面是起始码 00 00 00 01。
+    // "h264_mp4toannexb" 是 FFmpeg 内置的 BSF，完成这个格式转换，
+    // 同时会在流开始时注入 SPS/PPS（从 extradata 中读取）。
+    const AVBitStreamFilter *bsf = av_bsf_get_by_name("h264_mp4toannexb");
+    if (!bsf) {
+        std::cerr << "av_bsf_get_by_name(h264_mp4toannexb) failed" << std::endl;
+        avformat_close_input(&inFmt);
+        return AVERROR_BSF_NOT_FOUND;
+    }
+
+    // av_bsf_alloc：根据 BSF 定义分配上下文。
+    // 还需要把视频流的编解码参数复制进去（par_in），然后 av_bsf_init 初始化。
+    ret = av_bsf_alloc(bsf, &bsfCtx);
+    if (ret < 0) {
+        std::cerr << "av_bsf_alloc failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        avformat_close_input(&inFmt);
+        return ret;
+    }
+
+    ret = avcodec_parameters_copy(bsfCtx->par_in, videoStream->codecpar);
+    if (ret < 0) {
+        std::cerr << "avcodec_parameters_copy failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        av_bsf_free(&bsfCtx);
+        avformat_close_input(&inFmt);
+        return ret;
+    }
+    bsfCtx->time_base_in = videoStream->time_base;  // BSF 需要知道输入的时间基来转换 PTS
+
+    ret = av_bsf_init(bsfCtx);
+    if (ret < 0) {
+        std::cerr << "av_bsf_init failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+        av_bsf_free(&bsfCtx);
+        avformat_close_input(&inFmt);
+        return ret;
+    }
+
+    // ---- 第四步：通知 AudioManager 音频流信息 ----
+    // 如果 MP4 有音频流，把编解码参数发给 AudioManager，让它初始化 FFmpeg 音频解码器和 AO 硬件。
+    // extradata 对于 AAC 是 AudioSpecificConfig（采样率、声道等），解码器初始化必需。
+    if (audioStreamIndex >= 0) {
+        AVCodecParameters *apar = inFmt->streams[audioStreamIndex]->codecpar;
+        DemuxJob audioStart = {};
+        audioStart.type = DemuxJobType::AudioStart;
+        audioStart.codec_id = static_cast<int>(apar->codec_id);
+        audioStart.sample_rate = apar->sample_rate;
+        audioStart.channels = apar->channels;
+        if (apar->extradata && apar->extradata_size > 0) {
+            audioStart.extradata.assign(apar->extradata, apar->extradata + apar->extradata_size);
+        }
+        media_.demux_queue.push(std::move(audioStart));
+    }
+
+    // ---- 第五步：逐 packet 读取并分发 ----
+    // av_read_frame 从容器中读取一个压缩数据包（packet）。
+    // 每个 packet 属于某条流（视频或音频），通过 pkt.stream_index 区分。
+    // 注意：av_read_frame 返回的视频 packet 是 AVCC 格式，还需要经过 BSF 转换。
+    AVPacket pkt;
+    av_init_packet(&pkt);
+    int64_t firstMediaUs = AV_NOPTS_VALUE;  // 第一个有效 packet 的媒体时间（微秒）
+    int64_t playStartUs = av_gettime_relative();  // 播放起始的墙钟时间（微秒）
+    while (!stop_demux_ && (ret = av_read_frame(inFmt, &pkt)) >= 0) {
+        // ---- 墙钟同步：控制发包节奏 ----
+        // 用 packet 的 PTS 计算"理想发送时间"，和当前墙钟比较，
+        // 如果还没到就 sleep，避免瞬间把所有 packet 推给下游。
+        AVStream *pktStream = inFmt->streams[pkt.stream_index];
+        int64_t pktMediaUs = packetTimeUs(pkt, pktStream);  // 转成微秒
+        if (pktMediaUs != AV_NOPTS_VALUE) {
+            if (firstMediaUs == AV_NOPTS_VALUE) {
+                firstMediaUs = pktMediaUs;        // 记录第一个 packet 的时间作为基准
+                playStartUs = av_gettime_relative(); // 同时记录墙钟起点
+            }
+            // 目标发送时间 = 墙钟起点 + (当前 packet PTS - 第一个 packet PTS)
+            int64_t targetUs = playStartUs + std::max<int64_t>(0, pktMediaUs - firstMediaUs);
+            while (!stop_demux_) {
+                int64_t delayUs = targetUs - av_gettime_relative();
+                if (delayUs <= 0) {
+                    break;  // 时间到了，发包
+                }
+                usleep(static_cast<useconds_t>(std::min<int64_t>(delayUs, 10000)));  // 最多 sleep 10ms
+            }
+        }
+
+        // ---- 音频 packet：直接发给 AudioManager 解码播放 ----
+        // 音频 packet 不需要 BSF 转换（AAC 在 MP4 中已经是解码器能直接吃的格式）。
+        // AudioManager::playEncodedAudioPacket 会用 FFmpeg 解码 + swr_convert 转 PCM 再送 AO。
+        if (pkt.stream_index == audioStreamIndex) {
+            if (pkt.data && pkt.size > 0) {
+                DemuxJob audioPacket = {};
+                audioPacket.type = DemuxJobType::AudioPacket;
+                audioPacket.data.assign(pkt.data, pkt.data + pkt.size);
+                audioPacket.pts = static_cast<int64_t>(pkt.pts);
+                media_.demux_queue.push(std::move(audioPacket));
+            }
+            av_packet_unref(&pkt);  // 释放 packet 引用（data 指针作废，但 vector 已拷贝）
+            continue;
+        }
+
+        // 跳过既不是视频也不是音频的 packet（如字幕流）
+        if (pkt.stream_index != videoStreamIndex) {
+            av_packet_unref(&pkt);
+            continue;
+        }
+
+        // ---- 视频 packet：经过 BSF 转换后送 VDEC ----
+        // av_bsf_send_packet 把 AVCC 格式的 packet 送入 BSF。
+        // BSF 内部会把 4 字节长度前缀替换成 00 00 00 01 起始码，
+        // 并在流开始时自动注入 SPS/PPS（从 extradata 解析）。
+        ret = av_bsf_send_packet(bsfCtx, &pkt);
+        av_packet_unref(&pkt);  // 原始 AVCC packet 不再需要
+        if (ret < 0) {
+            std::cerr << "av_bsf_send_packet failed: " << ffErrStr(ret) << " (ret=" << ret << ")" << std::endl;
+            break;
+        }
+
+        // av_bsf_receive_packet 从 BSF 取出转换后的 Annex-B packet。
+        // 一个输入 packet 可能产生多个输出 packet（如 SPS + PPS + IDR），
+        // 所以要用 while 循环把所有输出都取干净。
+        while (!stop_demux_ && (ret = av_bsf_receive_packet(bsfCtx, &pkt)) == 0) {
+            int64_t videoPtsUs = packetTimeUs(pkt, videoStream);
+            sendVideoStream(pkt.data, pkt.size, false,
+                           videoPtsUs == AV_NOPTS_VALUE ? 0 : static_cast<uint64_t>(videoPtsUs));
+            av_packet_unref(&pkt);
+        }
+        // EAGAIN 表示 BSF 需要更多输入，不是错误；EOF 表示流结束。
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+            ret = 0;
+        }
+        if (ret < 0) {
+            break;
+        }
+    }
+
+    // ---- 第六步：发送 EOS 并清理 ----
+    // EOS 和 AudioEnd 由 demuxRun 统一发送（出错、被打断时同样需要通知下游）
+    if (ret == AVERROR_EOF) {
+        ret = 0;  // 正常结束，不是错误
+    }
+
+    av_bsf_free(&bsfCtx);           // 释放 BSF 上下文
+    avformat_close_input(&inFmt);    // 关闭容器并释放 inFmt（设为 nullptr 后自动释放）
+    return ret;
 }
 
 void Mp4Manager::muxRun()

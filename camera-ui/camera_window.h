@@ -27,6 +27,7 @@ private slots:
     void showNextPhoto();
     void showPrevPhoto();
     void backToAlbum();
+    void backToVideoAlbum();
     void onRecordStarted();
     void onRecordStopped();
     void onPhotoStarted();
@@ -39,6 +40,7 @@ private:
     void setupVideoAlbumPage();
     void setupViewerPage();
     void setupRecordPage();
+    void setupPlayerPage();
     void loadAlbum();
     void loadVideoAlbum();
     void showPhotoAt(int index);
@@ -52,6 +54,8 @@ private:
     QWidget *videoAlbumPage_ = nullptr;
     QWidget *viewerPage_ = nullptr;
     QWidget *recordPage_ = nullptr;
+    QWidget *playerPage_ = nullptr;
+    QPushButton *playerBackBtn_ = nullptr;
 
     QLabel *timeLabel_ = nullptr;
     QLabel *captureHint_ = nullptr;

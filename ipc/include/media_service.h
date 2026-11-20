@@ -8,6 +8,7 @@
  *   StartCapture() : 切回预览界面后，开启采集
  *   StopCapture()  : 离开预览界面后，停止采集
  *   PlayVideo(s path) : 点击录像列表视频项，播放指定视频
+ *   StopVideo()    : 退出播放页，停止播放
  *
  * MediaService -> UI：
  *   RecordStarted()      : 开始录像，UI 切到录像计时页
@@ -23,6 +24,7 @@
 #define MEDIA_SERVICE_METHOD_START_CAPTURE "StartCapture"
 #define MEDIA_SERVICE_METHOD_STOP_CAPTURE  "StopCapture"
 #define MEDIA_SERVICE_METHOD_PLAY_VIDEO    "PlayVideo"
+#define MEDIA_SERVICE_METHOD_STOP_VIDEO    "StopVideo"
 
 #define MEDIA_SERVICE_SIGNAL_RECORD_STARTED "RecordStarted"
 #define MEDIA_SERVICE_SIGNAL_RECORD_STOPPED "RecordStopped"

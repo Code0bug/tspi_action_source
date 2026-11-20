@@ -34,7 +34,6 @@ public:
     MediaStatus statusGet() const;
     void mp4PathSet(const std::string &path);
     std::string mp4PathGet();
-
     void start();
     void stop();
     void releaseVideoFrame(camera_frame_t &frame);

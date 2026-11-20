@@ -241,6 +241,8 @@ void VideoManager::startPlayback()
 
 void VideoManager::playbackRun()
 {
+    int slot = 0;
+
     while (playback_running_) {
         DecodedFrame frame;
         int ret = mpp_decoder_get_frame(&frame);
@@ -253,8 +255,27 @@ void VideoManager::playbackRun()
         if (frame.eos)
             break;
 
-        // TODO: RGA 将解码帧转换到 overlay buffer，并通过 socket 通知 UI 显示
+        // rga 图像处理：旋转 90 度 和 缩放为屏幕尺寸大小，输出到 overlay buffer
+        int ret_rga = rga_process(frame.fd,
+                                  (int)frame.width,
+                                  (int)frame.height,
+                                  (int)frame.hor_stride,
+                                  (int)frame.ver_stride,
+                                  overlay_fds[slot], nullptr,
+                                  (int)overlay_width, (int)overlay_height,
+                                  (int)overlay_pitch, RK_FORMAT_YCbCr_420_SP,
+                                  IM_HAL_TRANSFORM_ROT_90 | IM_SYNC);
         mpp_decoder_release_frame(&frame);
+        if (ret_rga != 0)
+            continue;
+
+        // socket 发送给 UI 显示
+        tspi_preview_buf msg = {};
+        msg.slot = uint32_t(slot);
+        ipc_send(m_socket, &msg, sizeof(msg), nullptr, 0);
+
+        if (overlay_count > 1)
+            slot = (slot + 1) % int(overlay_count);
     }
 
     playback_running_ = false;

@@ -5,6 +5,7 @@
 
 #include <camera_hal.h>
 
+#include <atomic>
 #include <cstdint>
 #include <string>
 #include <thread>
@@ -64,6 +65,7 @@ public:
     void muxRun();
     void startDemux(const std::string &path);
     void demuxRun(std::string path);
+    void stopDemux();
 
     bool initMp4Mux(const std::string &filename);
     void closeMp4Mux();
@@ -75,6 +77,8 @@ private:
     int addSpsPpsAndWriteHeader();
     int initAudioEncoder();
     int writeAudioFrame(AVFrame *frame);
+    int demuxMp4(const std::string &path);
+    int sendVideoStream(const uint8_t *src, uint32_t len, bool eos, uint64_t ptsUs = 0);
 
     MediaManager &media_;
 
@@ -93,7 +97,7 @@ private:
     std::vector<uint8_t> m_sps;
     std::vector<uint8_t> m_pps;
     std::thread muxer_thread;
-    std::thread demuxer_thread;
+    std::atomic<bool> stop_demux_{false};
 };
 
 #endif

@@ -130,6 +130,10 @@ void MediaManager::run()
             audio_.startPlayback();
             mp4_.startDemux(mp4_path);
         }
+        // 播放状态，退出播放页：停止解封装（自然播完时已结束，重复停止无副作用）
+        else if (last == MediaStatus::Playing && cur == MediaStatus::Paused) {
+            mp4_.stopDemux();
+        }
         last = cur;
     }
 }

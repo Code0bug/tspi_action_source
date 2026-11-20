@@ -247,6 +247,8 @@ int mpp_decoder_get_frame(DecodedFrame *out)
 
     MppFrame frame = nullptr;
     int ret = dec_mpi->decode_get_frame(dec_ctx, &frame);
+    if (ret == MPP_ERR_TIMEOUT)
+        return MPP_DEC_RES_NONE;
     if (ret) {
         printf("mpp_decoder: decode_get_frame failed %d\n", ret);
         return MPP_DEC_RES_ERR;

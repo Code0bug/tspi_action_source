@@ -113,6 +113,7 @@ CameraWindow::CameraWindow(QWidget *parent)
     setupVideoAlbumPage();
     setupViewerPage();
     setupRecordPage();
+    setupPlayerPage();
     stack_->setCurrentWidget(previewPage_);
 
     connect(&media_, &MediaClient::recordStarted, this, &CameraWindow::onRecordStarted);
@@ -172,6 +173,21 @@ void CameraWindow::setupRecordPage()
     connect(recTimer_, &QTimer::timeout, this, &CameraWindow::updateRecTime);
 
     stack_->addWidget(recordPage_);
+}
+
+void CameraWindow::setupPlayerPage()
+{
+    // 透明页：primary plane 上只画返回按钮，视频由下层 overlay plane 显示
+    playerPage_ = new QWidget;
+    playerPage_->setAttribute(Qt::WA_TranslucentBackground);
+    playerPage_->setStyleSheet(QStringLiteral("background: transparent;"));
+
+    playerBackBtn_ = new QPushButton(playerPage_);
+    setupButton(playerBackBtn_, QStringLiteral("/root/back.png"));
+    playerBackBtn_->move(0, 20);
+    connect(playerBackBtn_, &QPushButton::clicked, this, &CameraWindow::backToVideoAlbum);
+
+    stack_->addWidget(playerPage_);
 }
 
 void CameraWindow::setupAlbumPage()
@@ -321,6 +337,8 @@ void CameraWindow::layoutOverlayButtons()
         videoEmptyLabel_->setGeometry(videoAlbumPage_->rect());
     if (videoBackBtn_)
         videoBackBtn_->raise();
+    if (playerBackBtn_)
+        playerBackBtn_->raise();
     if (captureHint_ && previewPage_)
         captureHint_->move(previewPage_->width() - captureHint_->width() - 20, 20);
     if (recFpsLabel_ && recordPage_)
@@ -479,6 +497,15 @@ void CameraWindow::onVideoClicked(QListWidgetItem *item)
     if (videoAlbumDragged_)
         return;
     media_.playVideo(item->data(Qt::UserRole).toString());
+    stack_->setCurrentWidget(playerPage_);
+    layoutOverlayButtons();
+}
+
+void CameraWindow::backToVideoAlbum()
+{
+    media_.stopVideo();
+    stack_->setCurrentWidget(videoAlbumPage_);
+    layoutOverlayButtons();
 }
 
 void CameraWindow::showPhotoAt(int index)

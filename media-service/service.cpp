@@ -149,5 +149,12 @@ DBusHandlerResult Service::onMessage(DBusConnection *,
         return DBUS_HANDLER_RESULT_HANDLED;
     }
 
+    // Stop Video
+    if (dbus_message_is_method_call(msg, MEDIA_SERVICE_INTERFACE,
+                                    MEDIA_SERVICE_METHOD_STOP_VIDEO)) {
+        self->media_.statusUpdate(MediaStatus::Paused);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
