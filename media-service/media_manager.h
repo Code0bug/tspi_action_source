@@ -3,8 +3,7 @@
 
 #include "audio_manager.h"
 #include "key_manager.h"
-#include "mp4_muxer.h"
-#include "mux_job.h"
+#include "mp4_manager.h"
 #include "safe_queue.h"
 #include "service.h"
 #include "video_manager.h"
@@ -41,6 +40,7 @@ public:
     void releaseVideoFrame(camera_frame_t &frame);
 
     SafeQueue<MuxJob> mux_queue;
+    SafeQueue<DemuxJob> demux_queue;
 
 private:
     void run();
@@ -49,7 +49,7 @@ private:
     AudioManager audio_;
     KeyManager keys_;
     Service service_;
-    Mp4Muxer muxer_;
+    Mp4Manager mp4_;
 
     std::atomic<MediaStatus> status_{MediaStatus::Preview};
     std::atomic<bool> running_{false};

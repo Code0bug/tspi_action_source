@@ -24,6 +24,8 @@ public:
     void captureRun();
     void startCapture();
     void stopCapture();
+    void startPlayback();
+    void playbackRun();
     std::string takePhoto();
     void startRecord();
     std::string stopRecord();
@@ -56,6 +58,7 @@ private:
     std::mutex mtx_;
     std::condition_variable cv_;
     std::thread capture_thread;
+    std::atomic<bool> playback_running_{false};
 };
 
 #endif

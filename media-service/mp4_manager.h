@@ -1,7 +1,9 @@
-#ifndef MEDIA_SERVICE_MP4_MUXER_H
-#define MEDIA_SERVICE_MP4_MUXER_H
+#ifndef MEDIA_SERVICE_MP4_MANAGER_H
+#define MEDIA_SERVICE_MP4_MANAGER_H
 
 #include "mpp_codec.h"
+
+#include <camera_hal.h>
 
 #include <cstdint>
 #include <string>
@@ -15,17 +17,53 @@ struct SwrContext;
 
 class MediaManager;
 
-class Mp4Muxer {
-public:
-    explicit Mp4Muxer(MediaManager &media);
-    ~Mp4Muxer();
+enum class MuxJobType {
+    Open,
+    Video,
+    Audio,
+    Close,
+    Stop,
+};
 
-    Mp4Muxer(const Mp4Muxer &) = delete;
-    Mp4Muxer &operator=(const Mp4Muxer &) = delete;
+struct MuxJob {
+    MuxJobType type;
+    camera_frame_t video;
+    std::vector<uint8_t> pcm;
+    uint64_t pts;
+    std::string path;
+};
+
+enum class DemuxJobType {
+    AudioStart,   // 音频流开始，携带解码参数
+    AudioPacket,  // 一包压缩音频
+    AudioEnd,     // 音频流结束或停止
+};
+
+struct DemuxJob {
+    DemuxJobType type;
+    // AudioStart
+    int codec_id;
+    int sample_rate;
+    int channels;
+    std::vector<uint8_t> extradata;
+    // AudioPacket
+    std::vector<uint8_t> data;
+    int64_t pts;
+};
+
+class Mp4Manager {
+public:
+    explicit Mp4Manager(MediaManager &media);
+    ~Mp4Manager();
+
+    Mp4Manager(const Mp4Manager &) = delete;
+    Mp4Manager &operator=(const Mp4Manager &) = delete;
 
     void start(uint32_t width, uint32_t height, uint32_t stride);
     void stop();
-    void run();
+    void muxRun();
+    void startDemux(const std::string &path);
+    void demuxRun(std::string path);
 
     bool initMp4Mux(const std::string &filename);
     void closeMp4Mux();
@@ -55,6 +93,7 @@ private:
     std::vector<uint8_t> m_sps;
     std::vector<uint8_t> m_pps;
     std::thread muxer_thread;
+    std::thread demuxer_thread;
 };
 
 #endif

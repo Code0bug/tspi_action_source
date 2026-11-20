@@ -140,6 +140,9 @@ void VideoManager::stop()
     }
     cv_.notify_one();
     capture_thread.join();
+
+    // 播放线程已 detach，这里只通知它退出
+    playback_running_ = false;
 }
 
 void VideoManager::captureRun()
@@ -220,6 +223,42 @@ void VideoManager::stopCapture()
 {
     std::lock_guard<std::mutex> lock(mtx_);
     capturing_ = false;
+}
+
+void VideoManager::startPlayback()
+{
+    // 解码器需在 demux 送码流前就绪，所以在创建线程前同步初始化
+    if (mpp_decoder_init() != 0) {
+        std::fprintf(stderr, "VideoManager: mpp_decoder_init failed\n");
+        return;
+    }
+
+    playback_running_ = true;
+    // detach：线程退出后自动回收，下次播放可重新创建
+    std::thread playback_thread(&VideoManager::playbackRun, this);
+    playback_thread.detach();
+}
+
+void VideoManager::playbackRun()
+{
+    while (playback_running_) {
+        DecodedFrame frame;
+        int ret = mpp_decoder_get_frame(&frame);
+        if (ret == MPP_DEC_RES_ERR)
+            break;
+        if (ret == MPP_DEC_RES_NONE)
+            continue;
+
+        // 收到 eos，播放结束，退出循环
+        if (frame.eos)
+            break;
+
+        // TODO: RGA 将解码帧转换到 overlay buffer，并通过 socket 通知 UI 显示
+        mpp_decoder_release_frame(&frame);
+    }
+
+    playback_running_ = false;
+    mpp_decoder_deinit();
 }
 
 std::string VideoManager::takePhoto()

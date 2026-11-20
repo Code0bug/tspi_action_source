@@ -10,7 +10,7 @@ MediaManager::MediaManager()
     , audio_(*this)
     , keys_(*this)
     , service_(*this)
-    , muxer_(*this)
+    , mp4_(*this)
 {
 }
 
@@ -51,7 +51,7 @@ void MediaManager::start()
     audio_.start();
     keys_.start();
     // TODO: 后续应使用环境变量导入
-    muxer_.start(1920, 1080, 1920);
+    mp4_.start(1920, 1080, 1920);
     if (!service_.start())
         std::fprintf(stderr, "media-service: D-Bus control unavailable\n");
 
@@ -66,7 +66,7 @@ void MediaManager::stop()
     keys_.stop();
     video_.stop();
     audio_.stop();
-    muxer_.stop();
+    mp4_.stop();
     service_.stop();
     thread_.join();
 }
@@ -123,10 +123,12 @@ void MediaManager::run()
         }
         // 暂停状态，点击录像列表：播放录像
         else if (last == MediaStatus::Paused && cur == MediaStatus::Playing) {
-            std::printf("MediaManager: play video %s\n", mp4PathGet().c_str());
-            // 播放结束后回到暂停状态（相册）
-            status_.store(MediaStatus::Paused);
-            cur = status_.load();
+            std::string mp4_path = mp4PathGet();
+            std::printf("MediaManager: play video %s\n", mp4_path.c_str());
+            // 先启动下游播放线程，再启动解封装
+            video_.startPlayback();
+            audio_.startPlayback();
+            mp4_.startDemux(mp4_path);
         }
         last = cur;
     }

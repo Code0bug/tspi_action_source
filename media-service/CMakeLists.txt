@@ -5,7 +5,7 @@ add_executable(media-service
     key_manager.cpp
     media_manager.cpp
     audio_manager.cpp
-    mp4_muxer.cpp
+    mp4_manager.cpp
     utils/mpp_codec.cpp)
 target_include_directories(media-service PRIVATE
     ${CMAKE_SYSROOT}/usr/include/rockchip

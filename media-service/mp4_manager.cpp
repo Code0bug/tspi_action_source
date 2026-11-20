@@ -23,7 +23,7 @@
  *      ④ 结束写MP4前要进行flush操作，防止还有编码帧没有被写入
  *      ⑤ 结束写MP4，释放相关变量
  */
-#include "mp4_muxer.h"
+#include "mp4_manager.h"
 
 #include "media_manager.h"
 
@@ -193,7 +193,7 @@ bool annexbToAvcc(const uint8_t *data, uint32_t size, std::vector<uint8_t> &out)
 }
 } // namespace
 
-Mp4Muxer::Mp4Muxer(MediaManager &media)
+Mp4Manager::Mp4Manager(MediaManager &media)
     : media_(media)
     , m_outFmt(nullptr)
     , m_audioEncCtx(nullptr)
@@ -210,27 +210,38 @@ Mp4Muxer::Mp4Muxer(MediaManager &media)
 {
 }
 
-Mp4Muxer::~Mp4Muxer()
+Mp4Manager::~Mp4Manager()
 {
     closeMp4Mux();
     mpp_encoder_deinit();
 }
 
-void Mp4Muxer::start(uint32_t width, uint32_t height, uint32_t stride)
+void Mp4Manager::start(uint32_t width, uint32_t height, uint32_t stride)
 {
     mpp_encoder_init(width, height, stride);
-    muxer_thread = std::thread(&Mp4Muxer::run, this);
+    muxer_thread = std::thread(&Mp4Manager::muxRun, this);
 }
 
-void Mp4Muxer::stop()
+void Mp4Manager::stop()
 {
     MuxJob job = {};
     job.type = MuxJobType::Stop;
     media_.mux_queue.push(job);
     muxer_thread.join();
+    demuxer_thread.join();
 }
 
-void Mp4Muxer::run()
+void Mp4Manager::startDemux(const std::string &path)
+{
+    demuxer_thread = std::thread(&Mp4Manager::demuxRun, this, path);
+}
+
+void Mp4Manager::demuxRun(std::string path)
+{
+    (void)path;
+}
+
+void Mp4Manager::muxRun()
 {
     for (;;) {
         MuxJob job = media_.mux_queue.pop();
@@ -259,7 +270,7 @@ void Mp4Muxer::run()
     }
 }
 
-bool Mp4Muxer::initMp4Mux(const std::string &filename)
+bool Mp4Manager::initMp4Mux(const std::string &filename)
 {
     closeMp4Mux();
 
@@ -292,7 +303,7 @@ bool Mp4Muxer::initMp4Mux(const std::string &filename)
     return true;
 }
 
-void Mp4Muxer::closeMp4Mux()
+void Mp4Manager::closeMp4Mux()
 {
     if (!m_outFmt) {
         return;
@@ -336,7 +347,7 @@ void Mp4Muxer::closeMp4Mux()
     m_pps.clear();
 }
 
-int Mp4Muxer::initAudioEncoder()
+int Mp4Manager::initAudioEncoder()
 {
     /**
      * 1. 查找 AAC 编码器，分配并配置编码上下文，avcodec_open2 打开编码器
@@ -441,7 +452,7 @@ int Mp4Muxer::initAudioEncoder()
     return 0;
 }
 
-int Mp4Muxer::writeAudioFrame(AVFrame *frame)
+int Mp4Manager::writeAudioFrame(AVFrame *frame)
 {
     if (!m_outFmt || !m_audioEncCtx || m_audioStreamIndex < 0) {
         return -1;
@@ -486,7 +497,7 @@ int Mp4Muxer::writeAudioFrame(AVFrame *frame)
     return 0;
 }
 
-int Mp4Muxer::writeAudioToMp4(const uint8_t *pcmData, int pcmSize, uint64_t captureTsUs)
+int Mp4Manager::writeAudioToMp4(const uint8_t *pcmData, int pcmSize, uint64_t captureTsUs)
 {
     if (!m_outFmt || !m_audioEncCtx || !pcmData || pcmSize == 0) {
         return 0;
@@ -534,7 +545,7 @@ int Mp4Muxer::writeAudioToMp4(const uint8_t *pcmData, int pcmSize, uint64_t capt
     return 0;
 }
 
-int Mp4Muxer::addMp4Stream()
+int Mp4Manager::addMp4Stream()
 {
     if (!m_outFmt) {
         return -1;
@@ -581,7 +592,7 @@ int Mp4Muxer::addMp4Stream()
  * - 将SPS和PPS封装为avcc格式，然后写入AVCodecParameters结构体的extradata变量中
  * - 如果没有SPS和PPS信息就直接写header，会导致MP4文件无法打开，avcc格式的SPS+PPS信息就是告诉解码器如何解码视频帧的
  */
-int Mp4Muxer::addSpsPpsAndWriteHeader()
+int Mp4Manager::addSpsPpsAndWriteHeader()
 {
     if (!m_outFmt || m_sps.empty() || m_pps.empty()) {
         return -1;
@@ -622,7 +633,7 @@ int Mp4Muxer::addSpsPpsAndWriteHeader()
     return 0;
 }
 
-int Mp4Muxer::writeVideoToMp4(const EncodedPacket *pstStream)
+int Mp4Manager::writeVideoToMp4(const EncodedPacket *pstStream)
 {
     if (!m_outFmt || !pstStream || !pstStream->data || pstStream->size == 0) {
         return 0;

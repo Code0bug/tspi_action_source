@@ -23,6 +23,8 @@ public:
     void captureRun();
     void startCapture();
     void stopCapture();
+    void startPlayback();
+    void playbackRun();
 
 private:
     MediaManager &media_;

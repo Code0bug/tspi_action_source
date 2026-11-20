@@ -40,6 +40,11 @@ void AudioManager::stop()
     cv_.notify_one();
     audio_thread.join();
     audio_deinit(audio_capture);
+
+    // 播放线程可能阻塞在队列 pop 上，推送结束标志使其退出
+    DemuxJob job = {};
+    job.type = DemuxJobType::AudioEnd;
+    media_.demux_queue.push(std::move(job));
 }
 
 void AudioManager::startCapture()
@@ -51,6 +56,31 @@ void AudioManager::startCapture()
 void AudioManager::stopCapture()
 {
     capturing_ = false;
+}
+
+void AudioManager::startPlayback()
+{
+    // detach：线程取到 AudioEnd 退出后自动回收，下次播放可重新创建
+    std::thread playback_thread(&AudioManager::playbackRun, this);
+    playback_thread.detach();
+}
+
+void AudioManager::playbackRun()
+{
+    for (;;) {
+        DemuxJob job = media_.demux_queue.pop();
+        switch (job.type) {
+        case DemuxJobType::AudioStart:
+            // TODO: 用 codec_id / sample_rate / channels / extradata 初始化 FFmpeg 解码器和播放设备
+            break;
+        case DemuxJobType::AudioPacket:
+            // TODO: FFmpeg 解码 + swr_convert 转 PCM，再 audio_write 播放
+            break;
+        case DemuxJobType::AudioEnd:
+            // TODO: flush 解码器、drain 并关闭播放设备、释放解码资源
+            return;
+        }
+    }
 }
 
 void AudioManager::captureRun()
