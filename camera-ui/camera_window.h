@@ -5,6 +5,7 @@
 
 #include <QDateTime>
 #include <QLabel>
+#include <QString>
 #include <QListWidget>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -24,10 +25,15 @@ private slots:
     void showVideoAlbum();
     void onThumbClicked(QListWidgetItem *item);
     void onVideoClicked(QListWidgetItem *item);
+    void onPhotoPressed(QListWidgetItem *item);
+    void onVideoPressed(QListWidgetItem *item);
+    void onLongPress();
     void showNextPhoto();
     void showPrevPhoto();
     void backToAlbum();
     void backToVideoAlbum();
+    void confirmDelete();
+    void cancelDelete();
     void onRecordStarted();
     void onRecordStopped();
     void onPhotoStarted();
@@ -41,11 +47,16 @@ private:
     void setupViewerPage();
     void setupRecordPage();
     void setupPlayerPage();
+    void setupConfirmMask();
     void loadAlbum();
     void loadVideoAlbum();
     void showPhotoAt(int index);
     void updateRecTime();
     void layoutOverlayButtons();
+    void startLongPress(QListWidgetItem *item, bool video);
+    void cancelLongPress();
+    void deleteCurrentPhoto();
+    void deleteCurrentVideo();
     void resizeEvent(QResizeEvent *event) override;
 
     QStackedWidget *stack_ = nullptr;
@@ -75,6 +86,15 @@ private:
     QPushButton *viewerBackBtn_ = nullptr;
     QPushButton *prevBtn_ = nullptr;
     QPushButton *nextBtn_ = nullptr;
+    QWidget *confirmMask_ = nullptr;
+    enum class PendingDelete { None, Photo, Video };
+    PendingDelete pendingDelete_ = PendingDelete::None;
+    QString pendingPath_;
+    QString playingPath_;
+    QTimer *longPressTimer_ = nullptr;
+    QListWidgetItem *longPressItem_ = nullptr;
+    bool longPressIsVideo_ = false;
+    bool longPressTriggered_ = false;
     int photoIndex_ = 0;
     bool albumDragged_ = false;
     MediaClient media_;

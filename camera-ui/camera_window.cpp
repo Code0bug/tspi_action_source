@@ -2,8 +2,10 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QFont>
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QImageReader>
 #include <QPixmap>
@@ -114,6 +116,10 @@ CameraWindow::CameraWindow(QWidget *parent)
     setupViewerPage();
     setupRecordPage();
     setupPlayerPage();
+    setupConfirmMask();
+    longPressTimer_ = new QTimer(this);
+    longPressTimer_->setSingleShot(true);
+    connect(longPressTimer_, &QTimer::timeout, this, &CameraWindow::onLongPress);
     stack_->setCurrentWidget(previewPage_);
 
     connect(&media_, &MediaClient::recordStarted, this, &CameraWindow::onRecordStarted);
@@ -208,9 +214,10 @@ void CameraWindow::setupAlbumPage()
     QScroller::grabGesture(pictureList_->viewport(), QScroller::TouchGesture);
     QScroller *scroller = QScroller::scroller(pictureList_->viewport());
     connect(scroller, &QScroller::stateChanged, this, [this](QScroller::State state) {
-        if (state == QScroller::Dragging || state == QScroller::Scrolling)
+        if (state == QScroller::Dragging || state == QScroller::Scrolling) {
             albumDragged_ = true;
-        else if (state == QScroller::Inactive)
+            cancelLongPress();
+        } else if (state == QScroller::Inactive)
             QTimer::singleShot(0, this, [this] { albumDragged_ = false; });
     });
     pictureList_->setStyleSheet(QStringLiteral(
@@ -222,6 +229,7 @@ void CameraWindow::setupAlbumPage()
         "}"));
     setupTouchScrollBar(pictureList_->verticalScrollBar());
     connect(pictureList_, &QListWidget::itemClicked, this, &CameraWindow::onThumbClicked);
+    connect(pictureList_, &QListWidget::itemPressed, this, &CameraWindow::onPhotoPressed);
 
     auto *layout = new QVBoxLayout(albumPage_);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -263,9 +271,10 @@ void CameraWindow::setupVideoAlbumPage()
     QScroller::grabGesture(videoList_->viewport(), QScroller::TouchGesture);
     QScroller *scroller = QScroller::scroller(videoList_->viewport());
     connect(scroller, &QScroller::stateChanged, this, [this](QScroller::State state) {
-        if (state == QScroller::Dragging || state == QScroller::Scrolling)
+        if (state == QScroller::Dragging || state == QScroller::Scrolling) {
             videoAlbumDragged_ = true;
-        else if (state == QScroller::Inactive)
+            cancelLongPress();
+        } else if (state == QScroller::Inactive)
             QTimer::singleShot(0, this, [this] { videoAlbumDragged_ = false; });
     });
     videoList_->setStyleSheet(QStringLiteral(
@@ -277,6 +286,7 @@ void CameraWindow::setupVideoAlbumPage()
         "}"));
     setupTouchScrollBar(videoList_->verticalScrollBar());
     connect(videoList_, &QListWidget::itemClicked, this, &CameraWindow::onVideoClicked);
+    connect(videoList_, &QListWidget::itemPressed, this, &CameraWindow::onVideoPressed);
 
     auto *layout = new QVBoxLayout(videoAlbumPage_);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -327,6 +337,56 @@ void CameraWindow::setupViewerPage()
     stack_->addWidget(viewerPage_);
 }
 
+void CameraWindow::setupConfirmMask()
+{
+    confirmMask_ = new QWidget(this);
+    confirmMask_->hide();
+    confirmMask_->setStyleSheet(QStringLiteral("background: rgba(0, 0, 0, 180);"));
+
+    auto *msg = new QLabel(QStringLiteral("确认删除?"), confirmMask_);
+    msg->setAlignment(Qt::AlignCenter);
+    QFont msgFont = msg->font();
+    msgFont.setPixelSize(32);
+    msgFont.setBold(true);
+    msg->setFont(msgFont);
+    msg->setStyleSheet(QStringLiteral("QLabel { color: white; background: transparent; }"));
+
+    auto *cancelBtn = new QPushButton(QStringLiteral("取消"), confirmMask_);
+    auto *okBtn = new QPushButton(QStringLiteral("删除"), confirmMask_);
+    cancelBtn->setFixedSize(160, 72);
+    okBtn->setFixedSize(160, 72);
+    QFont btnFont = cancelBtn->font();
+    btnFont.setPixelSize(28);
+    btnFont.setBold(true);
+    cancelBtn->setFont(btnFont);
+    okBtn->setFont(btnFont);
+    cancelBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { color: white; background: #555555; border: none; border-radius: 12px; }"
+        "QPushButton:pressed { background: #777777; }"
+        "QPushButton:focus { outline: none; }"));
+    okBtn->setStyleSheet(QStringLiteral(
+        "QPushButton { color: white; background: #c80000; border: none; border-radius: 12px; }"
+        "QPushButton:pressed { background: #ff3333; }"
+        "QPushButton:focus { outline: none; }"));
+    connect(cancelBtn, &QPushButton::clicked, this, &CameraWindow::cancelDelete);
+    connect(okBtn, &QPushButton::clicked, this, &CameraWindow::confirmDelete);
+
+    auto *btns = new QHBoxLayout;
+    btns->setSpacing(24);
+    btns->addStretch();
+    btns->addWidget(cancelBtn);
+    btns->addWidget(okBtn);
+    btns->addStretch();
+
+    auto *layout = new QVBoxLayout(confirmMask_);
+    layout->setContentsMargins(24, 24, 24, 24);
+    layout->addStretch();
+    layout->addWidget(msg);
+    layout->addSpacing(32);
+    layout->addLayout(btns);
+    layout->addStretch();
+}
+
 void CameraWindow::layoutOverlayButtons()
 {
     if (emptyLabel_ && albumPage_)
@@ -339,6 +399,10 @@ void CameraWindow::layoutOverlayButtons()
         videoBackBtn_->raise();
     if (playerBackBtn_)
         playerBackBtn_->raise();
+    if (confirmMask_) {
+        confirmMask_->setGeometry(rect());
+        confirmMask_->raise();
+    }
     if (captureHint_ && previewPage_)
         captureHint_->move(previewPage_->width() - captureHint_->width() - 20, 20);
     if (recFpsLabel_ && recordPage_)
@@ -485,8 +549,11 @@ void CameraWindow::showVideoAlbum()
 
 void CameraWindow::onThumbClicked(QListWidgetItem *item)
 {
-    if (albumDragged_)
+    cancelLongPress();
+    if (albumDragged_ || longPressTriggered_) {
+        longPressTriggered_ = false;
         return;
+    }
     showPhotoAt(pictureList_->row(item));
     stack_->setCurrentWidget(viewerPage_);
     layoutOverlayButtons();
@@ -494,17 +561,125 @@ void CameraWindow::onThumbClicked(QListWidgetItem *item)
 
 void CameraWindow::onVideoClicked(QListWidgetItem *item)
 {
-    if (videoAlbumDragged_)
+    cancelLongPress();
+    if (videoAlbumDragged_ || longPressTriggered_) {
+        longPressTriggered_ = false;
         return;
-    media_.playVideo(item->data(Qt::UserRole).toString());
+    }
+    playingPath_ = item->data(Qt::UserRole).toString();
+    media_.playVideo(playingPath_);
     stack_->setCurrentWidget(playerPage_);
     layoutOverlayButtons();
+}
+
+void CameraWindow::onPhotoPressed(QListWidgetItem *item)
+{
+    startLongPress(item, false);
+}
+
+void CameraWindow::onVideoPressed(QListWidgetItem *item)
+{
+    startLongPress(item, true);
+}
+
+void CameraWindow::startLongPress(QListWidgetItem *item, bool video)
+{
+    longPressTriggered_ = false;
+    longPressItem_ = item;
+    longPressIsVideo_ = video;
+    longPressTimer_->start(800);
+}
+
+void CameraWindow::cancelLongPress()
+{
+    if (longPressTimer_)
+        longPressTimer_->stop();
+    longPressItem_ = nullptr;
+}
+
+void CameraWindow::onLongPress()
+{
+    if (!longPressItem_)
+        return;
+    longPressTriggered_ = true;
+    pendingPath_ = longPressItem_->data(Qt::UserRole).toString();
+    pendingDelete_ = longPressIsVideo_ ? PendingDelete::Video : PendingDelete::Photo;
+    longPressItem_ = nullptr;
+    confirmMask_->show();
+    confirmMask_->raise();
 }
 
 void CameraWindow::backToVideoAlbum()
 {
     media_.stopVideo();
+    playingPath_.clear();
     stack_->setCurrentWidget(videoAlbumPage_);
+    layoutOverlayButtons();
+}
+
+void CameraWindow::cancelDelete()
+{
+    pendingDelete_ = PendingDelete::None;
+    pendingPath_.clear();
+    confirmMask_->hide();
+}
+
+void CameraWindow::confirmDelete()
+{
+    confirmMask_->hide();
+    const PendingDelete kind = pendingDelete_;
+    pendingDelete_ = PendingDelete::None;
+    if (kind == PendingDelete::Photo)
+        deleteCurrentPhoto();
+    else if (kind == PendingDelete::Video)
+        deleteCurrentVideo();
+}
+
+void CameraWindow::deleteCurrentPhoto()
+{
+    const QString path = pendingPath_;
+    pendingPath_.clear();
+    if (path.isEmpty())
+        return;
+
+    QFile::remove(path);
+    for (int i = 0; i < pictureList_->count(); ++i) {
+        if (pictureList_->item(i)->data(Qt::UserRole).toString() == path) {
+            if (photoIndex_ >= i && photoIndex_ > 0)
+                --photoIndex_;
+            delete pictureList_->takeItem(i);
+            break;
+        }
+    }
+    emptyLabel_->setVisible(pictureList_->count() == 0);
+}
+
+void CameraWindow::deleteCurrentVideo()
+{
+    const QString path = pendingPath_;
+    pendingPath_.clear();
+    if (path.isEmpty())
+        return;
+
+    if (playingPath_ == path) {
+        media_.stopVideo();
+        playingPath_.clear();
+        if (stack_->currentWidget() == playerPage_)
+            stack_->setCurrentWidget(videoAlbumPage_);
+    }
+
+    const QFileInfo fi(path);
+    QFile::remove(path);
+    QFile::remove(kFirstFrameDir + QLatin1Char('/')
+                  + fi.completeBaseName() + QStringLiteral(".jpg"));
+
+    for (int i = 0; i < videoList_->count(); ++i) {
+        if (videoList_->item(i)->data(Qt::UserRole).toString() == path) {
+            delete videoList_->takeItem(i);
+            break;
+        }
+    }
+    videoEmptyLabel_->setVisible(videoList_->count() == 0);
     layoutOverlayButtons();
 }
 
