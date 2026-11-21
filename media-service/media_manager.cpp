@@ -49,8 +49,6 @@ void MediaManager::start()
     // TODO: start 统一添加返回条件
     video_.start();
     keys_.start();
-    // TODO: 后续应使用环境变量导入
-    mp4_.start(1920, 1080, 1920);
     if (!service_.start())
         std::fprintf(stderr, "media-service: D-Bus control unavailable\n");
 
@@ -100,6 +98,7 @@ void MediaManager::run()
         }
         // 预览状态，按键长按：录像
         else if (last == MediaStatus::Preview && cur == MediaStatus::Record) {
+            mp4_.startMux();
             video_.startRecord();
             audio_.startCapture();
             service_.emit(MEDIA_SERVICE_SIGNAL_RECORD_STARTED);
@@ -108,6 +107,7 @@ void MediaManager::run()
         else if (last == MediaStatus::Record && cur == MediaStatus::Preview) {
             audio_.stopCapture();
             std::string path = video_.stopRecord();
+            mp4_.stopMux();
             service_.emit(MEDIA_SERVICE_SIGNAL_RECORD_STOPPED);
             if (!path.empty())
                 service_.emit(MEDIA_SERVICE_SIGNAL_VIDEO_SAVED, path.c_str());

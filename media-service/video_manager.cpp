@@ -378,9 +378,6 @@ void VideoManager::startRecord()
 std::string VideoManager::stopRecord()
 {
     recording_ = false;
-    MuxJob job = {};
-    job.type = MuxJobType::Close;
-    media_.mux_queue.push(job);
     std::string path = first_frame_path_;
     first_frame_path_[0] = '\0';
     std::printf("VideoManager: stop video\n");

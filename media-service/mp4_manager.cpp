@@ -230,17 +230,23 @@ Mp4Manager::~Mp4Manager()
     closeMp4Mux();
 }
 
-void Mp4Manager::start(uint32_t width, uint32_t height, uint32_t stride)
+void Mp4Manager::startMux()
 {
     muxer_thread = std::thread(&Mp4Manager::muxRun, this);
 }
 
-void Mp4Manager::stop()
+void Mp4Manager::stopMux()
 {
     MuxJob job = {};
-    job.type = MuxJobType::Stop;
+    job.type = MuxJobType::Close;
     media_.mux_queue.push(job);
     muxer_thread.join();
+}
+
+void Mp4Manager::stop()
+{
+    if (muxer_thread.joinable())
+        stopMux();
     stopDemux();
 }
 
@@ -255,6 +261,38 @@ void Mp4Manager::startDemux(const std::string &path)
 void Mp4Manager::stopDemux()
 {
     stop_demux_ = true;
+}
+
+void Mp4Manager::muxRun()
+{
+    for (;;) {
+        MuxJob job = media_.mux_queue.pop();
+        switch (job.type) {
+        case MuxJobType::Open:
+            /**
+             * 每次开启新的录像都要重新初始化编码器，如果初始化一次，只有第一个IDR帧会带SPS/PPS信息
+             * 后面再进行第二次录像时会因为找不到SPS/PPS而封装MP4失败（0字节）
+             */
+            mpp_encoder_init(1920, 1080, 1920);
+            initMp4Mux(job.path);
+            break;
+        case MuxJobType::Video: {
+            EncodedPacket pkt;
+            if (mpp_encoder_encode(job.video.dmabuf_fd, job.video.length,
+                                   (uint64_t)job.video.timestamp_us, &pkt) == 0)
+                writeVideoToMp4(&pkt);
+            media_.releaseVideoFrame(job.video);
+            break;
+        }
+        case MuxJobType::Audio:
+            writeAudioToMp4(job.pcm.data(), (int)job.pcm.size(), job.pts);
+            break;
+        case MuxJobType::Close:
+            mpp_encoder_deinit();
+            closeMp4Mux();
+            return;
+        }
+    }
 }
 
 void Mp4Manager::demuxRun(std::string path)
@@ -488,42 +526,6 @@ int Mp4Manager::demuxMp4(const std::string &path)
     av_bsf_free(&bsfCtx);           // 释放 BSF 上下文
     avformat_close_input(&inFmt);    // 关闭容器并释放 inFmt（设为 nullptr 后自动释放）
     return ret;
-}
-
-void Mp4Manager::muxRun()
-{
-    for (;;) {
-        MuxJob job = media_.mux_queue.pop();
-        switch (job.type) {
-        case MuxJobType::Open:
-            /**
-             * 每次开启新的录像都要重新初始化编码器，如果初始化一次，只有第一个IDR帧会带SPS/PPS信息
-             * 后面再进行第二次录像时会因为找不到SPS/PPS而封装MP4失败（0字节）
-             */
-            mpp_encoder_init(1920, 1080, 1920);
-            initMp4Mux(job.path);
-            break;
-        case MuxJobType::Video: {
-            EncodedPacket pkt;
-            if (mpp_encoder_encode(job.video.dmabuf_fd, job.video.length,
-                                   (uint64_t)job.video.timestamp_us, &pkt) == 0)
-                writeVideoToMp4(&pkt);
-            media_.releaseVideoFrame(job.video);
-            break;
-        }
-        case MuxJobType::Audio:
-            writeAudioToMp4(job.pcm.data(), (int)job.pcm.size(), job.pts);
-            break;
-        case MuxJobType::Close:
-            mpp_encoder_deinit();
-            closeMp4Mux();
-            break;
-        case MuxJobType::Stop:
-            mpp_encoder_deinit();
-            closeMp4Mux();
-            return;
-        }
-    }
 }
 
 bool Mp4Manager::initMp4Mux(const std::string &filename)

@@ -23,7 +23,6 @@ enum class MuxJobType {
     Video,
     Audio,
     Close,
-    Stop,
 };
 
 struct MuxJob {
@@ -60,7 +59,8 @@ public:
     Mp4Manager(const Mp4Manager &) = delete;
     Mp4Manager &operator=(const Mp4Manager &) = delete;
 
-    void start(uint32_t width, uint32_t height, uint32_t stride);
+    void startMux();
+    void stopMux();
     void stop();
     void muxRun();
     void startDemux(const std::string &path);
