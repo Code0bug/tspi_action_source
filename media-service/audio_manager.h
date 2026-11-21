@@ -4,9 +4,7 @@
 #include <audio_hal.h>
 
 #include <atomic>
-#include <condition_variable>
 #include <cstdint>
-#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -24,7 +22,6 @@ public:
     AudioManager(const AudioManager &) = delete;
     AudioManager &operator=(const AudioManager &) = delete;
 
-    void start();
     void stop();
     void captureRun();
     void startCapture();
@@ -38,22 +35,18 @@ private:
     void closePlayback();
     int decodeAndPlayPacket(const uint8_t *data, int size, int64_t pts);
     int playDecodedFrame(AVFrame *frame);
-    int sendPcmToAudio(const uint8_t *data, int size);
     void releasePlaybackDecoder();
 
     MediaManager &media_;
     audio_t *audio_capture = nullptr;
     audio_t *audio_playback = nullptr;
-    bool isPlaying = false;
-    int playbackSampleRate = 0;
-    int playbackChannels = 0;
+    bool playbackReady = false;
+    int playbackTrueSampleRate = 0;
+    int playbackTrueChannels = 0;
     AVCodecContext *audioDecCtx = nullptr;
     SwrContext *audioSwrCtx = nullptr;
     AVFrame *audioFrame = nullptr;
-    std::atomic<bool> running_{true};
     std::atomic<bool> capturing_{false};
-    std::mutex mtx_;
-    std::condition_variable cv_;
     std::thread audio_thread;
 };
 

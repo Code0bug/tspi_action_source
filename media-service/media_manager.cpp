@@ -48,7 +48,6 @@ void MediaManager::start()
 {
     // TODO: start 统一添加返回条件
     video_.start();
-    audio_.start();
     keys_.start();
     // TODO: 后续应使用环境变量导入
     mp4_.start(1920, 1080, 1920);
