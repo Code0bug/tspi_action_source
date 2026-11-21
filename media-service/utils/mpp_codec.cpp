@@ -71,9 +71,17 @@ int mpp_encoder_init(uint32_t width, uint32_t height, uint32_t hor_stride)
     mpp_enc_cfg_set_s32(cfg, "rc:mode", MPP_ENC_RC_MODE_CBR);
     mpp_enc_cfg_set_s32(cfg, "rc:bps_target", width * height * 8);
     mpp_enc_cfg_set_s32(cfg, "rc:fps_in_num", 30);
+    mpp_enc_cfg_set_s32(cfg, "rc:gop", 30);  // GOP 序列长度
     mpp_enc_cfg_set_s32(cfg, "rc:fps_out_num", 30);
     mpp_enc_cfg_set_s32(cfg, "codec:type", type);
     mpi->control(ctx, MPP_ENC_SET_CFG, cfg);
+
+    // 让每个 IDR 前都输出 SPS/PPS 信息
+    // 也可以通过每次录像都重新初始化 encoder，来避免找不到 SPS/PPS 的问题
+    // MppEncHeaderMode header_mode = MPP_ENC_HEADER_MODE_EACH_IDR;
+    // ret = mpi->control(ctx, MPP_ENC_SET_HEADER_MODE, &header_mode);
+    // if (ret)
+    //     printf("mpp_encoder: set header mode failed %d\n", ret);
 
     RK_S64 timeout = 1000;
     mpi->control(ctx, MPP_SET_INPUT_TIMEOUT, &timeout);
