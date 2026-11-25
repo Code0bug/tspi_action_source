@@ -27,7 +27,7 @@ public:
     void startPlayback();
     void playbackRun();
     std::string takePhoto();
-    void startRecord();
+    std::string startRecord();
     std::string stopRecord();
     void encoderSize(uint32_t *width, uint32_t *height, uint32_t *stride) const;
     void releaseFrame(camera_frame_t &frame);
@@ -54,7 +54,7 @@ private:
     bool capturing_ = true;
     std::atomic<bool> recording_{false};
     bool save_first_frame_ = false;
-    char first_frame_path_[128] = {0};
+    char name_[32] = {0};
     std::mutex mtx_;
     std::condition_variable cv_;
     std::thread capture_thread;

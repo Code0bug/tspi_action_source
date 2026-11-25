@@ -49,6 +49,7 @@ void MediaManager::start()
     // TODO: start 统一添加返回条件
     video_.start();
     keys_.start();
+    imu_.start();
     if (!service_.start())
         std::fprintf(stderr, "media-service: D-Bus control unavailable\n");
 
@@ -61,6 +62,7 @@ void MediaManager::stop()
     running_ = false;
     cv_.notify_one();
     keys_.stop();
+    imu_.stop();
     video_.stop();
     audio_.stop();
     mp4_.stop();
@@ -99,18 +101,22 @@ void MediaManager::run()
         // 预览状态，按键长按：录像
         else if (last == MediaStatus::Preview && cur == MediaStatus::Record) {
             mp4_.startMux();
-            video_.startRecord();
+            std::string name = video_.startRecord();
             audio_.startCapture();
+            imu_.startRecord(name);
             service_.emit(MEDIA_SERVICE_SIGNAL_RECORD_STARTED);
         }
         // 录像状态，按键按下：停止录像
         else if (last == MediaStatus::Record && cur == MediaStatus::Preview) {
             audio_.stopCapture();
-            std::string path = video_.stopRecord();
+            std::string name = video_.stopRecord();
             mp4_.stopMux();
+            imu_.stopRecord();
             service_.emit(MEDIA_SERVICE_SIGNAL_RECORD_STOPPED);
-            if (!path.empty())
+            if (!name.empty()) {
+                std::string path = "/userdata/firstFrame/" + name + ".jpg";
                 service_.emit(MEDIA_SERVICE_SIGNAL_VIDEO_SAVED, path.c_str());
+            }
         }
         // 预览状态，切到相册：停止采集
         else if (last == MediaStatus::Preview && cur == MediaStatus::Paused) {

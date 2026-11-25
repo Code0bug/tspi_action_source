@@ -3,6 +3,7 @@ add_executable(media-service
     video_manager.cpp
     service.cpp
     key_manager.cpp
+    imu_manager.cpp
     media_manager.cpp
     audio_manager.cpp
     mp4_manager.cpp

@@ -190,7 +190,8 @@ void VideoManager::captureRun()
                                 -1, ui_frame.data,
                                 160, 160, 160, RK_FORMAT_BGR_888,
                                 IM_HAL_TRANSFORM_ROT_180 | IM_SYNC) == 0)
-                    cv::imwrite(first_frame_path_, ui_frame);
+                    cv::imwrite(std::string("/userdata/firstFrame/") + name_ + ".jpg",
+                                ui_frame);
             }
             MuxJob job = {};
             job.type = MuxJobType::Video;
@@ -345,9 +346,8 @@ void VideoManager::releaseFrame(camera_frame_t &frame)
     camera_release_frame(camera_display, &frame);
 }
 
-void VideoManager::startRecord()
+std::string VideoManager::startRecord()
 {
-    char name[32];
     char video_path[128];
     time_t now;
     struct tm tm_now;
@@ -361,10 +361,8 @@ void VideoManager::startRecord()
 
     now = time(nullptr);
     localtime_r(&now, &tm_now);
-    std::strftime(name, sizeof(name), "%Y%m%d_%H%M%S", &tm_now);
-    std::snprintf(video_path, sizeof(video_path), "/userdata/video/%s.mp4", name);
-    std::snprintf(first_frame_path_, sizeof(first_frame_path_),
-                  "/userdata/firstFrame/%s.jpg", name);
+    std::strftime(name_, sizeof(name_), "%Y%m%d_%H%M%S", &tm_now);
+    std::snprintf(video_path, sizeof(video_path), "/userdata/video/%s.mp4", name_);
 
     MuxJob job = {};
     job.type = MuxJobType::Open;
@@ -373,13 +371,12 @@ void VideoManager::startRecord()
     save_first_frame_ = true;
     recording_ = true;
     std::printf("VideoManager: start video %s\n", video_path);
+    return name_;
 }
 
 std::string VideoManager::stopRecord()
 {
     recording_ = false;
-    std::string path = first_frame_path_;
-    first_frame_path_[0] = '\0';
     std::printf("VideoManager: stop video\n");
-    return path;
+    return name_;
 }

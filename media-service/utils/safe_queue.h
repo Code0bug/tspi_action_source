@@ -1,6 +1,7 @@
 #ifndef MEDIA_SERVICE_SAFE_QUEUE_H
 #define MEDIA_SERVICE_SAFE_QUEUE_H
 
+#include <chrono>
 #include <condition_variable>
 #include <mutex>
 #include <queue>
@@ -36,6 +37,18 @@ public:
         T item = std::move(queue_.front());
         queue_.pop();
         return item;
+    }
+
+    // 尝试弹出队列元素，超时返回 false
+    bool pop(T &item, int timeout_ms)
+    {
+        std::unique_lock<std::mutex> lock(mtx_);
+        if (!cond_.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+                            [this] { return !queue_.empty(); }))
+            return false;
+        item = std::move(queue_.front());
+        queue_.pop();
+        return true;
     }
 
 private:

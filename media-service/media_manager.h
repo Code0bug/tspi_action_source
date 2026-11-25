@@ -2,6 +2,7 @@
 #define MEDIA_SERVICE_MEDIA_MANAGER_H
 
 #include "audio_manager.h"
+#include "imu_manager.h"
 #include "key_manager.h"
 #include "mp4_manager.h"
 #include "safe_queue.h"
@@ -47,6 +48,7 @@ private:
     VideoManager video_;
     AudioManager audio_;
     KeyManager keys_;
+    ImuManager imu_;
     Service service_;
     Mp4Manager mp4_;
 
