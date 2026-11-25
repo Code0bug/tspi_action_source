@@ -173,7 +173,7 @@ void VideoManager::captureRun()
                         overlay_fds[slot], nullptr,
                         (int)overlay_width, (int)overlay_height,
                         (int)overlay_pitch, RK_FORMAT_YCbCr_420_SP,
-                        IM_HAL_TRANSFORM_ROT_90 | IM_SYNC) != 0) {
+                        IM_HAL_TRANSFORM_ROT_270 | IM_SYNC) != 0) {
             camera_release_frame(camera_display, &frame);
             continue;
         }
@@ -189,7 +189,7 @@ void VideoManager::captureRun()
                                 (int)camera_display->height,
                                 -1, ui_frame.data,
                                 160, 160, 160, RK_FORMAT_BGR_888,
-                                IM_HAL_TRANSFORM_ROT_180 | IM_SYNC) == 0)
+                                IM_SYNC) == 0)
                     cv::imwrite(std::string("/userdata/firstFrame/") + name_ + ".jpg",
                                 ui_frame);
             }
@@ -256,7 +256,7 @@ void VideoManager::playbackRun()
         if (frame.eos)
             break;
 
-        // rga 图像处理：旋转 90 度 和 缩放为屏幕尺寸大小，输出到 overlay buffer
+        // rga 图像处理：旋转 270 度 和 缩放为屏幕尺寸大小，输出到 overlay buffer
         int ret_rga = rga_process(frame.fd,
                                   (int)frame.width,
                                   (int)frame.height,
@@ -265,7 +265,7 @@ void VideoManager::playbackRun()
                                   overlay_fds[slot], nullptr,
                                   (int)overlay_width, (int)overlay_height,
                                   (int)overlay_pitch, RK_FORMAT_YCbCr_420_SP,
-                                  IM_HAL_TRANSFORM_ROT_90 | IM_SYNC);
+                                  IM_HAL_TRANSFORM_ROT_270 | IM_SYNC);
         mpp_decoder_release_frame(&frame);
         if (ret_rga != 0)
             continue;
@@ -316,7 +316,7 @@ std::string VideoManager::takePhoto()
                           -1, bgr.data,
                           (int)camera_photo->width, (int)camera_photo->height,
                           (int)camera_photo->width, RK_FORMAT_BGR_888,
-                          IM_HAL_TRANSFORM_ROT_180 | IM_SYNC);
+                          IM_SYNC);
     camera_release_frame(camera_photo, &frame);
     if (ret != 0)
         return {};
