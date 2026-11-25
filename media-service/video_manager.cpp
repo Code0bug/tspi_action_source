@@ -57,8 +57,8 @@ bool VideoManager::createSocket()
     int fds[kOverlayCount];
     int nfds = kOverlayCount;
 
-    if (mkdir("/run/tspi-camera", 0750) < 0 && errno != EEXIST)
-        std::fprintf(stderr, "VideoManager: mkdir /run/tspi-camera: %s\n", std::strerror(errno));
+    if (mkdir("/run/tspi-action", 0750) < 0 && errno != EEXIST)
+        std::fprintf(stderr, "VideoManager: mkdir /run/tspi-action: %s\n", std::strerror(errno));
 
     unlink(TSPI_PREVIEW_SOCKET_PATH);
 
