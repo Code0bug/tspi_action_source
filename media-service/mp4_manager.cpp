@@ -301,15 +301,17 @@ void Mp4Manager::demuxRun(std::string path)
         printf("demux mp4 failed: %s\n", path.c_str());
     }
 
-    // 无论正常结束、出错还是被打断，都要通知下游线程退出：
-    // 视频：向 MPP 发送 EOS，视频线程取到 eos 帧后退出
-    // 音频：向队列推送 AudioEnd，音频线程取到后退出（没有音频流时也一样）
+    /**
+     * 无论正常结束、出错还是被打断，都要通知下游线程退出：
+     * 视频：向 MPP 发送 EOS，视频线程取到 eos 帧后退出
+     * 音频：向队列推送 AudioEnd，音频线程取到后退出（没有音频流时也一样）
+     */
     sendVideoStream(nullptr, 0, true);
     DemuxJob job = {};
     job.type = DemuxJobType::AudioEnd;
     media_.demux_queue.push(std::move(job));
 
-    // 播放结束，回到暂停状态（相册）
+    // 播放结束，回到暂停状态
     media_.statusUpdate(MediaStatus::Paused);
 }
 
