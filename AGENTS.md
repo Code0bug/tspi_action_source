@@ -1,104 +1,105 @@
-# tspi-action-source
+# TSPI-ACTION-SOURCE
 
-泰山派 RK3566 运动相机的应用层。CMake 交叉编译到 aarch64，产物只在开发板上跑，不要在宿主机执行。BSP / 内核 / Buildroot 在远程 SDK，本仓库只改应用。
+## 介绍
 
-双进程：`camera-ui` 画界面，`media-service` 做采集。预览走 Unix socket 传 overlay dma-buf fd（SCM_RIGHTS）；采集启停走 system D-Bus（`com.tspi.MediaService`）。UI 自定义 QPA 插件 `qtspi`：primary plane 画 Qt，overlay plane 画相机预览。当前 UI 是占位界面，尚未接 D-Bus。
+本仓库是泰山派 RK3566 运动相机的应用层，与 `tspi_action_bsp` 配套使用。BSP、内核和 Buildroot 系统配置由配套 SDK 维护。日常开发使用 Buildroot 工具链和 CMake 交叉编译为 aarch64，通过 adb 部署到泰山派运行和验收。
 
-## 角色
+应用由两个进程组成。`camera-ui` 使用 Qt Widgets，负责界面、触摸交互和相册浏览。`media-service` 负责音视频采集、拍照、录像和视频回放。UI 通过 system D-Bus 服务 `com.tspi.MediaService` 控制采集启停和视频回放，并接收拍照、录像状态通知。
 
-用户负责采集、HAL、IPC 和 BSP 联调。**UI 由 Agent 完成**：实现 `camera-ui/`（含 `platform/`）的界面，并按「UI 调试」闭环编译、上板、截屏验收，直到板端画面符合要求。
+`camera-ui` 的 `qtspi` 平台插件将 Qt 界面绘制在 DRM primary plane，将相机预览和视频回放显示在 overlay plane。UI 通过 Unix socket 将 overlay 缓冲区的 dma-buf fd 交给媒体服务，媒体服务写入画面后通过同一个 socket 通知 UI 更新显示。
 
 ## 目录
 
+| 目录 | 职责 |
+| --- | --- |
+| `camera-ui/` | Qt Widgets 界面、相册和 D-Bus 客户端。`platform/` 构建 QPA 插件 `libqtspi.so`，用 `QT_QPA_PLATFORM=tspi` 启动。 |
+| `media-service/` | 音视频采集、预览、拍照、录像和视频回放，处理实体按键及录像期间的 IMU 数据记录，提供 D-Bus 服务。 |
+| `hal/` | 摄像头（V4L2）和音频（ALSA）的 C 接口，构建 `libmedia_hal.so`。目录内的 DRM 显示实现由板端测试直接编译。 |
+| `ipc/` | `ipc_socket` 实现 Unix socket 通信和 fd 传递。`service_ipc` 提供共享 D-Bus 协议头及通信依赖，`dbus-policy/` 存放 system bus 策略。 |
+| `tests/` | 板端摄像头与显示联调、显示色彩和 Unix socket 通信测试。 |
+| `tools/` | 交叉编译、调试、板端截屏、连接 Wi-Fi 和清理存储的脚本及工具。 |
+| `cmake/` | RK3566 Buildroot 交叉编译工具链配置。 |
+| `doc/` | 项目相关记录文档。 |
+| `out/` | 本地生成目录，包含 `rk3566/` 构建产物、`staging/` 安装产物和 `screenshots/` 板端截图，由 Git 忽略。 |
 
-| 目录               | 职责                                                                          |
-| ---------------- | --------------------------------------------------------------------------- |
-| `camera-ui/`     | Qt Widgets 应用；`platform/` 是 QPA 插件 `libqtspi.so`，启动需 `QT_QPA_PLATFORM=tspi` |
-| `media-service/` | 采集与预览服务：V4L2 + RGA 写入 overlay，并导出 D-Bus 控制                                  |
-| `hal/`           | `libcamera_hal.so.0.1.0`，C ABI：camera（V4L2）、display（DRM）、IMU、按键             |
-| `ipc/`           | 预览 Unix socket、D-Bus 协议头和 system bus 策略；`service_ipc` 是 INTERFACE target    |
-| `monitor/`       | `camera-monitor`，尚未实现                                                       |
-| `tests/`         | 板端 HAL / 显示 / IPC 测试程序                                                      |
-| `tools/`         | 构建、adb 调试、截屏等脚本                                                             |
-| `cmake/`         | RK3566 Buildroot 交叉编译工具链                                                    |
-| `doc/`           | 调试与排障笔记                                                                     |
-| `out/`           | 构建与 staging 产物，Git 忽略                                                       |
+## 项目框架
 
+> 待补充：双进程框架、显示和播放链路、各cpp类角色定位
 
-# 构建和运行
+## 编译和调试
 
-## 构建
+### 编译
 
-在仓库根目录：
+先在用户目录下检查是否已有 `tspi_action_bsp` 和已编译的 Linux SDK（内核版本为 4.19.232）。如果缺少配套仓库或 SDK，提醒用户按 [README](README.md#快速开始) 下载并配置。
+
+在仓库根目录，将 `BUILDROOT_HOST_DIR` 设为本机 SDK 的 Buildroot `host` 目录，再运行编译脚本。
 
 ```bash
-export BUILDROOT_HOST_DIR=/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host
+export BUILDROOT_HOST_DIR=/path/to/linux_sdk/buildroot/output/rockchip_rk3566/host
 ./tools/build.sh
 ```
 
-产物在 `out/staging/usr/`（`bin/`、`lib/`、`lib/qt/plugins/platforms/`）。把它们同步到板上对应路径后再运行。不要在宿主机直接跑这些二进制。
+产物位于 `out/staging/usr/` 下的 `bin/`、`lib/` 和 `lib/qt/plugins/platforms/`，部署到板端后运行。
 
-## 运行
+### 板端调试
 
-先拷到板端：
+在开发环境安装 adb，安装方法见 [README](README.md#快速开始)。
 
 ```bash
-adb shell mkdir -p /usr/lib/qt/plugins/platforms /etc/dbus-1/system.d
+adb shell                   # 进入板端终端
+adb push 本地文件路径 板端路径  # 上传文件
+adb pull 板端文件路径 本地路径  # 下载文件
+```
+
+按改动范围同步对应文件。
+
+```bash
+# 若更新了 media-service
 adb push out/staging/usr/bin/media-service /usr/bin/
+# 若更新了 camera-ui
 adb push out/staging/usr/bin/camera-ui /usr/bin/
-adb push out/staging/usr/lib/libcamera_hal.so.0.1.0 /usr/lib/
+# 若更新了 HAL
+adb push out/staging/usr/lib/libmedia_hal.so /usr/lib/
+# 若更新了 camera-ui/platform
 adb push out/staging/usr/lib/qt/plugins/platforms/libqtspi.so /usr/lib/qt/plugins/platforms/
+# 若更新了 D-Bus 策略
 adb push out/staging/usr/etc/dbus-1/system.d/com.tspi.MediaService.conf /etc/dbus-1/system.d/
-adb shell 'ln -sf libcamera_hal.so.0.1.0 /usr/lib/libcamera_hal.so.0; ln -sf libcamera_hal.so.0 /usr/lib/libcamera_hal.so'
 ```
 
-板上先起媒体服务，再起 UI：
+同步后检查 `media-service` 和 `camera-ui` 的可执行权限，必要时在板端执行 `chmod`。
 
 ```bash
-media-service
-QT_QPA_PLATFORM=tspi camera-ui
+chmod +x /usr/bin/media-service /usr/bin/camera-ui
 ```
 
-## UI 调试
+板端的 `S23tspiAction` 已适配这两个进程时，可用相机启动脚本启停应用。
 
-改界面必须走下面闭环，不以宿主机渲染当验收。**Agent 只能改 `camera-ui/`（含 `platform/`）**。`media-service/`、`hal/`、`ipc/`、`tools/`、`cmake/`、`monitor/`、`tests/` 等其它目录未经用户允许不得修改、不得顺手重构。
+```bash
+/etc/init.d/S23tspiAction start
+/etc/init.d/S23tspiAction stop
+```
+
+### UI 调试
+
+进行 UI 调试时，**Agent 只能改 `camera-ui/`（含 `platform/`）**。`media-service/`、`hal/`、`ipc/`、`tools/`、`cmake/`、`monitor/`、`tests/` 等其它目录未经用户允许不得修改。
 
 `screenshot.sh` 只抓 DRM **primary plane**（Qt UI）。相机预览在 overlay，截图里看不到视频层；不要为了「图里没有预览」去改 HAL 或 media-service。
 
-### 闭环
-
 1. 在 `camera-ui/` 改界面。
-2. 交叉编译（不要在宿主机跑产物）：
 
-```bash
-export BUILDROOT_HOST_DIR=/home/lzp/linux_sdk/buildroot/output/rockchip_rk3566/host
-./tools/build.sh
-```
+2. 按[编译](#编译)一节交叉编译。
 
-3. 同步到板。只改应用代码时推 `camera-ui`；改了 `platform/` 再推 `libqtspi.so`：
+3. 同步产物之前，按[板端调试](#板端调试)一节，先停止相机应用，然后同步产物，同步后再启动。只改UI应用代码时同步 `camera-ui`，改了 `platform/` 再同步 `libqtspi.so`。
 
-```bash
-adb push out/staging/usr/bin/camera-ui /usr/bin/
-adb push out/staging/usr/lib/qt/plugins/platforms/libqtspi.so /usr/lib/qt/plugins/platforms/
-```
+4. 用户没有要求自行截图调试时，启动相机应用后就停止。
 
-4. 板上重启 UI。另开 adb 命令，不要占用已有交互 `adb shell`：
+5. 用户要求截图调试时，在本机仓库根目录执行以下命令。
 
-```bash
-adb shell 'killall camera-ui 2>/dev/null; QT_QPA_PLATFORM=tspi nohup camera-ui >/tmp/camera-ui.log 2>&1 &'
-```
+   ```bash
+   SHOT="out/screenshots/screen-$(date +%Y%m%d-%H%M%S).png"
+   mkdir -p out/screenshots
+   adb push ./tools/screenshot.sh /tmp/screenshot.sh
+   adb shell 'sh /tmp/screenshot.sh /tmp/screen.png' && adb pull /tmp/screen.png "$SHOT"
+   ```
 
-等界面画完再截屏。不要重启或改动 `media-service`，除非用户明确要求。
-
-5. 板上截屏并拉回本机。本地文件带时间戳，不要覆盖旧图：
-
-```bash
-SHOT="out/screenshots/screen-$(date +%Y%m%d-%H%M%S).png"
-mkdir -p out/screenshots
-adb push tools/screenshot.sh /tmp/screenshot.sh
-adb shell 'sh /tmp/screenshot.sh /tmp/screen.png'
-adb pull /tmp/screen.png "$SHOT"
-```
-
-6. 读取刚拉回的 `$SHOT`（`out/screenshots/screen-YYYYMMDD-HHMMSS.png`），对照本次改动的控件、文案、位置、颜色验收。不对就只改 `camera-ui/`，从第 2 步再走一遍。
-
+   打开刚拉回的 `$SHOT`，对照用户要求检查控件、文案、位置和颜色。需要调整时，修改后重新编译、部署并截图复查。
