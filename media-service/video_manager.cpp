@@ -6,10 +6,10 @@
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <fcntl.h>
-#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 
@@ -54,30 +54,25 @@ void VideoManager::start()
 bool VideoManager::createSocket()
 {
     tspi_preview_buf msg = {};
-    int fds[kOverlayCount];
-    int nfds = kOverlayCount;
+    std::vector<int> fds(8);
+    int nfds = fds.size();
 
-    if (mkdir("/run/tspi-action", 0750) < 0 && errno != EEXIST)
-        std::fprintf(stderr, "VideoManager: mkdir /run/tspi-action: %s\n", std::strerror(errno));
-
-    unlink(TSPI_PREVIEW_SOCKET_PATH);
-
-    m_socket = ipc_server_create(TSPI_PREVIEW_SOCKET_PATH);
+    const char *path = std::getenv("TSPI_PREVIEW_SOCK");
+    m_socket = ipc_server_create(path);
     if (m_socket < 0) {
         std::fprintf(stderr, "VideoManager: preview socket %s: %s\n",
-                     TSPI_PREVIEW_SOCKET_PATH, std::strerror(errno));
+                     path, std::strerror(errno));
         return false;
     }
 
     // socket 连接成功后，UI 会发送为 video 准备的显示 framebuffer dma-buf fd
-    ipc_recv(m_socket, &msg, sizeof(msg), fds, &nfds);
+    ipc_recv(m_socket, &msg, sizeof(msg), fds.data(), &nfds);
 
     overlay_width = msg.width;
     overlay_height = msg.height;
     overlay_pitch = msg.pitch;
     overlay_count = msg.count;
-    for (int i = 0; i < nfds; ++i)
-        overlay_fds[i] = fds[i];
+    overlay_fds.assign(fds.begin(), fds.begin() + nfds);
 
     std::printf("VideoManager: recv %u overlay fds %ux%u pitch %u\n",
                 overlay_count, overlay_width, overlay_height, overlay_pitch);
@@ -87,9 +82,9 @@ bool VideoManager::createSocket()
 
 VideoManager::~VideoManager()
 {
-    for (int i = 0; i < kOverlayCount; ++i) {
-        if (overlay_fds[i] >= 0)
-            close(overlay_fds[i]);
+    for (int fd : overlay_fds) {
+        if (fd >= 0)
+            close(fd);
     }
     if (m_socket >= 0)
         close(m_socket);
@@ -351,13 +346,6 @@ std::string VideoManager::startRecord()
     char video_path[128];
     time_t now;
     struct tm tm_now;
-
-    if (mkdir("/userdata/video", 0750) < 0 && errno != EEXIST)
-        std::fprintf(stderr, "VideoManager: mkdir /userdata/video: %s\n",
-                     std::strerror(errno));
-    if (mkdir("/userdata/firstFrame", 0750) < 0 && errno != EEXIST)
-        std::fprintf(stderr, "VideoManager: mkdir /userdata/firstFrame: %s\n",
-                     std::strerror(errno));
 
     now = time(nullptr);
     localtime_r(&now, &tm_now);

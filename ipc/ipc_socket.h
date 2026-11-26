@@ -9,8 +9,6 @@
 extern "C" {
 #endif
 
-#define TSPI_PREVIEW_SOCKET_PATH "/run/tspi-action/preview.sock"
-
 typedef struct tspi_preview_buf {
     uint32_t width;
     uint32_t height;

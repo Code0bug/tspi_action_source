@@ -22,6 +22,7 @@
 #include <QLoggingCategory>
 #include <QPainter>
 #include <QtCore/private/qcore_unix_p.h>
+#include <cstdlib>
 #include <cstring>
 #include <drm_fourcc.h>
 #include <fcntl.h>
@@ -546,9 +547,10 @@ bool DrmDevice::createSocket()
     int fds[OVERLAY_BUFFER_COUNT];
     tspi_preview_buf msg = {};
 
-    m_socket = ipc_client_create(TSPI_PREVIEW_SOCKET_PATH);
+    const char *path = std::getenv("TSPI_PREVIEW_SOCK");
+    m_socket = ipc_client_create(path);
     if (m_socket < 0) {
-        qErrnoWarning("preview socket connect %s failed", TSPI_PREVIEW_SOCKET_PATH);
+        qErrnoWarning("preview socket connect %s failed", path);
         return false;
     }
 

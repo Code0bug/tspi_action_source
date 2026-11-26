@@ -8,6 +8,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 class MediaManager;
 
@@ -38,13 +39,11 @@ private:
                     int src_ws, int src_hs, int dst_fd, void *dst_vir,
                     int dst_w, int dst_h, int dst_ws, int dst_fmt, int usage);
 
-    static const int kOverlayCount = 3;
-
     MediaManager &media_;
     camera_t *camera_display = nullptr;
     camera_t *camera_photo = nullptr;
     int m_socket = -1;
-    int overlay_fds[kOverlayCount] = {-1, -1, -1};
+    std::vector<int> overlay_fds;
     uint32_t overlay_width = 0;
     uint32_t overlay_height = 0;
     uint32_t overlay_pitch = 0;

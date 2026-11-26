@@ -1,7 +1,5 @@
 #include "imu_manager.h"
 
-#include <cerrno>
-#include <cstring>
 #include <fcntl.h>
 
 #ifndef FASYNC
@@ -11,7 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -27,10 +24,6 @@ ImuManager::~ImuManager()
 
 void ImuManager::start()
 {
-    if (mkdir("/userdata/imu", 0750) < 0 && errno != EEXIST)
-        fprintf(stderr, "ImuManager: mkdir /userdata/imu: %s\n",
-                strerror(errno));
-
     m_instance = this;
     file = nullptr;
 
