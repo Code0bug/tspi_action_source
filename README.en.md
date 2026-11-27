@@ -16,7 +16,7 @@ This repository contains the camera's **application software**. The media servic
 **Open-Source Links**
 
 - [Tspi Action HD Stabilized Action Camera on the Lichuang Open Hardware Platform](https://gitee.com/link?target=https%3A%2F%2Foshwhub.com%2Flzp21%2Fhd-smart-motion-camera)
-- [TSPI-ACTION board support package source (`tspi_action_bsp`)](https://gitee.com/lzp1733149755/tspi_action_bsp)
+- [TSPI-ACTION board support package source (`tspi_action_bsp`)](https://github.com/Code0bug/tspi_action_bsp)
 - [Camera demo video on Bilibili](https://gitee.com/link?target=https%3A%2F%2Fwww.bilibili.com%2Fvideo%2FBV1Qgq6BtEfx%2F%3Fspm_id_from%3D333.1387.0.0)
 - [Porting the OV8858 driver and adding autofocus on the Taishan Pi (CSDN)](https://gitee.com/link?target=https%3A%2F%2Fblog.csdn.net%2Fqq_53686293%2Farticle%2Fdetails%2F153208692%3Fspm%3D1001.2014.3001.5501)
 - [Porting the 2.3-inch MIPI touchscreen driver to the Taishan Pi (CSDN)](https://gitee.com/link?target=https%3A%2F%2Fblog.csdn.net%2Fqq_53686293%2Farticle%2Fdetails%2F156202739%3Fspm%3D1001.2014.3001.5502)
