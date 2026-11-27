@@ -16,7 +16,7 @@
 **开源链接**
 
 - 硬件开源地址：[泰山派高清防抖运动相机（Tspi Action） - 立创开源硬件平台](https://gitee.com/link?target=https%3A%2F%2Foshwhub.com%2Flzp21%2Fhd-smart-motion-camera)
-- tspi_action_bsp：[tspi_action_bsp: tspi_action 项目 bsp 内容](https://gitee.com/lzp1733149755/tspi_action_bsp)
+- `tspi_action_bsp`：[Gitee](https://gitee.com/lzp1733149755/tspi_action_bsp)、[GitHub](https://github.com/Code0bug/tspi_action_bsp)
 - 演示视频：[https://www.bilibili.com/video/BV1Qgq6BtEfx/?spm_id_from=333.1387.0.0](https://gitee.com/link?target=https%3A%2F%2Fwww.bilibili.com%2Fvideo%2FBV1Qgq6BtEfx%2F%3Fspm_id_from%3D333.1387.0.0)
 - ov8858驱动适配：[泰山派移植OV8858驱动并添加自动聚焦功能_泰山派ov8858-CSDN博客](https://gitee.com/link?target=https%3A%2F%2Fblog.csdn.net%2Fqq_53686293%2Farticle%2Fdetails%2F153208692%3Fspm%3D1001.2014.3001.5501)
 - 2.3寸屏幕驱动适配：[泰山派移植2.3寸MIPI触摸屏及MIPI屏幕移植心得_泰山派mipi-CSDN博客](https://gitee.com/link?target=https%3A%2F%2Fblog.csdn.net%2Fqq_53686293%2Farticle%2Fdetails%2F156202739%3Fspm%3D1001.2014.3001.5502)
